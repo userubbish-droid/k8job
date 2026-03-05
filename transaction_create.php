@@ -1,0 +1,118 @@
+<?php
+require 'config.php';
+session_start();
+if (!isset($_SESSION['user_id'])) {
+    header('Location: login.php');
+    exit;
+}
+
+$saved = false;
+$error = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $day     = trim($_POST['day'] ?? '');
+    $time    = trim($_POST['time'] ?? '00:00');
+    $mode    = trim($_POST['mode'] ?? '');
+    $code    = trim($_POST['code'] ?? '');
+    $bank    = trim($_POST['bank'] ?? '');
+    $product = trim($_POST['product'] ?? '');
+    $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
+    $bonus   = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
+    $staff   = trim($_POST['staff'] ?? '');
+    $remark  = trim($_POST['remark'] ?? '');
+
+    if ($day === '' || $mode === '') {
+        $error = '请填写日期和模式。';
+    } elseif (!is_numeric($amount)) {
+        $error = '金额请填数字。';
+    } else {
+        $amount = (float) $amount;
+        $bonus  = (float) $bonus;
+        $total  = $amount + $bonus;
+
+        $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null]);
+        $saved = true;
+    }
+}
+
+$today = date('Y-m-d');
+$now   = date('H:i');
+?>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>记一笔流水 - 算账网</title>
+    <style>
+        body { font-family: sans-serif; max-width: 520px; margin: 20px auto; padding: 0 16px; }
+        h2 { margin-bottom: 12px; }
+        .msg { padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .msg.ok { background: #d4edda; color: #155724; }
+        .msg.err { background: #f8d7da; color: #721c24; }
+        label { display: block; margin-top: 10px; font-weight: bold; }
+        input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; margin-top: 4px; }
+        button { margin-top: 16px; padding: 10px 20px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        a { color: #007bff; }
+    </style>
+</head>
+<body>
+    <h2>记一笔流水</h2>
+    <?php if ($saved): ?>
+        <div class="msg ok">已保存。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+    <?php elseif ($error): ?>
+        <div class="msg err"><?= htmlspecialchars($error) ?></div>
+    <?php endif; ?>
+
+    <form method="post">
+        <label>日期 *</label>
+        <input type="date" name="day" value="<?= htmlspecialchars($today) ?>" required>
+
+        <label>时间</label>
+        <input type="time" name="time" value="<?= htmlspecialchars($now) ?>">
+
+        <label>模式 *</label>
+        <select name="mode" required>
+            <option value="">-- 请选 --</option>
+            <option value="DEPOSIT">DEPOSIT（入）</option>
+            <option value="WITHDRAW">WITHDRAW（出）</option>
+            <option value="BANK">BANK</option>
+            <option value="REBATE">REBATE</option>
+            <option value="OTHER">OTHER</option>
+        </select>
+
+        <label>客户代码</label>
+        <input type="text" name="code" placeholder="如 C004">
+
+        <label>银行/渠道</label>
+        <input type="text" name="bank" placeholder="如 HLB">
+
+        <label>产品/平台</label>
+        <input type="text" name="product" placeholder="如 MEGA">
+
+        <label>金额 *</label>
+        <input type="text" name="amount" placeholder="如 630.00" required>
+
+        <label>奖励/返点</label>
+        <input type="text" name="bonus" placeholder="0" value="0">
+
+        <label>员工</label>
+        <input type="text" name="staff">
+
+        <label>备注</label>
+        <textarea name="remark" rows="2"></textarea>
+
+        <button type="submit">保存</button>
+    </form>
+
+    <p style="margin-top: 20px;">
+        <a href="dashboard.php">返回首页</a> |
+        <a href="transaction_list.php">流水列表</a> |
+        <a href="logout.php">退出</a>
+    </p>
+</body>
+</html>
