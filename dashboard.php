@@ -7,33 +7,37 @@ $today = date('Y-m-d');
 $month_start = date('Y-m-01');
 $month_end   = date('Y-m-t');
 
-// 今日统计
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-                              COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-                       FROM transactions WHERE day = ? AND status = 'approved'");
-$stmt->execute([$today]);
-$day = $stmt->fetch();
-$day_in   = $day['total_in'];
-$day_out  = $day['total_out'];
-$day_profit = $day_in - $day_out;
-
-// 本月统计
-$stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-                              COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-                       FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'");
-$stmt->execute([$month_start, $month_end]);
-$month = $stmt->fetch();
-$month_in    = $month['total_in'];
-$month_out   = $month['total_out'];
-$month_profit = $month_in - $month_out;
-
+$db_error = '';
+$day_in = $day_out = $day_profit = 0;
+$month_in = $month_out = $month_profit = 0;
 $pending_count = 0;
-if (($_SESSION['user_role'] ?? '') === 'admin') {
-    try {
+
+try {
+    // 今日统计（只统计已批准）
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+                           FROM transactions WHERE day = ? AND status = 'approved'");
+    $stmt->execute([$today]);
+    $day = $stmt->fetch();
+    $day_in   = (float)($day['total_in'] ?? 0);
+    $day_out  = (float)($day['total_out'] ?? 0);
+    $day_profit = $day_in - $day_out;
+
+    // 本月统计（只统计已批准）
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+                           FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'");
+    $stmt->execute([$month_start, $month_end]);
+    $month = $stmt->fetch();
+    $month_in    = (float)($month['total_in'] ?? 0);
+    $month_out   = (float)($month['total_out'] ?? 0);
+    $month_profit = $month_in - $month_out;
+
+    if (($_SESSION['user_role'] ?? '') === 'admin') {
         $pending_count = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
-    } catch (Throwable $e) {
-        $pending_count = 0;
     }
+} catch (Throwable $e) {
+    $db_error = $e->getMessage();
 }
 ?>
 <!DOCTYPE html>
@@ -72,6 +76,19 @@ if (($_SESSION['user_role'] ?? '') === 'admin') {
             欢迎，<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>
             （<?= htmlspecialchars($_SESSION['user_role'] ?? 'member') ?>）
         </p>
+
+        <?php if ($db_error): ?>
+            <div class="card" style="border:1px solid #f5c6cb; background:#f8d7da;">
+                <h2 style="color:#721c24;">系统提示：数据库还没升级完成</h2>
+                <div style="color:#721c24; font-size: 13px; line-height: 1.6;">
+                    <div><b>错误信息</b>：<?= htmlspecialchars($db_error) ?></div>
+                    <div style="margin-top:10px;">
+                        <b>解决方法</b>：到 Hostinger 的 phpMyAdmin 执行迁移 SQL：<code>migrate_approval.sql</code>（新增 status 等字段）。<br>
+                        另外如果你要用客户下拉，也执行：<code>migrate_customers.sql</code>（新增 customers 表）。
+                    </div>
+                </div>
+            </div>
+        <?php endif; ?>
 
         <div class="card">
             <h2>今日（<?= htmlspecialchars($today) ?>）</h2>
