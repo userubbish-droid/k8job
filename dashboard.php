@@ -134,6 +134,7 @@ try {
                 <a href="admin_users.php" class="outline">用户管理</a>
                 <a href="admin_banks.php" class="outline">银行管理</a>
                 <a href="admin_products.php" class="outline">产品管理</a>
+                <a href="admin_option_sets.php" class="outline">选项设置</a>
                 <a href="admin_approvals.php" class="outline">待批准<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
             <?php endif; ?>
             <a href="logout.php" class="outline">退出</a>
