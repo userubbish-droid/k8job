@@ -404,29 +404,27 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .welcome-role .role-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--primary-light); color: var(--primary); margin-left: 6px; }
 #month-card { display: none; }
 #month-card.visible { display: block; }
+/* 小屏：侧栏仍保持左边竖排（不变成顶部横排），略缩窄以留出内容区 */
 @media (max-width: 768px) {
-    .dashboard-layout { flex-direction: column; }
+    .dashboard-layout { flex-direction: row; }
     .dashboard-sidebar {
-        width: 100%;
-        border-right: none;
-        border-bottom: 1px solid var(--border);
-        padding: 12px;
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
+        width: 180px;
+        min-width: 180px;
+        padding: 12px 0;
+        overflow-y: auto;
+        flex-shrink: 0;
     }
     .dashboard-sidebar .nav-item {
-        padding: 12px 14px;
-        min-height: 44px;
-        margin: 0;
-        border-left: none;
-        border-radius: 8px;
-        background: #fff;
-        border: 1px solid var(--border);
-        white-space: nowrap;
+        padding: 10px 14px;
+        margin: 2px 8px;
+        font-size: 13px;
     }
-    .dashboard-sidebar .nav-item.primary { border-color: var(--primary); }
-    .dashboard-main { padding: 16px; }
+    .dashboard-sidebar .nav-item .nav-icon {
+        width: 16px;
+        height: 16px;
+        margin-right: 10px;
+    }
+    .dashboard-main { padding: 16px 20px; min-width: 0; }
     .stat-cards { flex-direction: column; }
     .total-table-wrap { grid-template-columns: 1fr; }
 }
