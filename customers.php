@@ -129,7 +129,6 @@ unset($r);
             <table>
                 <thead>
                     <tr>
-                        <th>VISITOR</th>
                         <th>CODE</th>
                         <th>REGISTER DATE</th>
                         <th>FULL NAME</th>
@@ -137,10 +136,6 @@ unset($r);
                         <th>BANK DETAILS</th>
                         <th>REGULAR</th>
                         <th>REMARK</th>
-                        <th>SMS</th>
-                        <th>FD</th>
-                        <th>WS</th>
-                        <th>WC</th>
                         <th>VERIFY</th>
                         <th>OLD TOTAL DEPOSIT</th>
                         <th>OLD TOTAL WITHDRAW</th>
@@ -156,7 +151,6 @@ unset($r);
                 <tbody>
                 <?php foreach ($rows as $r): ?>
                     <tr>
-                        <td><?= htmlspecialchars($r['visitor'] ?? 'VISITOR') ?></td>
                         <td><a href="customer_edit.php?id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($r['code']) ?></a></td>
                         <td><?= htmlspecialchars($r['register_date'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['name'] ?? '') ?></td>
@@ -164,10 +158,6 @@ unset($r);
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['regular_customer'] ?? '-') ?></td>
                         <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['sms'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['fd'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['ws'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['wc'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['verify'] ?? '') ?></td>
                         <td class="num"><?= number_format((float)($r['old_total_deposit'] ?? 0), 2) ?></td>
                         <td class="num"><?= number_format((float)($r['old_total_withdraw'] ?? 0), 2) ?></td>
@@ -190,7 +180,7 @@ unset($r);
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 22 : 21 ?>">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= $is_admin ? 17 : 16 ?>">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

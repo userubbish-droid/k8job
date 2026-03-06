@@ -17,16 +17,14 @@ if (!$row) {
     exit;
 }
 
-// 选项来源：SMS / FD / WS / WC / VERIFY 从 option_sets 表读取
-$option_lists = ['sms' => [], 'fd' => [], 'ws' => [], 'wc' => [], 'verify' => []];
+// 选项来源：VERIFY 从 option_sets 表读取
+$option_lists = ['verify' => []];
 try {
-    foreach (array_keys($option_lists) as $t) {
-        $stmt = $pdo->prepare("SELECT option_value FROM option_sets WHERE option_type = ? ORDER BY sort_order, option_value");
-        $stmt->execute([$t]);
-        $option_lists[$t] = $stmt->fetchAll(PDO::FETCH_COLUMN);
-    }
+    $stmt = $pdo->prepare("SELECT option_value FROM option_sets WHERE option_type = 'verify' ORDER BY sort_order, option_value");
+    $stmt->execute();
+    $option_lists['verify'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
-    // option_sets 表不存在时保持空列表
+    $option_lists['verify'] = [];
 }
 
 $msg = '';
@@ -37,14 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $name = trim($_POST['name'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $remark = trim($_POST['remark'] ?? '');
-    $visitor = trim($_POST['visitor'] ?? 'VISITOR');
     $register_date = trim($_POST['register_date'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
     $regular_customer = trim($_POST['regular_customer'] ?? '');
-    $sms = trim($_POST['sms'] ?? '');
-    $fd = trim($_POST['fd'] ?? '');
-    $ws = trim($_POST['ws'] ?? '');
-    $wc = trim($_POST['wc'] ?? '');
     $verify = trim($_POST['verify'] ?? '');
     $old_total_deposit = str_replace(',', '', trim($_POST['old_total_deposit'] ?? '0'));
     $old_total_withdraw = str_replace(',', '', trim($_POST['old_total_withdraw'] ?? '0'));
@@ -62,12 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $withdraw = is_numeric($withdraw) ? (float)$withdraw : 0;
 
         try {
-            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, visitor=?, register_date=?, bank_details=?, regular_customer=?,
-                sms=?, fd=?, ws=?, wc=?, verify=?, old_total_deposit=?, old_total_withdraw=?, deposit=?, withdraw=?, ref_918kiss=?, ref_megab=? WHERE id=?");
+            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, regular_customer=?,
+                verify=?, old_total_deposit=?, old_total_withdraw=?, deposit=?, withdraw=?, ref_918kiss=?, ref_megab=? WHERE id=?");
             $stmt->execute([
-                $code, $name ?: null, $phone ?: null, $remark ?: null, $visitor ?: 'VISITOR', $register_date ?: null, $bank_details ?: null, $regular_customer ?: null,
-                $sms ?: null, $fd ?: null, $ws ?: null, $wc ?: null, $verify ?: null,
-                $old_total_deposit, $old_total_withdraw, $deposit, $withdraw, $ref_918kiss ?: null, $ref_megab ?: null, $id
+                $code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $regular_customer ?: null,
+                $verify ?: null, $old_total_deposit, $old_total_withdraw, $deposit, $withdraw, $ref_918kiss ?: null, $ref_megab ?: null, $id
             ]);
             $msg = '已保存。';
             $row = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
@@ -106,22 +98,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         <form method="post">
             <div class="grid">
-                <div><label>VISITOR</label><input name="visitor" value="<?= htmlspecialchars($row['visitor'] ?? 'VISITOR') ?>"></div>
                 <div><label>CODE *</label><input name="code" required value="<?= htmlspecialchars($row['code']) ?>"></div>
                 <div><label>REGISTER DATE</label><input type="date" name="register_date" value="<?= htmlspecialchars($row['register_date'] ?? '') ?>"></div>
                 <div><label>FULL NAME</label><input name="name" value="<?= htmlspecialchars($row['name'] ?? '') ?>"></div>
                 <div><label>CONTACT</label><input name="phone" value="<?= htmlspecialchars($row['phone'] ?? '') ?>"></div>
                 <div><label>REGULAR CUSTOMER</label><select name="regular_customer"><option value="">-</option><option value="Y" <?= ($row['regular_customer'] ?? '') === 'Y' ? 'selected' : '' ?>>Y</option><option value="N" <?= ($row['regular_customer'] ?? '') === 'N' ? 'selected' : '' ?>>N</option></select></div>
-            </div>
-            <div style="margin-top:12px;"><label>BANK DETAILS</label><input name="bank_details" value="<?= htmlspecialchars($row['bank_details'] ?? '') ?>" placeholder="TNG 160402395453, PBB 8413574015"></div>
-            <div class="grid" style="margin-top:12px;">
-                <div><label>REMARK</label><input name="remark" value="<?= htmlspecialchars($row['remark'] ?? '') ?>"></div>
-                <div><label>SMS</label><select name="sms"><option value="">—</option><?php foreach ($option_lists['sms'] as $v): ?><option value="<?= htmlspecialchars($v) ?>" <?= ($row['sms'] ?? '') === $v ? 'selected' : '' ?>><?= htmlspecialchars($v) ?></option><?php endforeach; ?></select></div>
-                <div><label>FD</label><select name="fd"><option value="">—</option><?php foreach ($option_lists['fd'] as $v): ?><option value="<?= htmlspecialchars($v) ?>" <?= ($row['fd'] ?? '') === $v ? 'selected' : '' ?>><?= htmlspecialchars($v) ?></option><?php endforeach; ?></select></div>
-                <div><label>WS</label><select name="ws"><option value="">—</option><?php foreach ($option_lists['ws'] as $v): ?><option value="<?= htmlspecialchars($v) ?>" <?= ($row['ws'] ?? '') === $v ? 'selected' : '' ?>><?= htmlspecialchars($v) ?></option><?php endforeach; ?></select></div>
-                <div><label>WC</label><select name="wc"><option value="">—</option><?php foreach ($option_lists['wc'] as $v): ?><option value="<?= htmlspecialchars($v) ?>" <?= ($row['wc'] ?? '') === $v ? 'selected' : '' ?>><?= htmlspecialchars($v) ?></option><?php endforeach; ?></select></div>
                 <div><label>VERIFY</label><select name="verify"><option value="">—</option><?php foreach ($option_lists['verify'] as $v): ?><option value="<?= htmlspecialchars($v) ?>" <?= ($row['verify'] ?? '') === $v ? 'selected' : '' ?>><?= htmlspecialchars($v) ?></option><?php endforeach; ?></select></div>
             </div>
+            <div style="margin-top:12px;"><label>BANK DETAILS</label><input name="bank_details" value="<?= htmlspecialchars($row['bank_details'] ?? '') ?>" placeholder="TNG 160402395453, PBB 8413574015"></div>
+            <div style="margin-top:12px;"><label>REMARK</label><input name="remark" value="<?= htmlspecialchars($row['remark'] ?? '') ?>"></div>
             <div class="grid" style="margin-top:12px;">
                 <div><label>OLD TOTAL DEPOSIT</label><input name="old_total_deposit" value="<?= htmlspecialchars($row['old_total_deposit'] ?? '0') ?>"></div>
                 <div><label>OLD TOTAL WITHDRAW</label><input name="old_total_withdraw" value="<?= htmlspecialchars($row['old_total_withdraw'] ?? '0') ?>"></div>
