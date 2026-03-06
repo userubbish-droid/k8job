@@ -137,7 +137,7 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
     <div class="page-wrap" style="max-width: 900px;">
         <div class="page-header">
             <h2>编辑顾客 - <?= htmlspecialchars($row['code']) ?></h2>
-            <p class="breadcrumb"><a href="customers.php">← 返回顾客资料</a></p>
+            <p class="breadcrumb"><a href="customers.php">← 返回顾客列表</a></p>
         </div>
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>

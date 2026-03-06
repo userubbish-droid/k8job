@@ -140,7 +140,7 @@ if ($is_admin) {
     <div class="page-wrap" style="max-width: 520px;">
         <div class="page-header">
             <h2>记一笔流水</h2>
-            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水列表</a></p>
+            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水记录</a></p>
         </div>
 
     <?php if ($saved): ?>
@@ -279,7 +279,7 @@ if ($is_admin) {
 
     <p class="breadcrumb" style="margin-top:16px;">
         <a href="dashboard.php">返回首页</a><span>·</span>
-        <a href="transaction_list.php">流水列表</a><span>·</span>
+        <a href="transaction_list.php">流水记录</a><span>·</span>
         <a href="logout.php">退出</a>
     </p>
     </div>

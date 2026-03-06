@@ -46,14 +46,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>填写顾客资料 - 算账网</title>
+    <title>新增顾客 - 算账网</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="page-wrap" style="max-width: 560px;">
         <div class="page-header">
-            <h2>填写顾客资料</h2>
-            <p class="breadcrumb"><a href="customers.php">← 返回顾客资料</a></p>
+            <h2>新增顾客</h2>
+            <p class="breadcrumb"><a href="customers.php">← 返回顾客列表</a></p>
         </div>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 

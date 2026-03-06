@@ -77,10 +77,10 @@ try {
         <div class="page-header">
             <h2>选项设置（SMS / FD / WS / WC / VERIFY）</h2>
             <p class="breadcrumb">
-                <a href="customers.php">顾客资料</a><span>·</span>
+                <a href="customers.php">顾客列表</a><span>·</span>
                 <a href="dashboard.php">首页</a><span>·</span>
                 <a href="admin_products.php">产品管理</a><span>·</span>
-                <a href="product_library.php">顾客产品资料库</a>
+                <a href="product_library.php">产品账号</a>
             </p>
         </div>
 
@@ -89,15 +89,15 @@ try {
 
         <div class="card">
             <h3 style="margin-top:0;">产品与资料库</h3>
-            <p class="form-hint" style="margin-bottom:12px;">产品（如 MEGA、918KISS）在「产品管理」中添加；顾客的产品账号（CODE / 产品 / 账号 / 密码）在「顾客产品资料库」中查看。</p>
+            <p class="form-hint" style="margin-bottom:12px;">产品在「产品管理」中添加；顾客的产品账号在「产品账号」页查看。</p>
             <p>
                 <a href="admin_products.php" class="btn btn-primary">产品管理</a>
-                <a href="product_library.php" class="btn btn-outline">顾客产品资料库</a>
+                <a href="product_library.php" class="btn btn-outline">产品账号</a>
             </p>
         </div>
 
         <div class="card">
-            <p class="form-hint" style="margin:0 0 12px;">以下选项会出现在「顾客资料」编辑页的下拉里（如 VERIFY 等）。</p>
+            <p class="form-hint" style="margin:0 0 12px;">以下选项会出现在「编辑顾客」页的下拉里（如 VERIFY 等）。</p>
         <?php foreach ($types as $type => $label): ?>
         <div class="option-card">
             <h3><?= htmlspecialchars($label) ?>（<?= $type ?>）</h3>

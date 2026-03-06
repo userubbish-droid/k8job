@@ -51,7 +51,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>顾客产品资料库 - 算账网</title>
+    <title>产品账号 - 算账网</title>
     <link rel="stylesheet" href="style.css">
     <style>
         .product-cell { font-size: 13px; white-space: nowrap; }
@@ -62,11 +62,11 @@ try {
 <body>
     <div class="page-wrap" style="max-width: 100%;">
         <div class="page-header">
-            <h2>顾客产品资料库</h2>
+            <h2>产品账号</h2>
             <p class="breadcrumb">
                 <a href="dashboard.php">首页</a><span>·</span>
-                <a href="customers.php">顾客资料</a>
-                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">填写顾客资料</a><?php endif; ?>
+                <a href="customers.php">顾客列表</a>
+                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">新增顾客</a><?php endif; ?>
                 <?php if ($is_admin): ?><span>·</span><a href="admin_products.php">产品管理</a><?php endif; ?>
             </p>
         </div>
@@ -75,7 +75,7 @@ try {
 
         <div class="card">
             <h3>顾客产品资料</h3>
-            <p class="form-hint" style="margin-bottom:12px;">第一列为顾客 CODE；后面各列为产品（MEGA、918KISS、PUSSY 等，在「产品管理」中添加后会显示在此）。格子内为该顾客在该产品下的 id（账号）与 ps（密码）。在「编辑顾客」中为顾客添加产品账号后，会在此显示。</p>
+            <p class="form-hint" style="margin-bottom:12px;">第一列为顾客 CODE，后面各列为产品（MEGA、918KISS 等）。每格显示该顾客在该产品下的账号与密码。在「编辑顾客」里添加后在此显示。</p>
             <?php if ($products || $codes): ?>
             <div style="overflow-x: auto;">
             <table class="data-table">
@@ -89,7 +89,7 @@ try {
                 </thead>
                 <tbody>
                 <?php if (empty($codes)): ?>
-                    <tr><td colspan="<?= count($products) + 1 ?>">暂无顾客产品账号。请到「编辑顾客」为顾客添加产品（如 MEGA、918KISS）及 id、密码。</td></tr>
+                    <tr><td colspan="<?= count($products) + 1 ?>">暂无记录。请到「编辑顾客」为顾客添加产品及账号、密码。</td></tr>
                 <?php else: ?>
                 <?php foreach ($codes as $code): ?>
                     <tr>
@@ -117,7 +117,7 @@ try {
             </table>
             </div>
             <?php else: ?>
-            <p class="form-hint">暂无产品与数据。请先在「产品管理」添加产品（如 MEGA、918KISS、PUSSY），再在「编辑顾客」中为顾客添加各产品的 id 与密码。</p>
+            <p class="form-hint">暂无数据。请先在「产品管理」添加产品，再在「编辑顾客」里为顾客添加各产品的账号与密码。</p>
             <?php endif; ?>
         </div>
     </div>

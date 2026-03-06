@@ -43,18 +43,18 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>顾客资料 - 算账网</title>
+    <title>顾客列表 - 算账网</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="page-wrap">
         <div class="page-header">
-            <h2>顾客资料</h2>
+            <h2>顾客列表</h2>
             <p class="breadcrumb">
                 <a href="dashboard.php">首页</a>
                 <?php if (has_permission('transaction_create')): ?><span>·</span><a href="transaction_create.php">去记一笔</a><?php endif; ?>
-                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">填写顾客资料</a><?php endif; ?>
-                <?php if (has_permission('product_library')): ?><span>·</span><a href="product_library.php">顾客产品资料库</a><?php endif; ?>
+                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">新增顾客</a><?php endif; ?>
+                <?php if (has_permission('product_library')): ?><span>·</span><a href="product_library.php">产品账号</a><?php endif; ?>
                 <?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php">选项设置</a><?php endif; ?>
             </p>
         </div>

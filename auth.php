@@ -9,12 +9,12 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 function get_permission_options(): array
 {
     return [
-        'transaction_create' => '记一笔流水',
-        'transaction_list'   => '流水列表',
-        'customers'          => '客户资料（查看列表）',
-        'customer_create'    => '填写顾客资料',
+        'transaction_create' => '记一笔',
+        'transaction_list'   => '流水记录',
+        'customers'          => '顾客列表',
+        'customer_create'    => '新增顾客',
         'customer_edit'      => '编辑顾客（含产品账号）',
-        'product_library'    => '顾客产品资料库',
+        'product_library'    => '产品账号',
     ];
 }
 

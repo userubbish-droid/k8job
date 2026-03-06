@@ -142,13 +142,13 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>流水列表 - 算账网</title>
+    <title>流水记录 - 算账网</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
     <div class="page-wrap">
         <div class="page-header">
-            <h2>流水列表</h2>
+            <h2>流水记录</h2>
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_create.php">记一笔</a></p>
         </div>
 

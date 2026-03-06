@@ -50,69 +50,91 @@ try {
     <style>
         .dashboard-layout { display: flex; min-height: 100vh; }
         .dashboard-sidebar {
-            width: 200px;
-            min-width: 200px;
-            background: #fff;
+            width: 220px;
+            min-width: 220px;
+            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
             border-right: 1px solid var(--border);
-            padding: 20px 0;
+            padding: 16px 0;
             flex-shrink: 0;
         }
         .dashboard-sidebar .nav-item {
-            display: block;
-            padding: 10px 20px;
+            display: flex;
+            align-items: center;
+            padding: 12px 20px;
+            margin: 2px 10px;
             color: #475569;
             text-decoration: none;
             font-size: 14px;
+            border-radius: 8px;
             border-left: 3px solid transparent;
+            transition: background 0.15s, color 0.15s;
         }
-        .dashboard-sidebar .nav-item:hover { background: #f8fafc; color: var(--primary); }
-        .dashboard-sidebar .nav-item.primary { color: var(--primary); font-weight: 600; border-left-color: var(--primary); }
-        .dashboard-main { flex: 1; padding: 24px; overflow: auto; }
-        .stat-row { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 12px; }
-        .stat-row:last-child { margin-bottom: 0; }
-        .stat-item { flex: 1; min-width: 100px; }
-        .stat-item .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
-        .stat-item .value { font-size: 1.35rem; font-weight: 700; }
-        .stat-item .value.in { color: var(--success); }
-        .stat-item .value.out { color: var(--danger); }
-        .stat-item .value.profit { color: var(--primary); }
-        .month-toggle { margin-bottom: 16px; font-size: 14px; color: #64748b; }
-        .month-toggle input { margin-right: 8px; cursor: pointer; }
+        .dashboard-sidebar .nav-item .nav-icon {
+            width: 20px; height: 20px; margin-right: 10px;
+            border-radius: 4px;
+            background: #e2e8f0;
+            flex-shrink: 0;
+        }
+        .dashboard-sidebar .nav-item.primary .nav-icon { background: var(--primary); opacity: 0.9; }
+        .dashboard-sidebar .nav-item:hover { background: #fff; color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .dashboard-sidebar .nav-item.primary { background: #fff; color: var(--primary); font-weight: 600; border-left-color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
+        .dashboard-main { flex: 1; padding: 24px; overflow: auto; background: #fff; }
+        .stat-cards { display: flex; flex-wrap: wrap; gap: 16px; }
+        .stat-card {
+            flex: 1; min-width: 120px;
+            padding: 16px 20px;
+            border-radius: var(--card-radius);
+            border: 1px solid var(--border);
+            background: #fff;
+        }
+        .stat-card.in { border-left: 4px solid var(--success); background: linear-gradient(135deg, #f0fdf4 0%, #fff 100%); }
+        .stat-card.out { border-left: 4px solid var(--danger); background: linear-gradient(135deg, #fef2f2 0%, #fff 100%); }
+        .stat-card.profit { border-left: 4px solid var(--primary); background: linear-gradient(135deg, #eff6ff 0%, #fff 100%); }
+        .stat-card .label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+        .stat-card .value { font-size: 1.4rem; font-weight: 700; }
+        .stat-card.in .value { color: var(--success); }
+        .stat-card.out .value { color: var(--danger); }
+        .stat-card.profit .value { color: var(--primary); }
+        .month-toggle { margin-bottom: 16px; font-size: 14px; color: #64748b; display: flex; align-items: center; gap: 8px; }
+        .month-toggle input { cursor: pointer; width: 18px; height: 18px; }
         #month-card { display: none; }
         #month-card.visible { display: block; }
+        .welcome-role { font-size: 13px; color: var(--muted); }
+        .welcome-role .role-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; background: var(--primary-light); color: var(--primary); }
         @media (max-width: 768px) {
             .dashboard-layout { flex-direction: column; }
-            .dashboard-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-            .dashboard-sidebar .nav-item { padding: 12px 14px; min-height: 44px; display: inline-flex; align-items: center; border-left: none; border-radius: 8px; font-size: 14px; }
+            .dashboard-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
+            .dashboard-sidebar .nav-item { padding: 12px 14px; min-height: 44px; margin: 0; border-left: none; border-radius: 8px; }
             .dashboard-main { padding: 16px; }
+            .stat-cards { flex-direction: column; }
         }
     </style>
 </head>
 <body>
     <div class="dashboard-layout">
         <aside class="dashboard-sidebar">
-            <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item primary">记一笔流水</a><?php endif; ?>
-            <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item">流水列表</a><?php endif; ?>
-            <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item">客户资料</a><?php endif; ?>
-            <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item">顾客产品资料库</a><?php endif; ?>
-            <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item">填写顾客资料</a><?php endif; ?>
+            <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item primary"><span class="nav-icon"></span>记一笔</a><?php endif; ?>
+            <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item"><span class="nav-icon"></span>流水记录</a><?php endif; ?>
+            <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item"><span class="nav-icon"></span>顾客列表</a><?php endif; ?>
+            <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item"><span class="nav-icon"></span>产品账号</a><?php endif; ?>
+            <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item"><span class="nav-icon"></span>新增顾客</a><?php endif; ?>
             <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-                <a href="admin_users.php" class="nav-item">用户管理</a>
-                <a href="admin_banks.php" class="nav-item">银行管理</a>
-                <a href="admin_products.php" class="nav-item">产品管理</a>
-                <a href="admin_option_sets.php" class="nav-item">选项设置</a>
-                <a href="admin_permissions.php" class="nav-item">权限设置</a>
-                <a href="admin_approvals.php" class="nav-item">待批准<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
+                <a href="admin_users.php" class="nav-item"><span class="nav-icon"></span>账号管理</a>
+                <a href="admin_banks.php" class="nav-item"><span class="nav-icon"></span>银行/渠道</a>
+                <a href="admin_products.php" class="nav-item"><span class="nav-icon"></span>产品管理</a>
+                <a href="admin_option_sets.php" class="nav-item"><span class="nav-icon"></span>选项设置</a>
+                <a href="admin_permissions.php" class="nav-item"><span class="nav-icon"></span>员工权限</a>
+                <a href="admin_approvals.php" class="nav-item"><span class="nav-icon"></span>待审核<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
             <?php endif; ?>
-            <a href="logout.php" class="nav-item">退出</a>
+            <a href="logout.php" class="nav-item"><span class="nav-icon"></span>退出登录</a>
         </aside>
 
         <main class="dashboard-main">
             <div class="page-header">
                 <h1>算账网</h1>
-                <p class="breadcrumb">
-                    欢迎，<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>
-                    <span>（<?= htmlspecialchars($_SESSION['user_role'] ?? 'member') ?>）</span>
+                <p class="welcome-role">
+                    欢迎，<strong><?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></strong>
+                    <span class="role-badge"><?= ($_SESSION['user_role'] ?? '') === 'admin' ? '管理员' : '员工' ?></span>
                 </p>
             </div>
 
@@ -131,40 +153,40 @@ try {
 
             <div class="card">
                 <h3>今日（<?= htmlspecialchars($today) ?>）</h3>
-                <div class="stat-row">
-                    <div class="stat-item">
-                        <div class="label">总入 DEPOSIT</div>
-                        <div class="value in"><?= number_format((float)$day_in, 2) ?></div>
+                <div class="stat-cards">
+                    <div class="stat-card in">
+                        <div class="label">今日入账</div>
+                        <div class="value"><?= number_format((float)$day_in, 2) ?></div>
                     </div>
-                    <div class="stat-item">
-                        <div class="label">总出 WITHDRAW</div>
-                        <div class="value out"><?= number_format((float)$day_out, 2) ?></div>
+                    <div class="stat-card out">
+                        <div class="label">今日出账</div>
+                        <div class="value"><?= number_format((float)$day_out, 2) ?></div>
                     </div>
-                    <div class="stat-item">
-                        <div class="label">利润</div>
-                        <div class="value profit"><?= number_format($day_profit, 2) ?></div>
+                    <div class="stat-card profit">
+                        <div class="label">今日利润</div>
+                        <div class="value"><?= number_format($day_profit, 2) ?></div>
                     </div>
                 </div>
             </div>
 
             <label class="month-toggle">
                 <input type="checkbox" id="show_month" onchange="document.getElementById('month-card').classList.toggle('visible', this.checked)">
-                显示本月统计
+                显示本月数据
             </label>
             <div class="card" id="month-card">
                 <h3>本月（<?= $month_start ?> ~ <?= $month_end ?>）</h3>
-                <div class="stat-row">
-                    <div class="stat-item">
-                        <div class="label">总入</div>
-                        <div class="value in"><?= number_format((float)$month_in, 2) ?></div>
+                <div class="stat-cards">
+                    <div class="stat-card in">
+                        <div class="label">本月入账</div>
+                        <div class="value"><?= number_format((float)$month_in, 2) ?></div>
                     </div>
-                    <div class="stat-item">
-                        <div class="label">总出</div>
-                        <div class="value out"><?= number_format((float)$month_out, 2) ?></div>
+                    <div class="stat-card out">
+                        <div class="label">本月出账</div>
+                        <div class="value"><?= number_format((float)$month_out, 2) ?></div>
                     </div>
-                    <div class="stat-item">
-                        <div class="label">利润</div>
-                        <div class="value profit"><?= number_format($month_profit, 2) ?></div>
+                    <div class="stat-card profit">
+                        <div class="label">本月利润</div>
+                        <div class="value"><?= number_format($month_profit, 2) ?></div>
                     </div>
                 </div>
             </div>
