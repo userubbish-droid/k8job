@@ -85,31 +85,25 @@ if ($is_admin) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>记一笔流水 - 算账网</title>
-    <style>
-        body { font-family: sans-serif; max-width: 520px; margin: 20px auto; padding: 0 16px; }
-        h2 { margin-bottom: 12px; }
-        .msg { padding: 10px; margin: 10px 0; border-radius: 4px; }
-        .msg.ok { background: #d4edda; color: #155724; }
-        .msg.err { background: #f8d7da; color: #721c24; }
-        label { display: block; margin-top: 10px; font-weight: bold; }
-        input, select, textarea { width: 100%; padding: 8px; box-sizing: border-box; margin-top: 4px; }
-        button { margin-top: 16px; padding: 10px 20px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        a { color: #007bff; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h2>记一笔流水</h2>
+    <div class="page-wrap" style="max-width: 560px;">
+        <div class="page-header">
+            <h2>记一笔流水</h2>
+            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水列表</a></p>
+        </div>
     <?php if ($saved): ?>
         <?php if ($submitted_status === 'pending'): ?>
-            <div class="msg ok">已提交，等待管理员批准后才会显示在统计和流水列表中。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+            <div class="alert alert-success">已提交，等待管理员批准后才会显示在统计和流水列表中。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
         <?php else: ?>
-            <div class="msg ok">已保存并生效。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+            <div class="alert alert-success">已保存并生效。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
         <?php endif; ?>
     <?php elseif ($error): ?>
-        <div class="msg err"><?= htmlspecialchars($error) ?></div>
+        <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 
+    <div class="card">
     <form method="post">
         <label>日期 / 时间</label>
         <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">默认自动记录当前日期和时间。</p>
@@ -182,12 +176,14 @@ if ($is_admin) {
 
         <button type="submit">保存</button>
     </form>
+    </div>
 
-    <p style="margin-top: 20px;">
-        <a href="dashboard.php">返回首页</a> |
-        <a href="transaction_list.php">流水列表</a> |
+    <p class="breadcrumb" style="margin-top:20px;">
+        <a href="dashboard.php">返回首页</a><span>·</span>
+        <a href="transaction_list.php">流水列表</a><span>·</span>
         <a href="logout.php">退出</a>
     </p>
+    </div>
     <?php if ($is_admin): ?>
     <script>
         function toggleOther(selId, inputId) {

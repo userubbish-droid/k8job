@@ -43,51 +43,37 @@ try {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>产品/平台管理 - 算账网</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; }
-        .wrap { max-width: 860px; margin: 0 auto; }
-        .card { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-        label { display:block; margin-top: 10px; font-weight: 700; }
-        input { padding: 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }
-        button { padding: 8px 14px; background: #007bff; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        table { width: 100%; border-collapse: collapse; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #f2f2f2; }
-        .ok { background: #d4edda; padding: 10px; border-radius: 6px; color: #155724; margin-bottom: 10px; }
-        .err { background: #f8d7da; padding: 10px; border-radius: 6px; color: #721c24; margin-bottom: 10px; }
-        .muted { color: #666; font-size: 12px; }
-        a { color: #007bff; }
-        .btn2 { background: #6c757d; }
-        .btn2:hover { background: #5a6268; }
-        .inline { display:inline-block; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="wrap">
-        <h2 style="margin:0 0 12px;">产品/平台管理（仅 admin）</h2>
-        <p class="muted"><a href="dashboard.php">返回首页</a> | <a href="admin_banks.php">银行管理</a> | <a href="admin_users.php">用户管理</a></p>
+    <div class="page-wrap" style="max-width: 860px;">
+        <div class="page-header">
+            <h2>产品/平台管理</h2>
+            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="admin_banks.php">银行管理</a><span>·</span><a href="admin_users.php">用户管理</a></p>
+        </div>
 
-        <?php if ($msg): ?><div class="ok"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
-        <?php if ($err): ?><div class="err"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+        <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
+        <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <h3 style="margin:0 0 8px;">新增产品/平台</h3>
+            <h3>新增产品/平台</h3>
             <form method="post">
                 <input type="hidden" name="action" value="create">
-                <label>名称 *</label>
-                <input name="name" required placeholder="例如 MEGA / 918KISS">
-                <label>排序（数字越大越靠前，可选）</label>
-                <input name="sort_order" type="number" value="0">
-                <div style="margin-top:12px;">
-                    <button type="submit">添加</button>
+                <div class="form-group">
+                    <label>名称 *</label>
+                    <input name="name" class="form-control" required placeholder="例如 MEGA / 918KISS">
                 </div>
+                <div class="form-group">
+                    <label>排序（数字越大越靠前，可选）</label>
+                    <input name="sort_order" class="form-control" type="number" value="0">
+                </div>
+                <button type="submit" class="btn btn-primary">添加</button>
             </form>
         </div>
 
         <div class="card">
-            <h3 style="margin:0 0 8px;">列表</h3>
-            <table>
+            <h3>列表</h3>
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -110,7 +96,7 @@ try {
                             <form method="post" class="inline">
                                 <input type="hidden" name="action" value="toggle">
                                 <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                                <button type="submit" class="btn2"><?= ((int)$p['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                <button type="submit" class="btn btn-sm btn-gray"><?= ((int)$p['is_active'] === 1) ? '禁用' : '启用' ?></button>
                             </form>
                         </td>
                     </tr>
@@ -124,4 +110,5 @@ try {
     </div>
 </body>
 </html>
+
 

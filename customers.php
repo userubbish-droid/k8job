@@ -44,49 +44,32 @@ try {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>顾客资料 - 算账网</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; background: #f5f5f5; }
-        .wrap { max-width: 1400px; margin: 0 auto; }
-        .card { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-        .summary { display: flex; gap: 24px; margin-bottom: 16px; flex-wrap: wrap; }
-        .summary-item { background: #e8f4fc; padding: 12px 20px; border-radius: 8px; }
-        .summary-item strong { display: block; font-size: 12px; color: #666; }
-        .summary-item span { font-size: 20px; font-weight: 700; color: #0d6efd; }
-        label { display:block; margin-top: 10px; font-weight: 700; }
-        input, textarea, select { padding: 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }
-        button { padding: 8px 14px; background: #007bff; color: #fff; border: 0; border-radius: 6px; cursor: pointer; }
-        button:hover { background: #0056b3; }
-        table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; vertical-align: top; }
-        th { background: #e8f4fc; font-weight: 600; white-space: nowrap; }
-        .ok { background: #d4edda; padding: 10px; border-radius: 6px; color: #155724; margin-bottom: 10px; }
-        .err { background: #f8d7da; padding: 10px; border-radius: 6px; color: #721c24; margin-bottom: 10px; }
-        .muted { color: #666; font-size: 12px; }
-        a { color: #007bff; }
-        .btn2 { background: #6c757d; padding: 4px 8px; font-size: 12px; }
-        .btn2:hover { background: #5a6268; }
-        form.inline { display:inline-block; margin-right: 4px; }
-        .num { text-align: right; }
-        .total-col { background: #fff3cd; font-weight: 600; }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="wrap">
-        <h2 style="margin:0 0 8px;">顾客资料</h2>
-        <p class="muted"><a href="dashboard.php">返回首页</a> | <a href="transaction_create.php">去记一笔</a> | <a href="customer_create.php">填写顾客资料</a> | <a href="product_library.php">顾客产品资料库</a><?php if ($is_admin): ?> | <a href="admin_option_sets.php">选项设置（SMS/FD/WS/WC/VERIFY）</a><?php endif; ?></p>
+    <div class="page-wrap">
+        <div class="page-header">
+            <h2>顾客资料</h2>
+            <p class="breadcrumb">
+                <a href="dashboard.php">首页</a><span>·</span>
+                <a href="transaction_create.php">去记一笔</a><span>·</span>
+                <a href="customer_create.php">填写顾客资料</a><span>·</span>
+                <a href="product_library.php">顾客产品资料库</a><?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php">选项设置</a><?php endif; ?>
+            </p>
+        </div>
 
-        <?php if ($msg): ?><div class="ok"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
-        <?php if ($err): ?><div class="err"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+        <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
+        <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="summary">
-            <div class="summary-item"><strong>T1. Customer</strong><span><?= $summary['total'] ?></span></div>
-            <div class="summary-item"><strong>Active Member</strong><span><?= $summary['active'] ?></span></div>
-            <div class="summary-item"><strong>TARGET</strong><span>1</span></div>
+            <div class="summary-item"><strong>T1. Customer</strong><span class="num"><?= $summary['total'] ?></span></div>
+            <div class="summary-item"><strong>Active Member</strong><span class="num"><?= $summary['active'] ?></span></div>
+            <div class="summary-item"><strong>TARGET</strong><span class="num">1</span></div>
         </div>
 
         <div class="card" style="overflow-x: auto;">
-            <h3 style="margin:0 0 8px;">列表</h3>
-            <table>
+            <h3>列表</h3>
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>CODE</th>
@@ -117,14 +100,14 @@ try {
                             <form method="post" class="inline">
                                 <input type="hidden" name="action" value="toggle">
                                 <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                                <button type="submit" class="btn2"><?= ((int)$r['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                <button type="submit" class="btn btn-sm btn-gray"><?= ((int)$r['is_active'] === 1) ? '禁用' : '启用' ?></button>
                             </form>
                         </td>
                         <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 10 : 9 ?>">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= $is_admin ? 10 : 9 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

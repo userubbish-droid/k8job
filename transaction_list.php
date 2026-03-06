@@ -143,31 +143,16 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>流水列表 - 算账网</title>
-    <style>
-        body { font-family: sans-serif; margin: 20px; }
-        h2 { margin-bottom: 12px; }
-        .filters { background: #f5f5f5; padding: 12px; margin-bottom: 16px; border-radius: 4px; }
-        .filters label { margin-right: 8px; }
-        .filters input, .filters select { padding: 6px; margin-right: 12px; }
-        .filters button { padding: 6px 14px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-        .summary { margin: 12px 0; font-weight: bold; }
-        .summary span { margin-right: 20px; }
-        table { border-collapse: collapse; width: 100%; }
-        th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        th { background: #eee; }
-        tr:nth-child(even) { background: #f9f9f9; }
-        .in { color: #28a745; }
-        .out { color: #dc3545; }
-        a { color: #007bff; }
-        .muted { color: #666; font-size: 12px; margin-bottom: 8px; }
-        .pagination { margin-top: 12px; }
-        @media (max-width: 768px) { table { font-size: 12px; } th, td { padding: 4px; } }
-    </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h2>流水列表</h2>
+    <div class="page-wrap">
+        <div class="page-header">
+            <h2>流水列表</h2>
+            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_create.php">记一笔</a></p>
+        </div>
 
-    <form class="filters" method="get">
+    <form class="filters-bar" method="get">
         <?php if ($is_admin): ?>
             <label>状态</label>
             <select name="status">
@@ -217,19 +202,20 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <?php endforeach; ?>
         </select>
         <input type="hidden" name="page" value="1">
-        <button type="submit">筛选</button>
-        <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" style="margin-left:8px; padding:6px 14px; background:#28a745; color:#fff; text-decoration:none; border-radius:4px;">导出CSV</a>
+        <button type="submit" class="btn btn-primary">筛选</button>
+        <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" class="btn btn-outline">导出 CSV</a>
     </form>
 
     <div class="summary">
-        <span>总入：<span class="in"><?= number_format($total_in, 2) ?></span></span>
-        <span>总出：<span class="out"><?= number_format($total_out, 2) ?></span></span>
-        <span>利润：<?= number_format($profit, 2) ?></span>
+        <div class="summary-item"><strong>总入</strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
+        <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
+        <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
     </div>
 
-    <p class="muted">共 <?= $total_rows ?> 条，第 <?= $page ?>/<?= $total_pages ?> 页</p>
+    <p class="form-hint">共 <?= $total_rows ?> 条，第 <?= $page ?>/<?= $total_pages ?> 页</p>
 
-    <table>
+    <div class="card" style="overflow-x:auto; padding:0;">
+    <table class="data-table">
         <thead>
             <tr>
                 <th>日期</th>
@@ -255,7 +241,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <td><?= htmlspecialchars($r['code'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['bank'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['product'] ?? '') ?></td>
-                <td class="<?= $r['mode'] === 'DEPOSIT' ? 'in' : 'out' ?>"><?= number_format((float)$r['amount'], 2) ?></td>
+                <td class="num <?= $r['mode'] === 'DEPOSIT' ? 'value-in' : 'value-out' ?>"><?= number_format((float)$r['amount'], 2) ?></td>
                 <td><?= number_format((float)($r['bonus'] ?? 0), 2) ?></td>
                 <td><?= number_format((float)($r['total'] ?? 0), 2) ?></td>
                 <td><?= htmlspecialchars($r['staff'] ?? '') ?></td>
@@ -272,23 +258,25 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <?php endif; ?>
         </tbody>
     </table>
+    </div>
 
     <?php if ($total_pages > 1): ?>
-    <p class="pagination">
+    <div class="pagination" style="margin-top:16px;">
         <?php if ($page > 1): ?>
             <a href="<?= $base_url ?>page=<?= $page - 1 ?>">上一页</a>
         <?php endif; ?>
-        <span style="margin:0 12px;"><?= $page ?> / <?= $total_pages ?></span>
+        <span><?= $page ?> / <?= $total_pages ?></span>
         <?php if ($page < $total_pages): ?>
             <a href="<?= $base_url ?>page=<?= $page + 1 ?>">下一页</a>
         <?php endif; ?>
-    </p>
+    </div>
     <?php endif; ?>
 
-    <p style="margin-top: 20px;">
-        <a href="transaction_create.php">记一笔</a> |
-        <a href="dashboard.php">返回首页</a> |
+    <p class="breadcrumb" style="margin-top:20px;">
+        <a href="transaction_create.php">记一笔</a><span>·</span>
+        <a href="dashboard.php">返回首页</a><span>·</span>
         <a href="logout.php">退出</a>
     </p>
+    </div>
 </body>
 </html>

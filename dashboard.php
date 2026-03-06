@@ -46,41 +46,35 @@ try {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>首页 - 算账网</title>
+    <link rel="stylesheet" href="style.css">
     <style>
-        * { box-sizing: border-box; }
-        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f5f5f5; }
-        .wrap { max-width: 640px; margin: 0 auto; }
-        h1 { margin: 0 0 8px; font-size: 1.5rem; color: #333; }
-        .user { color: #666; font-size: 0.9rem; margin-bottom: 24px; }
-        .card { background: #fff; border-radius: 8px; padding: 20px; margin-bottom: 16px; box-shadow: 0 1px 3px rgba(0,0,0,0.08); }
-        .card h2 { margin: 0 0 16px; font-size: 1rem; color: #666; font-weight: 600; }
-        .row { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
-        .row:last-child { margin-bottom: 0; }
-        .item { flex: 1; min-width: 120px; }
-        .item .label { font-size: 0.85rem; color: #888; margin-bottom: 4px; }
-        .item .value { font-size: 1.25rem; font-weight: 600; }
-        .item .value.in { color: #28a745; }
-        .item .value.out { color: #dc3545; }
-        .item .value.profit { color: #007bff; }
-        .nav { margin-top: 24px; }
-        .nav a { display: inline-block; margin-right: 12px; padding: 10px 16px; background: #007bff; color: #fff; text-decoration: none; border-radius: 6px; font-size: 0.9rem; }
-        .nav a:hover { background: #0056b3; }
-        .nav a.outline { background: transparent; color: #666; border: 1px solid #ddd; }
-        .nav a.outline:hover { background: #f0f0f0; }
+        .stat-row { display: flex; flex-wrap: wrap; gap: 20px; margin-bottom: 12px; }
+        .stat-row:last-child { margin-bottom: 0; }
+        .stat-item { flex: 1; min-width: 100px; }
+        .stat-item .label { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+        .stat-item .value { font-size: 1.35rem; font-weight: 700; }
+        .stat-item .value.in { color: var(--success); }
+        .stat-item .value.out { color: var(--danger); }
+        .stat-item .value.profit { color: var(--primary); }
     </style>
 </head>
 <body>
-    <div class="wrap">
-        <h1>算账网</h1>
-        <p class="user">
+    <div class="page-wrap">
+        <div class="page-header">
+            <h1>算账网</h1>
+            <p class="breadcrumb">
+                欢迎，<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>
+                <span>（<?= htmlspecialchars($_SESSION['user_role'] ?? 'member') ?>）</span>
+            </p>
+        </div>
             欢迎，<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>
             （<?= htmlspecialchars($_SESSION['user_role'] ?? 'member') ?>）
         </p>
 
         <?php if ($db_error): ?>
-            <div class="card" style="border:1px solid #f5c6cb; background:#f8d7da;">
-                <h2 style="color:#721c24;">系统提示：数据库还没升级完成</h2>
-                <div style="color:#721c24; font-size: 13px; line-height: 1.6;">
+            <div class="card alert-error">
+                <h3 style="margin-top:0; color:#991b1b;">系统提示：数据库还没升级完成</h3>
+                <div style="font-size: 13px; line-height: 1.6;">
                     <div><b>错误信息</b>：<?= htmlspecialchars($db_error) ?></div>
                     <div style="margin-top:10px;">
                         <b>解决方法</b>：到 Hostinger 的 phpMyAdmin 执行迁移 SQL：<code>migrate_approval.sql</code>（新增 status 等字段）。<br>
@@ -91,17 +85,17 @@ try {
         <?php endif; ?>
 
         <div class="card">
-            <h2>今日（<?= htmlspecialchars($today) ?>）</h2>
-            <div class="row">
-                <div class="item">
+            <h3>今日（<?= htmlspecialchars($today) ?>）</h3>
+            <div class="stat-row">
+                <div class="stat-item">
                     <div class="label">总入 DEPOSIT</div>
                     <div class="value in"><?= number_format((float)$day_in, 2) ?></div>
                 </div>
-                <div class="item">
+                <div class="stat-item">
                     <div class="label">总出 WITHDRAW</div>
                     <div class="value out"><?= number_format((float)$day_out, 2) ?></div>
                 </div>
-                <div class="item">
+                <div class="stat-item">
                     <div class="label">利润</div>
                     <div class="value profit"><?= number_format($day_profit, 2) ?></div>
                 </div>
@@ -109,36 +103,36 @@ try {
         </div>
 
         <div class="card">
-            <h2>本月（<?= $month_start ?> ~ <?= $month_end ?>）</h2>
-            <div class="row">
-                <div class="item">
+            <h3>本月（<?= $month_start ?> ~ <?= $month_end ?>）</h3>
+            <div class="stat-row">
+                <div class="stat-item">
                     <div class="label">总入</div>
                     <div class="value in"><?= number_format((float)$month_in, 2) ?></div>
                 </div>
-                <div class="item">
+                <div class="stat-item">
                     <div class="label">总出</div>
                     <div class="value out"><?= number_format((float)$month_out, 2) ?></div>
                 </div>
-                <div class="item">
+                <div class="stat-item">
                     <div class="label">利润</div>
                     <div class="value profit"><?= number_format($month_profit, 2) ?></div>
                 </div>
             </div>
         </div>
 
-        <div class="nav">
-            <a href="transaction_create.php">记一笔流水</a>
-            <a href="transaction_list.php">流水列表</a>
-            <a href="customers.php" class="outline">客户资料</a>
-            <a href="product_library.php" class="outline">顾客产品资料库</a>
+        <div class="nav-links">
+            <a href="transaction_create.php" class="btn btn-primary">记一笔流水</a>
+            <a href="transaction_list.php" class="btn btn-outline">流水列表</a>
+            <a href="customers.php" class="btn btn-outline">客户资料</a>
+            <a href="product_library.php" class="btn btn-outline">顾客产品资料库</a>
             <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-                <a href="admin_users.php" class="outline">用户管理</a>
-                <a href="admin_banks.php" class="outline">银行管理</a>
-                <a href="admin_products.php" class="outline">产品管理</a>
-                <a href="admin_option_sets.php" class="outline">选项设置</a>
-                <a href="admin_approvals.php" class="outline">待批准<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
+                <a href="admin_users.php" class="btn btn-outline">用户管理</a>
+                <a href="admin_banks.php" class="btn btn-outline">银行管理</a>
+                <a href="admin_products.php" class="btn btn-outline">产品管理</a>
+                <a href="admin_option_sets.php" class="btn btn-outline">选项设置</a>
+                <a href="admin_approvals.php" class="btn btn-outline">待批准<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
             <?php endif; ?>
-            <a href="logout.php" class="outline">退出</a>
+            <a href="logout.php" class="btn btn-outline">退出</a>
         </div>
     </div>
 </body>

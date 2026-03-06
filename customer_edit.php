@@ -126,71 +126,86 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>编辑顾客 - <?= htmlspecialchars($row['code']) ?></title>
+    <link rel="stylesheet" href="style.css">
     <style>
-        body { font-family: sans-serif; margin: 20px; max-width: 900px; }
-        .card { background: #fff; border: 1px solid #eee; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
-        label { display:block; margin-top: 10px; font-weight: 700; font-size: 13px; }
-        input, select, textarea { padding: 8px; width: 100%; box-sizing: border-box; margin-top: 4px; }
-        button { padding: 8px 16px; background: #007bff; color: #fff; border: 0; border-radius: 6px; cursor: pointer; margin-top: 12px; }
-        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-        .ok { background: #d4edda; padding: 10px; border-radius: 6px; color: #155724; margin-bottom: 10px; }
-        .err { background: #f8d7da; padding: 10px; border-radius: 6px; color: #721c24; margin-bottom: 10px; }
-        a { color: #007bff; }
-        .product-accounts { margin-top: 16px; }
-        .product-accounts table { width: 100%; border-collapse: collapse; font-size: 13px; }
-        .product-accounts th, .product-accounts td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-        .product-accounts th { background: #e8f4fc; }
-        .add-product-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 8px; }
-        .add-product-row label { margin-top: 0; }
-        .btn-sm { padding: 4px 10px; font-size: 12px; background: #dc3545; color: #fff; border-radius: 4px; text-decoration: none; display: inline-block; }
-        .btn-sm:hover { background: #c82333; color: #fff; }
-        .muted { color: #666; }
+        .add-product-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; margin-top: 12px; }
+        .add-product-row .form-group { margin-bottom: 0; }
+        @media (max-width: 640px) { .add-product-row { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
-    <div class="card">
-        <h2 style="margin:0 0 8px;">编辑顾客 - <?= htmlspecialchars($row['code']) ?></h2>
-        <p><a href="customers.php">← 返回顾客资料</a></p>
-        <?php if ($msg): ?><div class="ok"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
-        <?php if ($err): ?><div class="err"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+    <div class="page-wrap" style="max-width: 900px;">
+        <div class="page-header">
+            <h2>编辑顾客 - <?= htmlspecialchars($row['code']) ?></h2>
+            <p class="breadcrumb"><a href="customers.php">← 返回顾客资料</a></p>
+        </div>
+        <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
+        <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-        <form method="post">
-            <div class="grid">
-                <div><label>CODE *</label><input name="code" required value="<?= htmlspecialchars($row['code']) ?>"></div>
-                <div><label>REGISTER DATE</label><input type="date" name="register_date" value="<?= htmlspecialchars($display_register_date) ?>" title="可根据填写时间自动记录"></div>
-                <div><label>FULL NAME</label><input name="name" value="<?= htmlspecialchars($row['name'] ?? '') ?>"></div>
-                <div><label>CONTACT</label><input name="phone" value="<?= htmlspecialchars($row['phone'] ?? '') ?>"></div>
-            </div>
-            <div style="margin-top:12px;"><label>BANK DETAILS</label><input name="bank_details" value="<?= htmlspecialchars($row['bank_details'] ?? '') ?>" placeholder="TNG 160402395453, PBB 8413574015"></div>
-            <div style="margin-top:12px;"><label>REMARK</label><textarea name="remark" rows="2"><?= htmlspecialchars($row['remark'] ?? '') ?></textarea></div>
-            <button type="submit">保存</button>
-        </form>
-    </div>
-
-    <div class="card product-accounts">
-        <h3 style="margin:0 0 8px;">产品账号</h3>
-        <p class="muted" style="font-size:12px; color:#666; margin:0 0 8px;">从下方选择产品并填写账号、密码后添加；可在「产品管理」中维护产品选项。</p>
-
-        <form method="post">
-            <input type="hidden" name="action" value="add_product">
-            <div class="add-product-row">
-                <div>
-                    <label>产品</label>
-                    <select name="product_name" required>
-                        <option value="">— 请选择 —</option>
-                        <?php foreach ($products as $p): ?>
-                            <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
-                        <?php endforeach; ?>
-                    </select>
+        <div class="card">
+            <form method="post">
+                <div class="grid-3">
+                    <div class="form-group">
+                        <label>CODE *</label>
+                        <input name="code" class="form-control" required value="<?= htmlspecialchars($row['code']) ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>REGISTER DATE</label>
+                        <input type="date" name="register_date" class="form-control" value="<?= htmlspecialchars($display_register_date) ?>" title="可根据填写时间自动记录">
+                    </div>
+                    <div class="form-group">
+                        <label>FULL NAME</label>
+                        <input name="name" class="form-control" value="<?= htmlspecialchars($row['name'] ?? '') ?>">
+                    </div>
+                    <div class="form-group">
+                        <label>CONTACT</label>
+                        <input name="phone" class="form-control" value="<?= htmlspecialchars($row['phone'] ?? '') ?>">
+                    </div>
                 </div>
-                <div><label>账号</label><input name="account" placeholder="账号"></div>
-                <div><label>密码</label><input name="password" type="password" placeholder="密码"></div>
-                <div><button type="submit">添加</button></div>
-            </div>
-        </form>
+                <div class="form-group">
+                    <label>BANK DETAILS</label>
+                    <input name="bank_details" class="form-control" value="<?= htmlspecialchars($row['bank_details'] ?? '') ?>" placeholder="TNG 160402395453, PBB 8413574015">
+                </div>
+                <div class="form-group">
+                    <label>REMARK</label>
+                    <textarea name="remark" class="form-control" rows="2"><?= htmlspecialchars($row['remark'] ?? '') ?></textarea>
+                </div>
+                <button type="submit" class="btn btn-primary">保存</button>
+            </form>
+        </div>
 
-        <?php if ($product_accounts): ?>
-        <table style="margin-top:12px;">
+        <div class="card">
+            <h3>产品账号</h3>
+            <p class="form-hint" style="margin-bottom:12px;">从下方选择产品并填写账号、密码后添加；可在「产品管理」中维护产品选项。</p>
+
+            <form method="post">
+                <input type="hidden" name="action" value="add_product">
+                <div class="add-product-row">
+                    <div class="form-group">
+                        <label>产品</label>
+                        <select name="product_name" class="form-control" required>
+                            <option value="">— 请选择 —</option>
+                            <?php foreach ($products as $p): ?>
+                                <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>账号</label>
+                        <input name="account" class="form-control" placeholder="账号">
+                    </div>
+                    <div class="form-group">
+                        <label>密码</label>
+                        <input name="password" type="password" class="form-control" placeholder="密码">
+                    </div>
+                    <div class="form-group">
+                        <button type="submit" class="btn btn-primary">添加</button>
+                    </div>
+                </div>
+            </form>
+
+            <?php if ($product_accounts): ?>
+            <table class="data-table" style="margin-top:16px;">
             <thead>
                 <tr><th>产品</th><th>账号</th><th>密码</th><th>操作</th></tr>
             </thead>
@@ -201,10 +216,10 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                     <td><?= htmlspecialchars($pa['account'] ?? '') ?></td>
                     <td><?= $pa['password'] !== '' && $pa['password'] !== null ? '••••••' : '—' ?></td>
                     <td>
-                        <form method="post" style="display:inline;" onsubmit="return confirm('确定删除这条产品账号？');">
+                        <form method="post" class="inline" onsubmit="return confirm('确定删除这条产品账号？');">
                             <input type="hidden" name="action" value="del_product">
                             <input type="hidden" name="account_id" value="<?= (int)$pa['id'] ?>">
-                            <button type="submit" class="btn-sm">删除</button>
+                            <button type="submit" class="btn btn-sm btn-danger">删除</button>
                         </form>
                     </td>
                 </tr>
@@ -212,8 +227,10 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
             </tbody>
         </table>
         <?php else: ?>
-        <p style="margin-top:12px; color:#888; font-size:13px;">暂无产品账号，请在上方选择产品并填写账号、密码后点击「添加」。</p>
+        <p class="form-hint" style="margin-top:16px;">暂无产品账号，请在上方选择产品并填写账号、密码后点击「添加」。</p>
         <?php endif; ?>
+        </div>
     </div>
 </body>
 </html>
+
