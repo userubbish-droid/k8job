@@ -62,14 +62,7 @@ try {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>首页 - 算账网</title>
-    <link rel="stylesheet" href="style.css?v=<?= filemtime(__DIR__ . '/style.css') ?: 2 ?>">
-    <!-- 强制左侧竖排导航，避免缓存导致仍显示横排 -->
-    <style>
-    .dashboard-layout { display: flex !important; flex-direction: row !important; min-height: 100vh; }
-    .dashboard-sidebar { display: flex !important; flex-direction: column !important; flex-wrap: nowrap !important; width: 228px; min-width: 228px; background: #fff; border-right: 1px solid #e2e8f0; padding: 20px 0; flex-shrink: 0; }
-    .dashboard-sidebar .nav-item { display: flex !important; width: 100%; padding: 12px 20px; margin: 0 12px 6px 12px; color: #475569; text-decoration: none; border-radius: 8px; white-space: nowrap; }
-    .dashboard-main { flex: 1; padding: 28px 32px; overflow: auto; background: #f8fafc; }
-    </style>
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>
     <div class="dashboard-layout">

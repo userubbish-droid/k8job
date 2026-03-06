@@ -63,7 +63,7 @@ try {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>选项设置 - 算账网</title>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .option-card { margin-bottom: 16px; }
         .option-card h3 { margin: 0 0 10px; font-size: 14px; color: #475569; }

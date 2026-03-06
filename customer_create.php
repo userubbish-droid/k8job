@@ -48,7 +48,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>新增顾客 - 算账网</title>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>
     <div class="dashboard-layout">

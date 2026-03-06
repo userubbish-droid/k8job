@@ -122,7 +122,7 @@ if ($is_admin) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>记一笔流水 - 算账网</title>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .form-section { margin-bottom: 20px; }
         .form-section-title { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.03em; }

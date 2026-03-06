@@ -67,7 +67,7 @@ if ($selected_id > 0) {
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>权限设置 - 算账网</title>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .perm-list { list-style: none; padding: 0; margin: 0; }
         .perm-list li { padding: 10px 0; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 10px; }

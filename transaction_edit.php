@@ -128,7 +128,7 @@ if ($product_other !== '') $product = '其他';
         button { margin-top: 16px; padding: 10px 20px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
         a { color: #007bff; }
     </style>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>
     <div class="dashboard-layout">

@@ -64,7 +64,7 @@ try {
         .btn2:hover { background: #5a6268; }
         .inline { display:inline-block; }
     </style>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>
     <div class="dashboard-layout">

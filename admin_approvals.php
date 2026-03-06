@@ -61,7 +61,7 @@ try {
         a { color: #007bff; }
         form { display: inline-block; margin-right: 6px; }
     </style>
-    <link rel="stylesheet" href="style.css">
+    <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>
     <div class="dashboard-layout">
