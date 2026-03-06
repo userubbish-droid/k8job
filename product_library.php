@@ -5,23 +5,17 @@ require_login();
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
-$products = [];
+$rows = [];
 $err = '';
 try {
-    $products = $pdo->query("SELECT id, name, is_active, sort_order FROM products ORDER BY sort_order DESC, name ASC")->fetchAll();
-    foreach ($products as &$p) {
-        $p['customer_count'] = 0;
-        try {
-            $st = $pdo->prepare("SELECT COUNT(*) FROM customer_product_accounts WHERE product_name = ?");
-            $st->execute([$p['name']]);
-            $p['customer_count'] = (int) $st->fetchColumn();
-        } catch (Throwable $_) {}
-        unset($st);
-    }
-    unset($p);
+    $sql = "SELECT a.id, a.customer_id, a.product_name, a.account, a.password, c.code
+            FROM customer_product_accounts a
+            LEFT JOIN customers c ON c.id = a.customer_id
+            ORDER BY c.code ASC, a.product_name ASC";
+    $rows = $pdo->query($sql)->fetchAll();
 } catch (Throwable $e) {
-    $products = [];
-    $err = '无法加载产品列表，请确认已执行 schema.sql 并已在「产品管理」中添加产品。';
+    $rows = [];
+    $err = '无法加载数据，请确认已执行 migrate_customer_products.sql 创建 customer_product_accounts 表。';
 }
 ?>
 <!doctype html>
@@ -59,33 +53,31 @@ try {
         <?php if ($err): ?><div class="err"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <h3 style="margin:0 0 12px;">产品列表</h3>
-            <p class="muted" style="margin-bottom:12px;">以下为在「产品管理」中已添加的产品（如 MEGA、918KISS 等），顾客编辑时可选择这些产品并填写账号与密码。</p>
-            <?php if ($products): ?>
+            <h3 style="margin:0 0 12px;">顾客产品资料</h3>
+            <p class="muted" style="margin-bottom:12px;">格式：顾客代码 CODE / 产品（MEGA、918KISS 等）/ 账号 / 密码。在「编辑顾客」中为顾客添加产品账号后，会在此显示。</p>
+            <?php if ($rows): ?>
             <table>
                 <thead>
                     <tr>
-                        <th>产品名称</th>
-                        <th>状态</th>
-                        <th>已关联顾客数</th>
+                        <th>CODE（顾客代码）</th>
+                        <th>产品（MEGA / 918KISS 等）</th>
+                        <th>账号</th>
+                        <th>密码</th>
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($products as $p): ?>
+                <?php foreach ($rows as $r): ?>
                     <tr>
-                        <td><strong><?= htmlspecialchars($p['name']) ?></strong></td>
-                        <td>
-                            <span class="badge <?= (int)$p['is_active'] === 1 ? 'badge-on' : 'badge-off' ?>">
-                                <?= (int)$p['is_active'] === 1 ? '启用' : '停用' ?>
-                            </span>
-                        </td>
-                        <td><span class="count"><?= (int)($p['customer_count'] ?? 0) ?></span> 人</td>
+                        <td><a href="customer_edit.php?id=<?= (int)$r['customer_id'] ?>"><?= htmlspecialchars($r['code'] ?? '-') ?></a></td>
+                        <td><?= htmlspecialchars($r['product_name']) ?></td>
+                        <td><?= htmlspecialchars($r['account'] ?? '') ?></td>
+                        <td><?= ($r['password'] !== null && $r['password'] !== '') ? '••••••' : '—' ?></td>
                     </tr>
                 <?php endforeach; ?>
                 </tbody>
             </table>
             <?php else: ?>
-            <p class="muted">暂无产品。<?php if ($is_admin): ?>请到 <a href="admin_products.php">产品管理</a> 添加产品（如 MEGA、918KISS 等）。<?php else: ?>请联系管理员在「产品管理」中添加产品。<?php endif; ?></p>
+            <p class="muted">暂无记录。请先在 <a href="customers.php">顾客资料</a> 中进入某顾客的编辑页，为其添加产品（如 MEGA、918KISS）及账号、密码后，数据会显示在此。</p>
             <?php endif; ?>
         </div>
     </div>
