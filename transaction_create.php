@@ -59,6 +59,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved_total = $total;
         $saved_reward_pct = ($reward_pct !== '' && is_numeric($reward_pct)) ? (float)$reward_pct : null;
         $saved_account = '';
+        $saved_customer_name = '';
+        $saved_customer_bank = '';
         if ($code !== '' && $product !== '') {
             try {
                 $acc = $pdo->prepare("SELECT a.account FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.code = ? AND a.product_name = ? LIMIT 1");
@@ -71,6 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             $saved_account = '—';
         }
+        if ($mode === 'WITHDRAW' && $code !== '') {
+            try {
+                $cust = $pdo->prepare("SELECT name, bank_details FROM customers WHERE code = ? LIMIT 1");
+                $cust->execute([$code]);
+                $crow = $cust->fetch();
+                $saved_customer_name = $crow ? trim($crow['name'] ?? '') : '';
+                $saved_customer_bank = $crow ? trim($crow['bank_details'] ?? '') : '';
+            } catch (Throwable $e) {}
+        }
     }
 }
 
@@ -81,10 +92,10 @@ $now   = date('H:i');
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $banks = [];
 $products = [];
-// 客户代码下拉选项
+// 客户代码下拉选项（含 name、bank_details 供 WITHDRAW 时显示）
 $customers = [];
 try {
-    $customers = $pdo->query("SELECT code, name FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll();
+    $customers = $pdo->query("SELECT code, name, bank_details FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll();
 } catch (Throwable $e) {
     $customers = [];
 }
@@ -137,10 +148,16 @@ if ($is_admin) {
             <div class="alert alert-success" style="margin-bottom: 0;">
                 <?php if ($submitted_status === 'pending'): ?>已提交，等待管理员批准。<?php else: ?>已保存并生效。<?php endif; ?>
             </div>
-            <?php if (!empty($saved_code) || !empty($saved_product)): ?>
+            <?php if (!empty($saved_code) || !empty($saved_product) || $saved_mode === 'WITHDRAW'): ?>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px;">
                 <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> · 金额 <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?> · 总数 <strong><?= number_format($saved_total, 2) ?></strong></div>
-                <div class="form-hint"><?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?></div>
+                <?php if ($saved_mode === 'WITHDRAW' && !empty($saved_code)): ?>
+                <div class="form-hint" style="margin-bottom:4px;">顾客姓名：<?= htmlspecialchars($saved_customer_name ?: '—') ?></div>
+                <div class="form-hint">银行资料：<?= htmlspecialchars($saved_customer_bank ?: '—') ?></div>
+                <?php endif; ?>
+                <?php if (!empty($saved_product)): ?>
+                <div class="form-hint" style="margin-top:4px;"><?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?></div>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
             <div class="success-actions">
@@ -177,7 +194,7 @@ if ($is_admin) {
             <div class="form-row-2">
                 <div class="form-group">
                     <label>模式 *</label>
-                    <select name="mode" class="form-control" required>
+                    <select name="mode" id="mode" class="form-control" required>
                         <option value="">-- 请选 --</option>
                         <option value="DEPOSIT">DEPOSIT（入）</option>
                         <option value="WITHDRAW">WITHDRAW（出）</option>
@@ -192,7 +209,7 @@ if ($is_admin) {
                     <select name="code" class="form-control" disabled><option value="">-- 暂无 --</option></select>
                     <p class="form-hint"><a href="customers.php">先去添加客户</a></p>
                     <?php else: ?>
-                    <select name="code" class="form-control">
+                    <select name="code" id="code" class="form-control">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($customers as $c): ?>
                         <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code'] . (empty($c['name']) ? '' : ' - ' . $c['name'])) ?></option>
@@ -200,6 +217,10 @@ if ($is_admin) {
                     </select>
                     <?php endif; ?>
                 </div>
+            </div>
+            <div id="withdraw_customer_box" class="form-group" style="display:none; padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:14px; border:1px solid #fcd34d;">
+                <div style="margin-bottom:4px;"><strong>顾客姓名</strong>：<span id="withdraw_customer_name">—</span></div>
+                <div><strong>银行资料</strong>：<span id="withdraw_customer_bank">—</span></div>
             </div>
             <div class="form-row-2">
                 <div class="form-group">
@@ -263,6 +284,31 @@ if ($is_admin) {
     </p>
     </div>
     <script>
+        (function() {
+            var customerData = <?= json_encode(array_column($customers, null, 'code')) ?>;
+            function updateWithdrawCustomer() {
+                var modeEl = document.getElementById('mode');
+                var codeEl = document.getElementById('code');
+                var box = document.getElementById('withdraw_customer_box');
+                var nameEl = document.getElementById('withdraw_customer_name');
+                var bankEl = document.getElementById('withdraw_customer_bank');
+                if (!modeEl || !codeEl || !box) return;
+                var code = (codeEl.value || '').trim();
+                if (modeEl.value === 'WITHDRAW' && code) {
+                    var c = customerData[code];
+                    box.style.display = 'block';
+                    nameEl.textContent = (c && c.name) ? c.name : '—';
+                    bankEl.textContent = (c && c.bank_details) ? c.bank_details : '—';
+                } else {
+                    box.style.display = 'none';
+                }
+            }
+            var modeEl = document.getElementById('mode');
+            var codeEl = document.getElementById('code');
+            if (modeEl) modeEl.addEventListener('change', updateWithdrawCustomer);
+            if (codeEl) codeEl.addEventListener('change', updateWithdrawCustomer);
+            updateWithdrawCustomer();
+        })();
         (function() {
             var amountEl = document.getElementById('amount');
             var rewardPctEl = document.getElementById('reward_pct');

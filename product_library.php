@@ -5,17 +5,45 @@ require_permission('product_library');
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
-$rows = [];
+$products = [];
+$by_code = [];
+$codes = [];
 $err = '';
+
 try {
-    $sql = "SELECT a.id, a.customer_id, a.product_name, a.account, a.password, c.code
+    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {
+    $products = [];
+}
+
+try {
+    $rows = $pdo->query("SELECT a.customer_id, a.product_name, a.account, a.password, c.code
             FROM customer_product_accounts a
             LEFT JOIN customers c ON c.id = a.customer_id
-            ORDER BY c.code ASC, a.product_name ASC";
-    $rows = $pdo->query($sql)->fetchAll();
+            ORDER BY c.code ASC, a.product_name ASC")->fetchAll();
+    foreach ($rows as $r) {
+        $code = $r['code'] ?? '';
+        if ($code === '') continue;
+        if (!isset($by_code[$code])) $by_code[$code] = [];
+        $by_code[$code][$r['product_name']] = [
+            'account'  => $r['account'] ?? '',
+            'password' => $r['password'] ?? '',
+            'customer_id' => (int)$r['customer_id'],
+        ];
+    }
+    $codes = array_keys($by_code);
+    sort($codes);
+    if (empty($products) && !empty($by_code)) {
+        $seen = [];
+        foreach ($by_code as $list) {
+            foreach (array_keys($list) as $pn) { $seen[$pn] = true; }
+        }
+        $products = array_keys($seen);
+        sort($products);
+    }
 } catch (Throwable $e) {
-    $rows = [];
-    $err = '无法加载数据，请确认已执行 migrate_customer_products.sql 创建 customer_product_accounts 表。';
+    $codes = [];
+    $err = '无法加载数据，请确认已执行 migrate_customer_products.sql。';
 }
 ?>
 <!doctype html>
@@ -25,9 +53,14 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>顾客产品资料库 - 算账网</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .product-cell { font-size: 13px; white-space: nowrap; }
+        .product-cell .id { color: #0f172a; }
+        .product-cell .ps { color: var(--muted); margin-top: 2px; }
+    </style>
 </head>
 <body>
-    <div class="page-wrap" style="max-width: 960px;">
+    <div class="page-wrap" style="max-width: 100%;">
         <div class="page-header">
             <h2>顾客产品资料库</h2>
             <p class="breadcrumb">
@@ -42,30 +75,49 @@ try {
 
         <div class="card">
             <h3>顾客产品资料</h3>
-            <p class="form-hint" style="margin-bottom:12px;">格式：顾客代码 CODE / 产品（MEGA、918KISS 等）/ 账号 / 密码。在「编辑顾客」中为顾客添加产品账号后，会在此显示。</p>
-            <?php if ($rows): ?>
+            <p class="form-hint" style="margin-bottom:12px;">第一列为顾客 CODE；后面各列为产品（MEGA、918KISS、PUSSY 等，在「产品管理」中添加后会显示在此）。格子内为该顾客在该产品下的 id（账号）与 ps（密码）。在「编辑顾客」中为顾客添加产品账号后，会在此显示。</p>
+            <?php if ($products || $codes): ?>
+            <div style="overflow-x: auto;">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>CODE（顾客代码）</th>
-                        <th>产品（MEGA / 918KISS 等）</th>
-                        <th>账号</th>
-                        <th>密码</th>
+                        <th>CODE</th>
+                        <?php foreach ($products as $p): ?>
+                        <th><?= htmlspecialchars($p) ?></th>
+                        <?php endforeach; ?>
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($rows as $r): ?>
+                <?php if (empty($codes)): ?>
+                    <tr><td colspan="<?= count($products) + 1 ?>">暂无顾客产品账号。请到「编辑顾客」为顾客添加产品（如 MEGA、918KISS）及 id、密码。</td></tr>
+                <?php else: ?>
+                <?php foreach ($codes as $code): ?>
                     <tr>
-                        <td><a href="customer_edit.php?id=<?= (int)$r['customer_id'] ?>"><?= htmlspecialchars($r['code'] ?? '-') ?></a></td>
-                        <td><?= htmlspecialchars($r['product_name']) ?></td>
-                        <td><?= htmlspecialchars($r['account'] ?? '') ?></td>
-                        <td><?= ($r['password'] !== null && $r['password'] !== '') ? '••••••' : '—' ?></td>
+                        <?php $first_cell = reset($by_code[$code]); $cid = (int)($first_cell['customer_id'] ?? 0); ?>
+                        <td><a href="customer_edit.php?id=<?= $cid ?>"><?= htmlspecialchars($code) ?></a></td>
+                        <?php foreach ($products as $p): ?>
+                        <td class="product-cell">
+                            <?php
+                            $cell = $by_code[$code][$p] ?? null;
+                            if ($cell && (($cell['account'] ?? '') !== '' || ($cell['password'] ?? '') !== '')):
+                                $acc = htmlspecialchars($cell['account'] ?? '');
+                                $pwd = ($cell['password'] ?? '') !== '' ? '••••••' : '—';
+                            ?>
+                            <div class="id">id：<?= $acc ?: '—' ?></div>
+                            <div class="ps">ps：<?= $pwd ?></div>
+                            <?php else: ?>
+                            —
+                            <?php endif; ?>
+                        </td>
+                        <?php endforeach; ?>
                     </tr>
                 <?php endforeach; ?>
+                <?php endif; ?>
                 </tbody>
             </table>
+            </div>
             <?php else: ?>
-            <p class="form-hint">暂无记录。请先在 <a href="customers.php">顾客资料</a> 中进入某顾客的编辑页，为其添加产品（如 MEGA、918KISS）及账号、密码后，数据会显示在此。</p>
+            <p class="form-hint">暂无产品与数据。请先在「产品管理」添加产品（如 MEGA、918KISS、PUSSY），再在「编辑顾客」中为顾客添加各产品的 id 与密码。</p>
             <?php endif; ?>
         </div>
     </div>
