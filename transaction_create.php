@@ -16,6 +16,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
+    if ($bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
+    if ($product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $bonus   = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
     $staff   = trim($_POST['staff'] ?? '');
@@ -40,6 +42,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $today = date('Y-m-d');
 $now   = date('H:i');
+
+// 银行/渠道 下拉选项（可自行增删）
+$banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
+// 产品/平台 下拉选项（可自行增删）
+$products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -89,10 +96,24 @@ $now   = date('H:i');
         <input type="text" name="code" placeholder="如 C004">
 
         <label>银行/渠道</label>
-        <input type="text" name="bank" placeholder="如 HLB">
+        <select name="bank" id="bank">
+            <option value="">-- 请选 --</option>
+            <?php foreach ($banks as $b): ?>
+            <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
+            <?php endforeach; ?>
+            <option value="其他">其他</option>
+        </select>
+        <input type="text" name="bank_other" id="bank_other" placeholder="输入其他银行/渠道" style="display:none; margin-top:6px;">
 
         <label>产品/平台</label>
-        <input type="text" name="product" placeholder="如 MEGA">
+        <select name="product" id="product">
+            <option value="">-- 请选 --</option>
+            <?php foreach ($products as $p): ?>
+            <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
+            <?php endforeach; ?>
+            <option value="其他">其他</option>
+        </select>
+        <input type="text" name="product_other" id="product_other" placeholder="输入其他产品/平台" style="display:none; margin-top:6px;">
 
         <label>金额 *</label>
         <input type="text" name="amount" placeholder="如 630.00" required>
@@ -114,5 +135,14 @@ $now   = date('H:i');
         <a href="transaction_list.php">流水列表</a> |
         <a href="logout.php">退出</a>
     </p>
+    <script>
+        function toggleOther(selId, inputId) {
+            var sel = document.getElementById(selId);
+            var inp = document.getElementById(inputId);
+            if (sel.value === '其他') { inp.style.display = 'block'; inp.focus(); } else { inp.style.display = 'none'; inp.value = ''; }
+        }
+        document.getElementById('bank').onchange = function() { toggleOther('bank', 'bank_other'); };
+        document.getElementById('product').onchange = function() { toggleOther('product', 'product_other'); };
+    </script>
 </body>
 </html>
