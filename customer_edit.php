@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('customer_edit');
+$sidebar_current = 'customers';
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -134,6 +135,9 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
     </style>
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 900px;">
         <div class="page-header">
             <h2>编辑顾客 - <?= htmlspecialchars($row['code']) ?></h2>
@@ -230,6 +234,8 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
         <p class="form-hint" style="margin-top:16px;">暂无产品账号，请在上方选择产品并填写账号、密码后点击「添加」。</p>
         <?php endif; ?>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

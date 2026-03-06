@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('customer_create');
+$sidebar_current = 'customer_create';
 
 $msg = '';
 $err = '';
@@ -50,6 +51,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 560px;">
         <div class="page-header">
             <h2>新增顾客</h2>
@@ -83,6 +87,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <button type="submit" class="btn btn-primary">保存并继续</button>
             </form>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

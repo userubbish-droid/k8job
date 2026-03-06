@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('transaction_list');
+$sidebar_current = 'transaction_list';
 
 $id = (int)($_GET['id'] ?? 0);
 $return_to = trim($_GET['return_to'] ?? 'transaction_list.php');
@@ -127,8 +128,13 @@ if ($product_other !== '') $product = '其他';
         button { margin-top: 16px; padding: 10px 20px; background: #007bff; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
         a { color: #007bff; }
     </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
+    <div class="page-wrap" style="max-width: 520px;">
     <h2>编辑流水 #<?= (int)$row['id'] ?></h2>
     <?php if ($error): ?><div class="msg err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
 
@@ -225,5 +231,8 @@ if ($product_other !== '') $product = '其他';
         }
     </script>
     <?php endif; ?>
+    </div>
+        </main>
+    </div>
 </body>
 </html>

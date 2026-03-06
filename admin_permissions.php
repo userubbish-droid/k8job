@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_admin();
+$sidebar_current = 'admin_permissions';
 
 $msg = '';
 $err = '';
@@ -76,6 +77,9 @@ if ($selected_id > 0) {
     </style>
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 560px;">
         <div class="page-header">
             <h2>Member 权限设置</h2>
@@ -123,6 +127,8 @@ if ($selected_id > 0) {
             <p class="form-hint">请先从上方下拉选择一名 Member（如 member1、member2），再为其勾选权限。</p>
             <?php endif; ?>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

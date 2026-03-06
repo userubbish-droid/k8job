@@ -7,10 +7,10 @@ $today = date('Y-m-d');
 $month_start = date('Y-m-01');
 $month_end   = date('Y-m-t');
 
+$sidebar_current = 'dashboard';
 $db_error = '';
 $day_in = $day_out = $day_profit = 0;
 $month_in = $month_out = $month_profit = 0;
-$pending_count = 0;
 $by_product_today = [];
 $by_bank_today = [];
 
@@ -35,16 +35,12 @@ try {
     $month_out   = (float)($month['total_out'] ?? 0);
     $month_profit = $month_in - $month_out;
 
-    if (($_SESSION['user_role'] ?? '') === 'admin') {
-        $pending_count = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
-    }
-
     // 今日按产品汇总（已批准）
     $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
                            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
                            FROM transactions WHERE day = ? AND status = 'approved'
-                           GROUP BY product ORDER BY total_in + total_out DESC");
+                           GROUP BY product ORDER BY 2 + 3 DESC");
     $stmt->execute([$today]);
     $by_product_today = $stmt->fetchAll();
 
@@ -53,7 +49,7 @@ try {
                            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
                            FROM transactions WHERE day = ? AND status = 'approved'
-                           GROUP BY bank ORDER BY total_in + total_out DESC");
+                           GROUP BY bank ORDER BY 2 + 3 DESC");
     $stmt->execute([$today]);
     $by_bank_today = $stmt->fetchAll();
 } catch (Throwable $e) {
@@ -67,98 +63,10 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>首页 - 算账网</title>
     <link rel="stylesheet" href="style.css">
-    <style>
-        .dashboard-layout { display: flex; min-height: 100vh; }
-        .dashboard-sidebar {
-            width: 220px;
-            min-width: 220px;
-            background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
-            border-right: 1px solid var(--border);
-            padding: 16px 0;
-            flex-shrink: 0;
-        }
-        .dashboard-sidebar .nav-item {
-            display: flex;
-            align-items: center;
-            padding: 12px 20px;
-            margin: 2px 10px;
-            color: #475569;
-            text-decoration: none;
-            font-size: 14px;
-            border-radius: 8px;
-            border-left: 3px solid transparent;
-            transition: background 0.15s, color 0.15s;
-        }
-        .dashboard-sidebar .nav-item .nav-icon {
-            width: 20px; height: 20px; margin-right: 10px;
-            border-radius: 4px;
-            background: #e2e8f0;
-            flex-shrink: 0;
-        }
-        .dashboard-sidebar .nav-item.primary .nav-icon { background: var(--primary); opacity: 0.9; }
-        .dashboard-sidebar .nav-item:hover { background: #fff; color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-        .dashboard-sidebar .nav-item.primary { background: #fff; color: var(--primary); font-weight: 600; border-left-color: var(--primary); box-shadow: 0 1px 2px rgba(0,0,0,0.04); }
-        .dashboard-main { flex: 1; padding: 24px; overflow: auto; background: #fff; }
-        .stat-cards { display: flex; flex-wrap: wrap; gap: 16px; }
-        .stat-card {
-            flex: 1; min-width: 120px;
-            padding: 16px 20px;
-            border-radius: var(--card-radius);
-            border: 1px solid var(--border);
-            background: #fff;
-        }
-        .stat-card.in { border-left: 4px solid var(--success); background: linear-gradient(135deg, #f0fdf4 0%, #fff 100%); }
-        .stat-card.out { border-left: 4px solid var(--danger); background: linear-gradient(135deg, #fef2f2 0%, #fff 100%); }
-        .stat-card.profit { border-left: 4px solid var(--primary); background: linear-gradient(135deg, #eff6ff 0%, #fff 100%); }
-        .stat-card .label { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
-        .stat-card .value { font-size: 1.4rem; font-weight: 700; }
-        .stat-card.in .value { color: var(--success); }
-        .stat-card.out .value { color: var(--danger); }
-        .stat-card.profit .value { color: var(--primary); }
-        .total-table-wrap { margin-top: 16px; overflow-x: auto; }
-        .total-table-wrap h4 { font-size: 14px; color: #475569; margin: 0 0 8px; font-weight: 600; }
-        .total-table { width: 100%; font-size: 13px; border-collapse: collapse; }
-        .total-table th, .total-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
-        .total-table th { background: #f8fafc; color: var(--muted); font-weight: 600; }
-        .total-table .num { text-align: right; }
-        .total-table .num.in { color: var(--success); }
-        .total-table .num.out { color: var(--danger); }
-        .total-table .num.profit { color: var(--primary); font-weight: 600; }
-        .month-toggle { margin-bottom: 16px; font-size: 14px; color: #64748b; display: flex; align-items: center; gap: 8px; }
-        .month-toggle input { cursor: pointer; width: 18px; height: 18px; }
-        #month-card { display: none; }
-        #month-card.visible { display: block; }
-        .welcome-role { font-size: 13px; color: var(--muted); }
-        .welcome-role .role-badge { display: inline-block; padding: 2px 8px; border-radius: 6px; font-size: 12px; background: var(--primary-light); color: var(--primary); }
-        @media (max-width: 768px) {
-            .dashboard-layout { flex-direction: column; }
-            .dashboard-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 12px; display: flex; flex-wrap: wrap; gap: 6px; }
-            .dashboard-sidebar .nav-item { padding: 12px 14px; min-height: 44px; margin: 0; border-left: none; border-radius: 8px; }
-            .dashboard-main { padding: 16px; }
-            .stat-cards { flex-direction: column; }
-            .total-table-wrap { grid-template-columns: 1fr; }
-        }
-    </style>
 </head>
 <body>
     <div class="dashboard-layout">
-        <aside class="dashboard-sidebar">
-            <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item primary"><span class="nav-icon"></span>记一笔</a><?php endif; ?>
-            <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item"><span class="nav-icon"></span>流水记录</a><?php endif; ?>
-            <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item"><span class="nav-icon"></span>顾客列表</a><?php endif; ?>
-            <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item"><span class="nav-icon"></span>产品账号</a><?php endif; ?>
-            <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item"><span class="nav-icon"></span>新增顾客</a><?php endif; ?>
-            <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
-                <a href="admin_users.php" class="nav-item"><span class="nav-icon"></span>账号管理</a>
-                <a href="admin_banks.php" class="nav-item"><span class="nav-icon"></span>银行/渠道</a>
-                <a href="admin_products.php" class="nav-item"><span class="nav-icon"></span>产品管理</a>
-                <a href="admin_option_sets.php" class="nav-item"><span class="nav-icon"></span>选项设置</a>
-                <a href="admin_permissions.php" class="nav-item"><span class="nav-icon"></span>员工权限</a>
-                <a href="admin_approvals.php" class="nav-item"><span class="nav-icon"></span>待审核<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
-            <?php endif; ?>
-            <a href="logout.php" class="nav-item"><span class="nav-icon"></span>退出登录</a>
-        </aside>
-
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
             <div class="page-header">
                 <h1>算账网</h1>

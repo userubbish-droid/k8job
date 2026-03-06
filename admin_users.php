@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_admin();
+$sidebar_current = 'admin_users';
 
 $msg = '';
 $err = '';
@@ -86,9 +87,13 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
         .btn2:hover { background: #5a6268; }
         .inline { display:inline-block; }
     </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="wrap">
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
+    <div class="wrap" style="max-width: 960px;">
         <h2>用户管理（仅 admin）</h2>
         <p class="muted">当前：<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>（<?= htmlspecialchars($_SESSION['user_role'] ?? '') ?>）</p>
 
@@ -173,6 +178,8 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
                 </tbody>
             </table>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

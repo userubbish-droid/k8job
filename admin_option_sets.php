@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_admin();
+$sidebar_current = 'admin_option_sets';
 
 $msg = '';
 $err = '';
@@ -73,6 +74,9 @@ try {
     </style>
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 720px;">
         <div class="page-header">
             <h2>选项设置（SMS / FD / WS / WC / VERIFY）</h2>
@@ -129,6 +133,8 @@ try {
         </div>
         <?php endforeach; ?>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

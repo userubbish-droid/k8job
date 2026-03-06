@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_admin();
+$sidebar_current = 'admin_banks';
 
 $msg = '';
 $err = '';
@@ -63,9 +64,13 @@ try {
         .btn2:hover { background: #5a6268; }
         .inline { display:inline-block; }
     </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="wrap">
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
+    <div class="wrap" style="max-width: 960px;">
         <h2 style="margin:0 0 12px;">银行/渠道管理（仅 admin）</h2>
         <p class="muted"><a href="dashboard.php">返回首页</a> | <a href="admin_products.php">产品管理</a> | <a href="admin_users.php">用户管理</a></p>
 
@@ -122,6 +127,8 @@ try {
                 </tbody>
             </table>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_admin();
+$sidebar_current = 'admin_products';
 
 $msg = '';
 $err = '';
@@ -46,6 +47,9 @@ try {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 860px;">
         <div class="page-header">
             <h2>产品/平台管理</h2>
@@ -107,6 +111,8 @@ try {
                 </tbody>
             </table>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

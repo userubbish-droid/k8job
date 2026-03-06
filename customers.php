@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('customers');
+$sidebar_current = 'customers';
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
@@ -47,6 +48,9 @@ try {
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
             <h2>顾客列表</h2>
@@ -113,6 +117,8 @@ try {
                 </tbody>
             </table>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

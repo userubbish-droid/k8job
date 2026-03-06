@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('transaction_list');
+$sidebar_current = 'transaction_list';
 
 $day_from = $_GET['day_from'] ?? date('Y-m-01');
 $day_to   = $_GET['day_to'] ?? date('Y-m-d');
@@ -146,6 +147,9 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
             <h2>流水记录</h2>
@@ -277,6 +281,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         <a href="dashboard.php">返回首页</a><span>·</span>
         <a href="logout.php">退出</a>
     </p>
+    </div>
+        </main>
     </div>
 </body>
 </html>

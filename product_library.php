@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('product_library');
+$sidebar_current = 'product_library';
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
@@ -60,6 +61,9 @@ try {
     </style>
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 100%;">
         <div class="page-header">
             <h2>产品账号</h2>
@@ -120,6 +124,8 @@ try {
             <p class="form-hint">暂无数据。请先在「产品管理」添加产品，再在「编辑顾客」里为顾客添加各产品的账号与密码。</p>
             <?php endif; ?>
         </div>
+    </div>
+        </main>
     </div>
 </body>
 </html>

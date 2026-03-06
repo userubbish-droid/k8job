@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_admin();
+$sidebar_current = 'admin_approvals';
 
 $msg = '';
 $err = '';
@@ -60,9 +61,13 @@ try {
         a { color: #007bff; }
         form { display: inline-block; margin-right: 6px; }
     </style>
+    <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <div class="wrap">
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
+    <div class="wrap" style="max-width: 1100px;">
         <h2 style="margin:0 0 8px;">待批准（仅 admin）</h2>
         <p class="muted"><a href="dashboard.php">返回首页</a> | <a href="transaction_list.php?status=pending">查看所有待批准（列表视图）</a></p>
 
@@ -120,6 +125,8 @@ try {
                 <?php endif; ?>
             </tbody>
         </table>
+    </div>
+        </main>
     </div>
 </body>
 </html>

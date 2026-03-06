@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('transaction_create');
+$sidebar_current = 'transaction_create';
 
 $saved = false;
 $error = '';
@@ -137,6 +138,9 @@ if ($is_admin) {
     </style>
 </head>
 <body>
+    <div class="dashboard-layout">
+        <?php include __DIR__ . '/inc/sidebar.php'; ?>
+        <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 520px;">
         <div class="page-header">
             <h2>记一笔流水</h2>
@@ -282,6 +286,8 @@ if ($is_admin) {
         <a href="transaction_list.php">流水记录</a><span>·</span>
         <a href="logout.php">退出</a>
     </p>
+    </div>
+        </main>
     </div>
     <script>
         (function() {
