@@ -13,7 +13,8 @@ $day_in = $day_out = $day_profit = 0;
 $month_in = $month_out = $month_profit = 0;
 $day_customers_count = 0;
 $day_orders_count = 0;
-$by_bank_today = [];
+$day_new_customers = 0;
+$day_new_customer_orders = 0;
 
 try {
     // 今日统计（只统计已批准）
@@ -45,14 +46,15 @@ try {
     $stmt->execute([$today]);
     $day_orders_count = (int) $stmt->fetchColumn();
 
-    // 今日按银行/渠道汇总（已批准）
-    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
-                           COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-                           COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-                           FROM transactions WHERE day = ? AND status = 'approved'
-                           GROUP BY bank ORDER BY 2 + 3 DESC");
+    // 几个新顾客（今日新增的顾客数，按 customers 表 created_at）
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE DATE(created_at) = ?");
     $stmt->execute([$today]);
-    $by_bank_today = $stmt->fetchAll();
+    $day_new_customers = (int) $stmt->fetchColumn();
+
+    // 新客户进多少单（今日已批准流水中，顾客代码属于「今日新增顾客」的条数）
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND DATE(c.created_at) = ? WHERE t.day = ? AND t.status = 'approved'");
+    $stmt->execute([$today, $today]);
+    $day_new_customer_orders = (int) $stmt->fetchColumn();
 } catch (Throwable $e) {
     $db_error = $e->getMessage();
 }
@@ -123,24 +125,19 @@ try {
                             </div>
                         </div>
                     </div>
-                    <?php if (!empty($by_bank_today)): ?>
                     <div>
-                        <h4>银行目前有多少（今日）</h4>
-                        <table class="total-table">
-                            <thead><tr><th>银行/渠道</th><th class="num">入账</th><th class="num">出账</th><th class="num">利润</th></tr></thead>
-                            <tbody>
-                            <?php foreach ($by_bank_today as $r): $bi = (float)($r['total_in'] ?? 0); $bo = (float)($r['total_out'] ?? 0); ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($r['bank'] ?? '—') ?></td>
-                                    <td class="num in"><?= number_format($bi, 2) ?></td>
-                                    <td class="num out"><?= number_format($bo, 2) ?></td>
-                                    <td class="num profit"><?= number_format($bi - $bo, 2) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                        <h4>今日新顾客与单数</h4>
+                        <div class="stat-cards" style="margin-top:8px;">
+                            <div class="stat-card" style="border-left-color: var(--success);">
+                                <div class="label">几个新顾客</div>
+                                <div class="value" style="color: var(--success);"><?= (int)$day_new_customers ?></div>
+                            </div>
+                            <div class="stat-card" style="border-left-color: var(--primary);">
+                                <div class="label">新客户进多少单</div>
+                                <div class="value" style="color: var(--primary);"><?= (int)$day_new_customer_orders ?></div>
+                            </div>
+                        </div>
                     </div>
-                    <?php endif; ?>
                 </div>
             </div>
 
