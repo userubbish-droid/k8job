@@ -62,7 +62,10 @@ $month_profit = $month_in - $month_out;
 <body>
     <div class="wrap">
         <h1>算账网</h1>
-        <p class="user">欢迎，<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></p>
+        <p class="user">
+            欢迎，<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>
+            （<?= htmlspecialchars($_SESSION['user_role'] ?? 'member') ?>）
+        </p>
 
         <div class="card">
             <h2>今日（<?= htmlspecialchars($today) ?>）</h2>

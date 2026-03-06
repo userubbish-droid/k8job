@@ -1,4 +1,5 @@
 <?php
+require 'config.php';
 session_start();
 if (isset($_SESSION['user_id'])) {
     header('Location: dashboard.php');
@@ -8,15 +9,25 @@ if (isset($_SESSION['user_id'])) {
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
-    $pass = trim($_POST['pass'] ?? '');
-    // 简单单用户：用户名 admin，密码 123（上线后请改密码或改成数据库验证）
-    if ($user === 'admin' && $pass === '123') {
-        $_SESSION['user_id']   = 1;
-        $_SESSION['user_name'] = 'Admin';
-        header('Location: dashboard.php');
-        exit;
+    $pass = (string) ($_POST['pass'] ?? '');
+
+    if ($user === '' || $pass === '') {
+        $error = '请输入用户名和密码';
+    } else {
+        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, display_name, is_active FROM users WHERE username = ? LIMIT 1");
+        $stmt->execute([$user]);
+        $u = $stmt->fetch();
+
+        if (!$u || (int)$u['is_active'] !== 1 || !password_verify($pass, $u['password_hash'])) {
+            $error = '用户名或密码错误';
+        } else {
+            $_SESSION['user_id'] = (int)$u['id'];
+            $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
+            $_SESSION['user_role'] = $u['role'];
+            header('Location: dashboard.php');
+            exit;
+        }
     }
-    $error = '用户名或密码错误';
 }
 ?>
 <!DOCTYPE html>
@@ -39,11 +50,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <?php if ($error): ?><p class="err"><?= htmlspecialchars($error) ?></p><?php endif; ?>
     <form method="post">
         <label>用户名</label>
-        <input type="text" name="user" value="admin" required>
+        <input type="text" name="user" required>
         <label>密码</label>
-        <input type="password" name="pass" placeholder="默认 123" required>
+        <input type="password" name="pass" required>
         <button type="submit">登录</button>
     </form>
-    <p style="margin-top: 12px; font-size: 12px; color: #666;">默认：admin / 123（上线后请修改）</p>
+    <p style="margin-top: 12px; font-size: 12px; color: #666;">
+        还没创建账号？先访问 <a href="setup.php">setup.php</a> 创建（创建完请删除 setup.php）。
+    </p>
 </body>
 </html>
