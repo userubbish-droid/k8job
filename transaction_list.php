@@ -1,10 +1,7 @@
 <?php
 require 'config.php';
-session_start();
-if (!isset($_SESSION['user_id'])) {
-    header('Location: login.php');
-    exit;
-}
+require 'auth.php';
+require_login();
 
 $day_from = $_GET['day_from'] ?? date('Y-m-01');
 $day_to   = $_GET['day_to'] ?? date('Y-m-d');
