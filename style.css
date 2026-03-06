@@ -338,9 +338,12 @@ textarea.form-control {
 /* 行内表单（如操作列里的按钮） */
 form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 
-/* 固定侧栏布局（各选项页共用） */
-.dashboard-layout { display: flex; min-height: 100vh; }
+/* 固定侧栏布局：导航在左边，每一项往下排成一列 */
+.dashboard-layout { display: flex; flex-direction: row; min-height: 100vh; }
 .dashboard-sidebar {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
     width: 228px;
     min-width: 228px;
     background: #fff;
@@ -350,16 +353,22 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 }
 .dashboard-sidebar .nav-item {
     display: flex;
+    flex-direction: row;
     align-items: center;
-    padding: 11px 20px;
-    margin: 2px 12px;
+    width: 100%;
+    box-sizing: border-box;
+    padding: 12px 20px;
+    margin: 0 12px 6px 12px;
     color: #475569;
     text-decoration: none;
     font-size: 14px;
     border-radius: 8px;
     border-left: 3px solid transparent;
     transition: background 0.15s, color 0.15s;
+    white-space: nowrap;
 }
+.dashboard-sidebar .nav-item:first-of-type { margin-top: 0; }
+.dashboard-sidebar .nav-item:last-of-type { margin-bottom: 0; }
 .dashboard-sidebar .nav-item .nav-icon {
     width: 18px; height: 18px; margin-right: 12px;
     border-radius: 4px;
