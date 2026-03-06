@@ -68,7 +68,7 @@ try {
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
-            <div class="page-header">
+            <div class="page-header dashboard-header">
                 <h1>算账网</h1>
                 <p class="welcome-role">
                     欢迎，<strong><?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></strong>
