@@ -9,12 +9,38 @@ $mode     = $_GET['mode'] ?? '';
 $code     = trim($_GET['code'] ?? '');
 $bank     = trim($_GET['bank'] ?? '');
 $product  = trim($_GET['product'] ?? '');
+$status   = trim($_GET['status'] ?? '');
 $export   = ($_GET['export'] ?? '') === 'csv';
 $per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 
+$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+
 $params = [];
 $where  = ['1=1'];
+
+// 审批过滤：默认只看已批准
+if ($is_admin) {
+    if ($status === '' || $status === 'approved') {
+        $where[] = "status = 'approved'";
+    } elseif (in_array($status, ['pending', 'rejected'], true)) {
+        $where[] = "status = '$status'";
+    } elseif ($status === 'all') {
+        // 不加过滤
+    } else {
+        $where[] = "status = 'approved'";
+        $status = 'approved';
+    }
+} else {
+    if ($status === 'pending') {
+        $where[] = "status = 'pending'";
+        $where[] = "created_by = ?";
+        $params[] = (int)($_SESSION['user_id'] ?? 0);
+    } else {
+        $where[] = "status = 'approved'";
+        $status = 'approved';
+    }
+}
 
 if ($day_from !== '') {
     $where[] = 'day >= ?';
@@ -100,6 +126,7 @@ $profit    = $total_in - $total_out;
 
 // 分页链接保留当前筛选参数
 $q = array_filter([
+    'status'   => $status,
     'day_from' => $day_from,
     'day_to'   => $day_to,
     'mode'     => $mode,
@@ -141,6 +168,21 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     <h2>流水列表</h2>
 
     <form class="filters" method="get">
+        <?php if ($is_admin): ?>
+            <label>状态</label>
+            <select name="status">
+                <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
+                <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>待批准</option>
+                <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>已拒绝</option>
+                <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>全部</option>
+            </select>
+        <?php else: ?>
+            <label>状态</label>
+            <select name="status">
+                <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
+                <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>待批准（我的）</option>
+            </select>
+        <?php endif; ?>
         <label>从</label>
         <input type="date" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
         <label>到</label>

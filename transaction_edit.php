@@ -11,7 +11,7 @@ if (strpos($return_to, 'transaction_list.php') !== 0) {
 
 $row = null;
 if ($id > 0) {
-    $stmt = $pdo->prepare("SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark FROM transactions WHERE id = ?");
+    $stmt = $pdo->prepare("SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by FROM transactions WHERE id = ?");
     $stmt->execute([$id]);
     $row = $stmt->fetch();
 }
@@ -20,17 +20,32 @@ if (!$row) {
     exit;
 }
 
+$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+// member 只能编辑自己 pending 的记录
+if (!$is_admin) {
+    if (($row['status'] ?? '') !== 'pending') {
+        http_response_code(403);
+        echo '无权限：已批准/已拒绝的流水不能修改。';
+        exit;
+    }
+    if ((int)($row['created_by'] ?? 0) !== (int)($_SESSION['user_id'] ?? 0)) {
+        http_response_code(403);
+        echo '无权限：只能修改自己提交的流水。';
+        exit;
+    }
+}
+
 $saved = false;
 $error = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $day     = trim($_POST['day'] ?? '');
-    $time    = trim($_POST['time'] ?? '00:00');
+    $can_edit_dt = $is_admin && !empty($_POST['edit_dt']);
+    $day     = $can_edit_dt ? trim($_POST['day'] ?? '') : ($row['day'] ?? date('Y-m-d'));
+    $time    = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : ($row['time'] ?? date('H:i:s'));
     $mode    = trim($_POST['mode'] ?? '');
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
-    $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
     if ($is_admin && $bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
     if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
@@ -57,7 +72,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 // 银行/产品：admin 可改列表且可选「其他」；员工只能从管理员设置的选项中选择
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $banks = [];
 $products = [];
 try {
@@ -114,10 +128,20 @@ if ($product_other !== '') $product = '其他';
 
     <form method="post">
         <input type="hidden" name="return_to" value="<?= htmlspecialchars($return_to) ?>">
-        <label>日期 *</label>
-        <input type="date" name="day" value="<?= htmlspecialchars($day) ?>" required>
-        <label>时间</label>
-        <input type="time" name="time" value="<?= htmlspecialchars($time) ?>">
+        <label>日期 / 时间</label>
+        <p style="margin:4px 0 0;font-size:12px;color:#888;">
+            <?php if ($is_admin): ?>默认不改日期/时间，勾选才可修改。<?php else: ?>员工不能修改日期/时间。<?php endif; ?>
+        </p>
+        <?php if ($is_admin): ?>
+            <label style="font-weight:600; margin-top:10px;">
+                <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:auto; margin-right:6px;">
+                需要修改日期/时间
+            </label>
+            <input type="date" name="day" id="day" value="<?= htmlspecialchars($day) ?>" style="margin-top:6px;" disabled>
+            <input type="time" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" style="margin-top:6px;" disabled>
+        <?php else: ?>
+            <input type="text" value="<?= htmlspecialchars($day . ' ' . $time) ?>" readonly>
+        <?php endif; ?>
         <label>模式 *</label>
         <select name="mode" required>
             <option value="">-- 请选 --</option>
@@ -170,6 +194,13 @@ if ($product_other !== '') $product = '其他';
         }
         document.getElementById('bank').onchange = function() { toggleOther('bank', 'bank_other'); };
         document.getElementById('product').onchange = function() { toggleOther('product', 'product_other'); };
+        var cb = document.getElementById('edit_dt');
+        if (cb) {
+            cb.onchange = function() {
+                document.getElementById('day').disabled = !cb.checked;
+                document.getElementById('time').disabled = !cb.checked;
+            };
+        }
     </script>
     <?php endif; ?>
 </body>

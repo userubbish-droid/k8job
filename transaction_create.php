@@ -5,15 +5,17 @@ require_login();
 
 $saved = false;
 $error = '';
+$submitted_status = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $day     = trim($_POST['day'] ?? '');
-    $time    = trim($_POST['time'] ?? '00:00');
+    $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+    $can_edit_dt = $is_admin && !empty($_POST['edit_dt']);
+    $day     = $can_edit_dt ? trim($_POST['day'] ?? '') : date('Y-m-d');
+    $time    = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : date('H:i:s');
     $mode    = trim($_POST['mode'] ?? '');
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
-    $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
     if ($is_admin && $bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
     if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
@@ -30,11 +32,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus  = (float) $bonus;
         $total  = $amount + $bonus;
 
-        $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $status = $is_admin ? 'approved' : 'pending';
+        $approved_by = $is_admin ? (int)($_SESSION['user_id'] ?? 0) : null;
+        $approved_at = $is_admin ? date('Y-m-d H:i:s') : null;
+
+        $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $pdo->prepare($sql);
-        $stmt->execute([$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null]);
+        $stmt->execute([
+            $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null,
+            $amount, $bonus, $total, $staff ?: null, $remark ?: null,
+            $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at
+        ]);
         $saved = true;
+        $submitted_status = $status;
     }
 }
 
@@ -83,17 +94,26 @@ if ($is_admin) {
 <body>
     <h2>记一笔流水</h2>
     <?php if ($saved): ?>
-        <div class="msg ok">已保存。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+        <?php if ($submitted_status === 'pending'): ?>
+            <div class="msg ok">已提交，等待管理员批准后才会显示在统计和流水列表中。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+        <?php else: ?>
+            <div class="msg ok">已保存并生效。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+        <?php endif; ?>
     <?php elseif ($error): ?>
         <div class="msg err"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 
     <form method="post">
-        <label>日期 *</label>
-        <input type="date" name="day" value="<?= htmlspecialchars($today) ?>" required>
-
-        <label>时间</label>
-        <input type="time" name="time" value="<?= htmlspecialchars($now) ?>">
+        <label>日期 / 时间</label>
+        <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">默认自动记录当前日期和时间。</p>
+        <?php if ($is_admin): ?>
+            <label style="font-weight:600; margin-top:10px;">
+                <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:auto; margin-right:6px;">
+                需要修改日期/时间
+            </label>
+            <input type="date" name="day" id="day" value="<?= htmlspecialchars($today) ?>" style="margin-top:6px;" disabled>
+            <input type="time" name="time" id="time" value="<?= htmlspecialchars($now) ?>" style="margin-top:6px;" disabled>
+        <?php endif; ?>
 
         <label>模式 *</label>
         <select name="mode" required>
@@ -159,6 +179,14 @@ if ($is_admin) {
         }
         document.getElementById('bank').onchange = function() { toggleOther('bank', 'bank_other'); };
         document.getElementById('product').onchange = function() { toggleOther('product', 'product_other'); };
+
+        var cb = document.getElementById('edit_dt');
+        if (cb) {
+            cb.onchange = function() {
+                document.getElementById('day').disabled = !cb.checked;
+                document.getElementById('time').disabled = !cb.checked;
+            };
+        }
     </script>
     <?php endif; ?>
 </body>

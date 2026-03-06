@@ -10,7 +10,7 @@ $month_end   = date('Y-m-t');
 // 今日统计
 $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                               COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-                       FROM transactions WHERE day = ?");
+                       FROM transactions WHERE day = ? AND status = 'approved'");
 $stmt->execute([$today]);
 $day = $stmt->fetch();
 $day_in   = $day['total_in'];
@@ -20,12 +20,21 @@ $day_profit = $day_in - $day_out;
 // 本月统计
 $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                               COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-                       FROM transactions WHERE day >= ? AND day <= ?");
+                       FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'");
 $stmt->execute([$month_start, $month_end]);
 $month = $stmt->fetch();
 $month_in    = $month['total_in'];
 $month_out   = $month['total_out'];
 $month_profit = $month_in - $month_out;
+
+$pending_count = 0;
+if (($_SESSION['user_role'] ?? '') === 'admin') {
+    try {
+        $pending_count = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
+    } catch (Throwable $e) {
+        $pending_count = 0;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -107,6 +116,7 @@ $month_profit = $month_in - $month_out;
                 <a href="admin_users.php" class="outline">用户管理</a>
                 <a href="admin_banks.php" class="outline">银行管理</a>
                 <a href="admin_products.php" class="outline">产品管理</a>
+                <a href="admin_approvals.php" class="outline">待批准<?= $pending_count ? '（' . (int)$pending_count . '）' : '' ?></a>
             <?php endif; ?>
             <a href="logout.php" class="outline">退出</a>
         </div>

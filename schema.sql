@@ -13,6 +13,10 @@ CREATE TABLE IF NOT EXISTS transactions (
   total DECIMAL(12,2) DEFAULT 0,
   staff VARCHAR(50),
   remark VARCHAR(255),
+  status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+  created_by INT UNSIGNED NULL,
+  approved_by INT UNSIGNED NULL,
+  approved_at DATETIME NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
