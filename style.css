@@ -338,14 +338,14 @@ textarea.form-control {
 /* 行内表单（如操作列里的按钮） */
 form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 
-/* 固定侧栏布局：导航在左边，每一项往下排成一列 */
-.dashboard-layout { display: flex; flex-direction: row; min-height: 100vh; }
+/* 固定侧栏布局：导航在左边，每一项往下排成一列（!important 防缓存未更新） */
+.dashboard-layout { display: flex !important; flex-direction: row !important; min-height: 100vh; }
 .dashboard-sidebar {
-    display: flex;
-    flex-direction: column;
-    flex-wrap: nowrap;
-    width: 228px;
-    min-width: 228px;
+    display: flex !important;
+    flex-direction: column !important;
+    flex-wrap: nowrap !important;
+    width: 228px !important;
+    min-width: 228px !important;
     background: #fff;
     border-right: 1px solid var(--border);
     padding: 20px 0;
