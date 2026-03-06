@@ -111,123 +111,152 @@ if ($is_admin) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>记一笔流水 - 算账网</title>
     <link rel="stylesheet" href="style.css">
+    <style>
+        .form-section { margin-bottom: 20px; }
+        .form-section-title { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
+        .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .calc-box { margin: 12px 0; padding: 12px 14px; background: #f0f9ff; border-radius: 8px; font-size: 14px; color: #0c4a6e; }
+        .success-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
+        .success-actions a { padding: 8px 14px; background: #fff; border: 1px solid #a7f3d0; border-radius: 6px; color: #059669; text-decoration: none; font-size: 13px; }
+        .success-actions a:hover { background: #ecfdf5; }
+        @media (max-width: 640px) {
+            .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+        }
+    </style>
 </head>
 <body>
-    <div class="page-wrap" style="max-width: 560px;">
+    <div class="page-wrap" style="max-width: 520px;">
         <div class="page-header">
             <h2>记一笔流水</h2>
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水列表</a></p>
         </div>
+
     <?php if ($saved): ?>
-        <?php if ($submitted_status === 'pending'): ?>
-            <div class="alert alert-success">
-                已提交，等待管理员批准后才会显示在统计和流水列表中。<br>
-                <?php if (!empty($saved_code) || !empty($saved_product)): ?>
-                <strong>顾客产品资料</strong>：<?= htmlspecialchars($saved_mode) ?> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?>，总数 <strong><?= number_format($saved_total, 2) ?></strong>。<br>
-                <?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?>
-                <?php endif; ?>
-                <br><br>
-                <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a>
+        <div class="card" style="margin-bottom: 20px;">
+            <div class="alert alert-success" style="margin-bottom: 0;">
+                <?php if ($submitted_status === 'pending'): ?>已提交，等待管理员批准。<?php else: ?>已保存并生效。<?php endif; ?>
             </div>
-        <?php else: ?>
-            <div class="alert alert-success">
-                已保存并生效。<br>
-                <?php if (!empty($saved_code) || !empty($saved_product)): ?>
-                <strong>顾客产品资料</strong>：<?= htmlspecialchars($saved_mode) ?> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?>，总数 <strong><?= number_format($saved_total, 2) ?></strong>。<br>
-                <?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?>
-                <?php endif; ?>
-                <br><br>
-                <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a>
+            <?php if (!empty($saved_code) || !empty($saved_product)): ?>
+            <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px;">
+                <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> · 金额 <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?> · 总数 <strong><?= number_format($saved_total, 2) ?></strong></div>
+                <div class="form-hint"><?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?></div>
             </div>
-        <?php endif; ?>
+            <?php endif; ?>
+            <div class="success-actions">
+                <a href="transaction_create.php">再记一笔</a>
+                <a href="transaction_list.php">看流水</a>
+                <a href="dashboard.php">回首页</a>
+            </div>
+        </div>
     <?php elseif ($error): ?>
         <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
     <?php endif; ?>
 
     <div class="card">
     <form method="post">
-        <label>日期 / 时间</label>
-        <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">默认自动记录当前日期和时间。</p>
         <?php if ($is_admin): ?>
-            <label style="font-weight:600; margin-top:10px;">
-                <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:auto; margin-right:6px;">
-                需要修改日期/时间
+        <div class="form-section">
+            <div class="form-section-title">日期 / 时间</div>
+            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
+                <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:18px; height:18px;">
+                <span>需要修改日期/时间</span>
             </label>
             <div id="dt_box" style="display:none;">
-                <input type="date" name="day" id="day" value="<?= htmlspecialchars($today) ?>" style="margin-top:6px;">
-                <input type="time" name="time" id="time" value="<?= htmlspecialchars($now) ?>" style="margin-top:6px;">
+                <div class="form-row-2">
+                    <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label>时间</label><input type="time" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>"></div>
+                </div>
             </div>
+            <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。</p>
+        </div>
         <?php endif; ?>
 
-        <label>模式 *</label>
-        <select name="mode" required>
-            <option value="">-- 请选 --</option>
-            <option value="DEPOSIT">DEPOSIT（入）</option>
-            <option value="WITHDRAW">WITHDRAW（出）</option>
-            <option value="BANK">BANK</option>
-            <option value="REBATE">REBATE</option>
-            <option value="OTHER">OTHER</option>
-        </select>
-
-        <label>客户代码</label>
-        <?php if (empty($customers)): ?>
-            <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无客户选项，请先到 <a href="customers.php">客户资料</a> 添加。</p>
-            <select name="code" disabled>
-                <option value="">-- 暂无 --</option>
-            </select>
-        <?php else: ?>
-            <select name="code">
-                <option value="">-- 请选 --</option>
-                <?php foreach ($customers as $c): ?>
-                    <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code'] . (empty($c['name']) ? '' : ' - ' . $c['name'])) ?></option>
-                <?php endforeach; ?>
-            </select>
-        <?php endif; ?>
-
-        <label>银行/渠道</label>
-        <?php if (!$is_admin && empty($banks)): ?><p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无选项，请联系管理员在「银行管理」中添加。</p><?php endif; ?>
-        <select name="bank" id="bank">
-            <option value="">-- 请选 --</option>
-            <?php foreach ($banks as $b): ?>
-            <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
-            <?php endforeach; ?>
-            <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
-        </select>
-        <?php if ($is_admin): ?><input type="text" name="bank_other" id="bank_other" placeholder="输入其他银行/渠道" style="display:none; margin-top:6px;"><?php endif; ?>
-
-        <label>产品/平台</label>
-        <?php if (!$is_admin && empty($products)): ?><p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无选项，请联系管理员在「产品管理」中添加。</p><?php endif; ?>
-        <select name="product" id="product">
-            <option value="">-- 请选 --</option>
-            <?php foreach ($products as $p): ?>
-            <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
-            <?php endforeach; ?>
-            <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
-        </select>
-        <?php if ($is_admin): ?><input type="text" name="product_other" id="product_other" placeholder="输入其他产品/平台" style="display:none; margin-top:6px;"><?php endif; ?>
-
-        <label>金额 *</label>
-        <input type="text" name="amount" id="amount" placeholder="如 630.00" required>
-
-        <label>奖励 %（按金额比例计算，填数字如 10 即 10%）</label>
-        <input type="text" name="reward_pct" id="reward_pct" placeholder="如 10 表示 10%" value="">
-        <p class="form-hint" style="margin-top:4px;">不填则下方可填固定奖励金额。</p>
-
-        <label>奖励/返点（固定金额，当上面未填 % 时使用）</label>
-        <input type="text" name="bonus" id="bonus" placeholder="0" value="0">
-
-        <div id="calc_summary" style="margin:12px 0; padding:10px; background:#f0f9ff; border-radius:8px; font-size:14px; display:none;">
-            <span id="calc_text">奖励金额：0，总数：0</span>
+        <div class="form-section">
+            <div class="form-section-title">基本信息</div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>模式 *</label>
+                    <select name="mode" class="form-control" required>
+                        <option value="">-- 请选 --</option>
+                        <option value="DEPOSIT">DEPOSIT（入）</option>
+                        <option value="WITHDRAW">WITHDRAW（出）</option>
+                        <option value="BANK">BANK</option>
+                        <option value="REBATE">REBATE</option>
+                        <option value="OTHER">OTHER</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>客户代码</label>
+                    <?php if (empty($customers)): ?>
+                    <select name="code" class="form-control" disabled><option value="">-- 暂无 --</option></select>
+                    <p class="form-hint"><a href="customers.php">先去添加客户</a></p>
+                    <?php else: ?>
+                    <select name="code" class="form-control">
+                        <option value="">-- 请选 --</option>
+                        <?php foreach ($customers as $c): ?>
+                        <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code'] . (empty($c['name']) ? '' : ' - ' . $c['name'])) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                    <?php endif; ?>
+                </div>
+            </div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>银行/渠道</label>
+                    <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
+                    <select name="bank" id="bank" class="form-control">
+                        <option value="">-- 请选 --</option>
+                        <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
+                        <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
+                    </select>
+                    <?php if ($is_admin): ?><input type="text" name="bank_other" id="bank_other" class="form-control" placeholder="其他银行" style="display:none; margin-top:6px;"><?php endif; ?>
+                </div>
+                <div class="form-group">
+                    <label>产品/平台</label>
+                    <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
+                    <select name="product" id="product" class="form-control">
+                        <option value="">-- 请选 --</option>
+                        <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
+                        <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
+                    </select>
+                    <?php if ($is_admin): ?><input type="text" name="product_other" id="product_other" class="form-control" placeholder="其他产品" style="display:none; margin-top:6px;"><?php endif; ?>
+                </div>
+            </div>
         </div>
 
-        <label>备注</label>
-        <textarea name="remark" rows="2"></textarea>
+        <div class="form-section">
+            <div class="form-section-title">金额与奖励</div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>金额 *</label>
+                    <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
+                </div>
+                <div class="form-group">
+                    <label>奖励 %</label>
+                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="如 10" value="">
+                    <p class="form-hint">填数字即百分比，不填可用下方固定金额</p>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>奖励/返点（固定金额）</label>
+                <input type="text" name="bonus" id="bonus" class="form-control" placeholder="0" value="0">
+            </div>
+            <div id="calc_summary" class="calc-box" style="display:none;"><span id="calc_text"></span></div>
+        </div>
 
-        <button type="submit" class="btn btn-primary">保存</button>
+        <div class="form-section">
+            <div class="form-group">
+                <label>备注</label>
+                <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
+            </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width:100%;">保存</button>
     </form>
     </div>
 
-    <p class="breadcrumb" style="margin-top:20px;">
+    <p class="breadcrumb" style="margin-top:16px;">
         <a href="dashboard.php">返回首页</a><span>·</span>
         <a href="transaction_list.php">流水列表</a><span>·</span>
         <a href="logout.php">退出</a>

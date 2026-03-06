@@ -25,12 +25,31 @@ body {
     color: #334155;
     line-height: 1.5;
     min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
 }
 
 .page-wrap {
     max-width: 1200px;
     margin: 0 auto;
     padding: 24px 20px;
+}
+
+/* 手机端通用 */
+@media (max-width: 640px) {
+    body { font-size: 15px; padding-bottom: env(safe-area-inset-bottom, 0); }
+    .page-wrap { padding: 16px 12px; }
+    .page-header h1, .page-header h2 { font-size: 1.25rem; }
+    .breadcrumb { font-size: 12px; }
+    .breadcrumb span { margin: 0 4px; }
+    .card { padding: 16px; border-radius: 10px; }
+    .btn { padding: 12px 20px; font-size: 15px; min-height: 44px; }
+    .form-control { padding: 12px 14px; font-size: 16px; min-height: 44px; }
+    select.form-control { min-height: 44px; }
+    .alert { padding: 14px; font-size: 14px; }
+    .data-table { font-size: 13px; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .data-table th, .data-table td { padding: 8px 10px; }
+    .filters-bar { padding: 12px; gap: 10px; }
+    .summary-item { min-width: 100%; }
 }
 
 /* 页面标题与面包屑 */

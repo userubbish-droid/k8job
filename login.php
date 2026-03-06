@@ -61,8 +61,15 @@ $login_as = $_POST['login_as'] ?? 'admin';
             align-items: center;
             justify-content: center;
             padding: 20px;
+            padding-bottom: max(20px, env(safe-area-inset-bottom));
             position: relative;
             overflow: hidden;
+        }
+        @media (max-width: 640px) {
+            body { padding: 16px; }
+            .login-card { padding: 24px 20px; }
+            .input-wrap input { min-height: 44px; font-size: 16px; }
+            .btn-login { min-height: 48px; font-size: 16px; }
         }
         body::before {
             content: '';

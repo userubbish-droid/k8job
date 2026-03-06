@@ -83,7 +83,8 @@ try {
         @media (max-width: 768px) {
             .dashboard-layout { flex-direction: column; }
             .dashboard-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); padding: 12px; display: flex; flex-wrap: wrap; gap: 8px; }
-            .dashboard-sidebar .nav-item { padding: 8px 12px; border-left: none; border-radius: 6px; }
+            .dashboard-sidebar .nav-item { padding: 12px 14px; min-height: 44px; display: inline-flex; align-items: center; border-left: none; border-radius: 8px; font-size: 14px; }
+            .dashboard-main { padding: 16px; }
         }
     </style>
 </head>
