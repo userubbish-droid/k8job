@@ -13,8 +13,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
-    if ($bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
-    if ($product === '其他') $product = trim($_POST['product_other'] ?? '');
+    $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+    if ($is_admin && $bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
+    if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $bonus   = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
     $staff   = trim($_POST['staff'] ?? '');
@@ -40,7 +41,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $today = date('Y-m-d');
 $now   = date('H:i');
 
-// 银行/产品下拉：优先从数据库读取（admin 可在管理页维护），没有表/无数据时回退到内置列表
+// 银行/产品：仅 admin 可“设置”（在 admin_banks / admin_products 管理）；员工只能从已设置的选项中选择
+$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $banks = [];
 $products = [];
 try {
@@ -53,11 +55,10 @@ try {
 } catch (Throwable $e) {
     $products = [];
 }
-if (!$banks) {
-    $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
-}
-if (!$products) {
-    $products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
+// admin 无数据时用内置列表，并可选「其他」手填；员工只能用管理员设置的列表，不能改
+if ($is_admin) {
+    if (!$banks) $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
+    if (!$products) $products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
 }
 ?>
 <!DOCTYPE html>
@@ -108,24 +109,26 @@ if (!$products) {
         <input type="text" name="code" placeholder="如 C004">
 
         <label>银行/渠道</label>
+        <?php if (!$is_admin && empty($banks)): ?><p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无选项，请联系管理员在「银行管理」中添加。</p><?php endif; ?>
         <select name="bank" id="bank">
             <option value="">-- 请选 --</option>
             <?php foreach ($banks as $b): ?>
             <option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option>
             <?php endforeach; ?>
-            <option value="其他">其他</option>
+            <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
         </select>
-        <input type="text" name="bank_other" id="bank_other" placeholder="输入其他银行/渠道" style="display:none; margin-top:6px;">
+        <?php if ($is_admin): ?><input type="text" name="bank_other" id="bank_other" placeholder="输入其他银行/渠道" style="display:none; margin-top:6px;"><?php endif; ?>
 
         <label>产品/平台</label>
+        <?php if (!$is_admin && empty($products)): ?><p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无选项，请联系管理员在「产品管理」中添加。</p><?php endif; ?>
         <select name="product" id="product">
             <option value="">-- 请选 --</option>
             <?php foreach ($products as $p): ?>
             <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
             <?php endforeach; ?>
-            <option value="其他">其他</option>
+            <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
         </select>
-        <input type="text" name="product_other" id="product_other" placeholder="输入其他产品/平台" style="display:none; margin-top:6px;">
+        <?php if ($is_admin): ?><input type="text" name="product_other" id="product_other" placeholder="输入其他产品/平台" style="display:none; margin-top:6px;"><?php endif; ?>
 
         <label>金额 *</label>
         <input type="text" name="amount" placeholder="如 630.00" required>
@@ -147,14 +150,16 @@ if (!$products) {
         <a href="transaction_list.php">流水列表</a> |
         <a href="logout.php">退出</a>
     </p>
+    <?php if ($is_admin): ?>
     <script>
         function toggleOther(selId, inputId) {
             var sel = document.getElementById(selId);
             var inp = document.getElementById(inputId);
-            if (sel.value === '其他') { inp.style.display = 'block'; inp.focus(); } else { inp.style.display = 'none'; inp.value = ''; }
+            if (inp && sel.value === '其他') { inp.style.display = 'block'; inp.focus(); } else if (inp) { inp.style.display = 'none'; inp.value = ''; }
         }
         document.getElementById('bank').onchange = function() { toggleOther('bank', 'bank_other'); };
         document.getElementById('product').onchange = function() { toggleOther('product', 'product_other'); };
     </script>
+    <?php endif; ?>
 </body>
 </html>

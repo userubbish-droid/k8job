@@ -10,6 +10,8 @@ $code     = trim($_GET['code'] ?? '');
 $bank     = trim($_GET['bank'] ?? '');
 $product  = trim($_GET['product'] ?? '');
 $export   = ($_GET['export'] ?? '') === 'csv';
+$per_page = 20;
+$page     = max(1, (int)($_GET['page'] ?? 1));
 
 $params = [];
 $where  = ['1=1'];
@@ -40,10 +42,41 @@ if ($product !== '') {
 }
 
 $sql_where = implode(' AND ', $where);
+
+// 导出 CSV：按当前筛选导出全部匹配记录（不分页）
+if ($export) {
+    $export_sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark
+                   FROM transactions WHERE $sql_where ORDER BY day DESC, time DESC";
+    $export_stmt = $pdo->prepare($export_sql);
+    $export_stmt->execute($params);
+    $export_rows = $export_stmt->fetchAll();
+    $filename = 'transactions_' . date('Ymd_His') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, ['day','time','mode','code','bank','product','amount','bonus','total','staff','remark']);
+    foreach ($export_rows as $r) {
+        fputcsv($out, [$r['day'],$r['time'],$r['mode'],$r['code'],$r['bank'],$r['product'],$r['amount'],$r['bonus'],$r['total'],$r['staff'],$r['remark']]);
+    }
+    fclose($out);
+    exit;
+}
+
+// 总数（分页用）
+$count_sql = "SELECT COUNT(*) FROM transactions WHERE $sql_where";
+$count_stmt = $pdo->prepare($count_sql);
+$count_stmt->execute($params);
+$total_rows = (int) $count_stmt->fetchColumn();
+$total_pages = $total_rows > 0 ? (int) ceil($total_rows / $per_page) : 1;
+$page = min($page, max(1, $total_pages));
+$offset = ($page - 1) * $per_page;
+
 $sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark
         FROM transactions
         WHERE $sql_where
-        ORDER BY day DESC, time DESC";
+        ORDER BY day DESC, time DESC
+        LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
 $stmt = $pdo->prepare($sql);
 $stmt->execute($params);
 $rows = $stmt->fetchAll();
@@ -65,32 +98,17 @@ $total_in  = $sum['total_in'];
 $total_out = $sum['total_out'];
 $profit    = $total_in - $total_out;
 
-if ($export) {
-    $filename = 'transactions_' . date('Ymd_His') . '.csv';
-    header('Content-Type: text/csv; charset=utf-8');
-    header('Content-Disposition: attachment; filename="' . $filename . '"');
-
-    $out = fopen('php://output', 'w');
-    fwrite($out, "\xEF\xBB\xBF"); // Excel 友好的 UTF-8 BOM
-    fputcsv($out, ['day','time','mode','code','bank','product','amount','bonus','total','staff','remark']);
-    foreach ($rows as $r) {
-        fputcsv($out, [
-            $r['day'],
-            $r['time'],
-            $r['mode'],
-            $r['code'],
-            $r['bank'],
-            $r['product'],
-            $r['amount'],
-            $r['bonus'],
-            $r['total'],
-            $r['staff'],
-            $r['remark'],
-        ]);
-    }
-    fclose($out);
-    exit;
-}
+// 分页链接保留当前筛选参数
+$q = array_filter([
+    'day_from' => $day_from,
+    'day_to'   => $day_to,
+    'mode'     => $mode,
+    'code'     => $code,
+    'bank'     => $bank,
+    'product'  => $product,
+]);
+$query_string = http_build_query($q);
+$base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' : '?');
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -114,6 +132,8 @@ if ($export) {
         .in { color: #28a745; }
         .out { color: #dc3545; }
         a { color: #007bff; }
+        .muted { color: #666; font-size: 12px; margin-bottom: 8px; }
+        .pagination { margin-top: 12px; }
         @media (max-width: 768px) { table { font-size: 12px; } th, td { padding: 4px; } }
     </style>
 </head>
@@ -154,8 +174,9 @@ if ($export) {
                 <option value="<?= htmlspecialchars($p) ?>" <?= $product === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
             <?php endforeach; ?>
         </select>
+        <input type="hidden" name="page" value="1">
         <button type="submit">筛选</button>
-        <button type="submit" name="export" value="csv" style="background:#28a745;">导出CSV</button>
+        <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" style="margin-left:8px; padding:6px 14px; background:#28a745; color:#fff; text-decoration:none; border-radius:4px;">导出CSV</a>
     </form>
 
     <div class="summary">
@@ -163,6 +184,8 @@ if ($export) {
         <span>总出：<span class="out"><?= number_format($total_out, 2) ?></span></span>
         <span>利润：<?= number_format($profit, 2) ?></span>
     </div>
+
+    <p class="muted">共 <?= $total_rows ?> 条，第 <?= $page ?>/<?= $total_pages ?> 页</p>
 
     <table>
         <thead>
@@ -178,6 +201,7 @@ if ($export) {
                 <th>合计</th>
                 <th>员工</th>
                 <th>备注</th>
+                <th>操作</th>
             </tr>
         </thead>
         <tbody>
@@ -194,13 +218,30 @@ if ($export) {
                 <td><?= number_format((float)($r['total'] ?? 0), 2) ?></td>
                 <td><?= htmlspecialchars($r['staff'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
+                <td>
+                    <?php $edit_return = 'transaction_list.php?' . ($query_string ? $query_string . '&' : '') . 'page=' . $page; ?>
+                    <a href="transaction_edit.php?id=<?= (int)$r['id'] ?>&return_to=<?= urlencode($edit_return) ?>">编辑</a>
+                    <a href="transaction_delete.php?id=<?= (int)$r['id'] ?>&<?= $query_string ?>&page=<?= $page ?>" onclick="return confirm('确定删除这条流水？');">删除</a>
+                </td>
             </tr>
             <?php endforeach; ?>
             <?php if (empty($rows)): ?>
-            <tr><td colspan="11">暂无流水</td></tr>
+            <tr><td colspan="12">暂无流水</td></tr>
             <?php endif; ?>
         </tbody>
     </table>
+
+    <?php if ($total_pages > 1): ?>
+    <p class="pagination">
+        <?php if ($page > 1): ?>
+            <a href="<?= $base_url ?>page=<?= $page - 1 ?>">上一页</a>
+        <?php endif; ?>
+        <span style="margin:0 12px;"><?= $page ?> / <?= $total_pages ?></span>
+        <?php if ($page < $total_pages): ?>
+            <a href="<?= $base_url ?>page=<?= $page + 1 ?>">下一页</a>
+        <?php endif; ?>
+    </p>
+    <?php endif; ?>
 
     <p style="margin-top: 20px;">
         <a href="transaction_create.php">记一笔</a> |
