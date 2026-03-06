@@ -20,7 +20,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $bonus   = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
-    $staff   = trim($_POST['staff'] ?? '');
     $remark  = trim($_POST['remark'] ?? '');
 
     if ($day === '' || $mode === '') {
@@ -35,6 +34,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $status = $is_admin ? 'approved' : 'pending';
         $approved_by = $is_admin ? (int)($_SESSION['user_id'] ?? 0) : null;
         $approved_at = $is_admin ? date('Y-m-d H:i:s') : null;
+        $staff = (string) ($_SESSION['user_name'] ?? ($_SESSION['user_id'] ?? ''));
 
         $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
@@ -56,6 +56,13 @@ $now   = date('H:i');
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $banks = [];
 $products = [];
+// 客户代码下拉选项
+$customers = [];
+try {
+    $customers = $pdo->query("SELECT code, name FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll();
+} catch (Throwable $e) {
+    $customers = [];
+}
 try {
     $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
@@ -111,8 +118,10 @@ if ($is_admin) {
                 <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:auto; margin-right:6px;">
                 需要修改日期/时间
             </label>
-            <input type="date" name="day" id="day" value="<?= htmlspecialchars($today) ?>" style="margin-top:6px;" disabled>
-            <input type="time" name="time" id="time" value="<?= htmlspecialchars($now) ?>" style="margin-top:6px;" disabled>
+            <div id="dt_box" style="display:none;">
+                <input type="date" name="day" id="day" value="<?= htmlspecialchars($today) ?>" style="margin-top:6px;">
+                <input type="time" name="time" id="time" value="<?= htmlspecialchars($now) ?>" style="margin-top:6px;">
+            </div>
         <?php endif; ?>
 
         <label>模式 *</label>
@@ -126,7 +135,19 @@ if ($is_admin) {
         </select>
 
         <label>客户代码</label>
-        <input type="text" name="code" placeholder="如 C004">
+        <?php if (empty($customers)): ?>
+            <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无客户选项，请先到 <a href="customers.php">客户资料</a> 添加。</p>
+            <select name="code" disabled>
+                <option value="">-- 暂无 --</option>
+            </select>
+        <?php else: ?>
+            <select name="code">
+                <option value="">-- 请选 --</option>
+                <?php foreach ($customers as $c): ?>
+                    <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code'] . (empty($c['name']) ? '' : ' - ' . $c['name'])) ?></option>
+                <?php endforeach; ?>
+            </select>
+        <?php endif; ?>
 
         <label>银行/渠道</label>
         <?php if (!$is_admin && empty($banks)): ?><p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无选项，请联系管理员在「银行管理」中添加。</p><?php endif; ?>
@@ -156,9 +177,6 @@ if ($is_admin) {
         <label>奖励/返点</label>
         <input type="text" name="bonus" placeholder="0" value="0">
 
-        <label>员工</label>
-        <input type="text" name="staff">
-
         <label>备注</label>
         <textarea name="remark" rows="2"></textarea>
 
@@ -183,8 +201,8 @@ if ($is_admin) {
         var cb = document.getElementById('edit_dt');
         if (cb) {
             cb.onchange = function() {
-                document.getElementById('day').disabled = !cb.checked;
-                document.getElementById('time').disabled = !cb.checked;
+                var box = document.getElementById('dt_box');
+                if (box) box.style.display = cb.checked ? 'block' : 'none';
             };
         }
     </script>

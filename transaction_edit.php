@@ -50,7 +50,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $bonus   = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
-    $staff   = trim($_POST['staff'] ?? '');
     $remark  = trim($_POST['remark'] ?? '');
     $return_to = trim($_POST['return_to'] ?? $return_to);
     if (strpos($return_to, 'transaction_list.php') !== 0) $return_to = 'transaction_list.php';
@@ -63,8 +62,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $amount = (float) $amount;
         $bonus  = (float) $bonus;
         $total  = $amount + $bonus;
-        $stmt = $pdo->prepare("UPDATE transactions SET day=?, time=?, mode=?, code=?, bank=?, product=?, amount=?, bonus=?, total=?, staff=?, remark=? WHERE id=?");
-        $stmt->execute([$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $id]);
+        // 不允许在编辑时改 staff（由账号自动记录）
+        $stmt = $pdo->prepare("UPDATE transactions SET day=?, time=?, mode=?, code=?, bank=?, product=?, amount=?, bonus=?, total=?, remark=? WHERE id=?");
+        $stmt->execute([$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $remark ?: null, $id]);
         $saved = true;
         header('Location: ' . $return_to);
         exit;
@@ -74,6 +74,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 // 银行/产品：admin 可改列表且可选「其他」；员工只能从管理员设置的选项中选择
 $banks = [];
 $products = [];
+// 客户代码选项
+$customers = [];
+try {
+    $customers = $pdo->query("SELECT code, name FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll();
+} catch (Throwable $e) {
+    $customers = [];
+}
 try {
     $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $banks = []; }
@@ -93,7 +100,6 @@ $bank   = $row['bank'] ?? '';
 $product= $row['product'] ?? '';
 $amount = $row['amount'];
 $bonus  = $row['bonus'] ?? 0;
-$staff  = $row['staff'] ?? '';
 $remark = $row['remark'] ?? '';
 // 编辑时：若当前值不在列表中（如已被管理员删除），仍保留显示
 if (!$is_admin) {
@@ -137,8 +143,10 @@ if ($product_other !== '') $product = '其他';
                 <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:auto; margin-right:6px;">
                 需要修改日期/时间
             </label>
-            <input type="date" name="day" id="day" value="<?= htmlspecialchars($day) ?>" style="margin-top:6px;" disabled>
-            <input type="time" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" style="margin-top:6px;" disabled>
+            <div id="dt_box" style="display:none;">
+                <input type="date" name="day" id="day" value="<?= htmlspecialchars($day) ?>" style="margin-top:6px;">
+                <input type="time" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" style="margin-top:6px;">
+            </div>
         <?php else: ?>
             <input type="text" value="<?= htmlspecialchars($day . ' ' . $time) ?>" readonly>
         <?php endif; ?>
@@ -152,7 +160,23 @@ if ($product_other !== '') $product = '其他';
             <option value="OTHER" <?= $mode === 'OTHER' ? 'selected' : '' ?>>OTHER</option>
         </select>
         <label>客户代码</label>
-        <input type="text" name="code" value="<?= htmlspecialchars($code) ?>">
+        <?php if (!$customers): ?>
+            <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无客户选项，请先到 <a href="customers.php">客户资料</a> 添加。</p>
+            <input type="text" value="<?= htmlspecialchars($code) ?>" readonly>
+        <?php else: ?>
+            <?php
+                // 若当前记录 code 不在激活列表（被禁用），也要能显示
+                $code_exists = false;
+                foreach ($customers as $c) { if (($c['code'] ?? '') === $code) { $code_exists = true; break; } }
+                if ($code !== '' && !$code_exists) array_unshift($customers, ['code' => $code, 'name' => '(已禁用/不存在)']);
+            ?>
+            <select name="code">
+                <option value="">-- 请选 --</option>
+                <?php foreach ($customers as $c): ?>
+                    <option value="<?= htmlspecialchars($c['code']) ?>" <?= $code === $c['code'] ? 'selected' : '' ?>><?= htmlspecialchars($c['code'] . (empty($c['name']) ? '' : ' - ' . $c['name'])) ?></option>
+                <?php endforeach; ?>
+            </select>
+        <?php endif; ?>
         <label>银行/渠道</label>
         <select name="bank" id="bank">
             <option value="">-- 请选 --</option>
@@ -175,8 +199,6 @@ if ($product_other !== '') $product = '其他';
         <input type="text" name="amount" value="<?= htmlspecialchars($amount) ?>" required>
         <label>奖励/返点</label>
         <input type="text" name="bonus" value="<?= htmlspecialchars($bonus) ?>">
-        <label>员工</label>
-        <input type="text" name="staff" value="<?= htmlspecialchars($staff) ?>">
         <label>备注</label>
         <textarea name="remark" rows="2"><?= htmlspecialchars($remark) ?></textarea>
         <button type="submit">保存</button>
@@ -197,8 +219,8 @@ if ($product_other !== '') $product = '其他';
         var cb = document.getElementById('edit_dt');
         if (cb) {
             cb.onchange = function() {
-                document.getElementById('day').disabled = !cb.checked;
-                document.getElementById('time').disabled = !cb.checked;
+                var box = document.getElementById('dt_box');
+                if (box) box.style.display = cb.checked ? 'block' : 'none';
             };
         }
     </script>
