@@ -19,7 +19,7 @@ function get_permission_options(): array
 }
 
 /**
- * 当前用户是否拥有某权限。admin 默认全部允许；member 查 role_permissions 表。
+ * 当前用户是否拥有某权限。admin 默认全部允许；member 查 user_permissions 表（按用户）。
  */
 function has_permission(string $key): bool
 {
@@ -30,16 +30,20 @@ function has_permission(string $key): bool
     if ($role !== 'member') {
         return false;
     }
+    $uid = (int)($_SESSION['user_id'] ?? 0);
+    if ($uid <= 0) {
+        return false;
+    }
     global $pdo;
     if (!isset($pdo)) {
         return false;
     }
     try {
-        $stmt = $pdo->prepare("SELECT 1 FROM role_permissions WHERE role = 'member' AND permission_key = ? LIMIT 1");
-        $stmt->execute([$key]);
+        $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1");
+        $stmt->execute([$uid, $key]);
         return (bool) $stmt->fetch();
     } catch (Throwable $e) {
-        return true;
+        return false;
     }
 }
 

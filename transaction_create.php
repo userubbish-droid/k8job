@@ -18,9 +18,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $product = trim($_POST['product'] ?? '');
     if ($is_admin && $bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
     if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
-    $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
-    $bonus   = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
-    $remark  = trim($_POST['remark'] ?? '');
+    $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
+    $reward_pct = str_replace(',', '', trim($_POST['reward_pct'] ?? ''));
+    $bonus_fix  = str_replace(',', '', trim($_POST['bonus'] ?? '0'));
+    $remark   = trim($_POST['remark'] ?? '');
 
     if ($day === '' || $mode === '') {
         $error = '请填写日期和模式。';
@@ -28,7 +29,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = '金额请填数字。';
     } else {
         $amount = (float) $amount;
-        $bonus  = (float) $bonus;
+        if ($reward_pct !== '' && is_numeric($reward_pct)) {
+            $bonus = round($amount * (float)$reward_pct / 100, 2);
+        } else {
+            $bonus = is_numeric($bonus_fix) ? (float) $bonus_fix : 0;
+        }
         $total  = $amount + $bonus;
 
         $status = $is_admin ? 'approved' : 'pending';
@@ -46,6 +51,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $saved = true;
         $submitted_status = $status;
+        $saved_mode = $mode;
+        $saved_code = $code;
+        $saved_product = $product;
+        $saved_amount = $amount;
+        $saved_bonus = $bonus;
+        $saved_total = $total;
+        $saved_reward_pct = ($reward_pct !== '' && is_numeric($reward_pct)) ? (float)$reward_pct : null;
+        $saved_account = '';
+        if ($code !== '' && $product !== '') {
+            try {
+                $acc = $pdo->prepare("SELECT a.account FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.code = ? AND a.product_name = ? LIMIT 1");
+                $acc->execute([$code, $product]);
+                $row = $acc->fetch();
+                $saved_account = $row ? (trim($row['account'] ?? '') ?: '—') : '—';
+            } catch (Throwable $e) {
+                $saved_account = '—';
+            }
+        } else {
+            $saved_account = '—';
+        }
     }
 }
 
@@ -95,9 +120,25 @@ if ($is_admin) {
         </div>
     <?php if ($saved): ?>
         <?php if ($submitted_status === 'pending'): ?>
-            <div class="alert alert-success">已提交，等待管理员批准后才会显示在统计和流水列表中。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+            <div class="alert alert-success">
+                已提交，等待管理员批准后才会显示在统计和流水列表中。<br>
+                <?php if (!empty($saved_code) || !empty($saved_product)): ?>
+                <strong>顾客产品资料</strong>：<?= htmlspecialchars($saved_mode) ?> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?>，总数 <strong><?= number_format($saved_total, 2) ?></strong>。<br>
+                <?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?>
+                <?php endif; ?>
+                <br><br>
+                <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a>
+            </div>
         <?php else: ?>
-            <div class="alert alert-success">已保存并生效。 <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a></div>
+            <div class="alert alert-success">
+                已保存并生效。<br>
+                <?php if (!empty($saved_code) || !empty($saved_product)): ?>
+                <strong>顾客产品资料</strong>：<?= htmlspecialchars($saved_mode) ?> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?>，总数 <strong><?= number_format($saved_total, 2) ?></strong>。<br>
+                <?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?>
+                <?php endif; ?>
+                <br><br>
+                <a href="transaction_create.php">再记一笔</a> | <a href="transaction_list.php">看流水</a> | <a href="dashboard.php">回首页</a>
+            </div>
         <?php endif; ?>
     <?php elseif ($error): ?>
         <div class="alert alert-error"><?= htmlspecialchars($error) ?></div>
@@ -166,15 +207,23 @@ if ($is_admin) {
         <?php if ($is_admin): ?><input type="text" name="product_other" id="product_other" placeholder="输入其他产品/平台" style="display:none; margin-top:6px;"><?php endif; ?>
 
         <label>金额 *</label>
-        <input type="text" name="amount" placeholder="如 630.00" required>
+        <input type="text" name="amount" id="amount" placeholder="如 630.00" required>
 
-        <label>奖励/返点</label>
-        <input type="text" name="bonus" placeholder="0" value="0">
+        <label>奖励 %（按金额比例计算，填数字如 10 即 10%）</label>
+        <input type="text" name="reward_pct" id="reward_pct" placeholder="如 10 表示 10%" value="">
+        <p class="form-hint" style="margin-top:4px;">不填则下方可填固定奖励金额。</p>
+
+        <label>奖励/返点（固定金额，当上面未填 % 时使用）</label>
+        <input type="text" name="bonus" id="bonus" placeholder="0" value="0">
+
+        <div id="calc_summary" style="margin:12px 0; padding:10px; background:#f0f9ff; border-radius:8px; font-size:14px; display:none;">
+            <span id="calc_text">奖励金额：0，总数：0</span>
+        </div>
 
         <label>备注</label>
         <textarea name="remark" rows="2"></textarea>
 
-        <button type="submit">保存</button>
+        <button type="submit" class="btn btn-primary">保存</button>
     </form>
     </div>
 
@@ -184,8 +233,38 @@ if ($is_admin) {
         <a href="logout.php">退出</a>
     </p>
     </div>
-    <?php if ($is_admin): ?>
     <script>
+        (function() {
+            var amountEl = document.getElementById('amount');
+            var rewardPctEl = document.getElementById('reward_pct');
+            var bonusEl = document.getElementById('bonus');
+            var summaryEl = document.getElementById('calc_summary');
+            var textEl = document.getElementById('calc_text');
+            function updateCalc() {
+                var amount = parseFloat((amountEl && amountEl.value) ? amountEl.value.replace(/,/g,'') : '') || 0;
+                var pct = parseFloat((rewardPctEl && rewardPctEl.value) ? rewardPctEl.value.replace(/,/g,'') : '') || NaN;
+                var bonusFix = parseFloat((bonusEl && bonusEl.value) ? bonusEl.value.replace(/,/g,'') : '') || 0;
+                var bonus = 0;
+                if (!isNaN(pct) && pct !== 0) {
+                    bonus = Math.round(amount * pct / 100 * 100) / 100;
+                } else {
+                    bonus = bonusFix;
+                }
+                var total = amount + bonus;
+                if (amount > 0) {
+                    summaryEl.style.display = 'block';
+                    textEl.textContent = '奖励金额：' + bonus.toFixed(2) + '，总数：' + total.toFixed(2);
+                } else {
+                    summaryEl.style.display = 'none';
+                }
+            }
+            if (amountEl) amountEl.addEventListener('input', updateCalc);
+            if (amountEl) amountEl.addEventListener('change', updateCalc);
+            if (rewardPctEl) rewardPctEl.addEventListener('input', updateCalc);
+            if (bonusEl) bonusEl.addEventListener('input', updateCalc);
+            updateCalc();
+        })();
+        <?php if ($is_admin): ?>
         function toggleOther(selId, inputId) {
             var sel = document.getElementById(selId);
             var inp = document.getElementById(inputId);
@@ -201,7 +280,7 @@ if ($is_admin) {
                 if (box) box.style.display = cb.checked ? 'block' : 'none';
             };
         }
+        <?php endif; ?>
     </script>
-    <?php endif; ?>
 </body>
 </html>
