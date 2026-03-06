@@ -70,7 +70,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
             header("Location: customer_edit.php?id=$id&msg=1");
             exit;
         } catch (Throwable $e) {
-            $err = '添加失败：' . $e->getMessage();
+            if (strpos($e->getMessage(), 'customer_product_accounts') !== false || strpos($e->getMessage(), "doesn't exist") !== false) {
+                $err = '添加失败：尚未创建产品账号表。请在 phpMyAdmin 中选中数据库，执行 migrate_customer_products.sql 创建 customer_product_accounts 表后再试。';
+            } else {
+                $err = '添加失败：' . $e->getMessage();
+            }
         }
     }
 }

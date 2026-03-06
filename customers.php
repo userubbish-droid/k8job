@@ -11,21 +11,7 @@ $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     try {
-        if ($action === 'create') {
-            $code = trim($_POST['code'] ?? '');
-            $name = trim($_POST['name'] ?? '');
-            $phone = trim($_POST['phone'] ?? '');
-            $remark = trim($_POST['remark'] ?? '');
-            $bank_details = trim($_POST['bank_details'] ?? '');
-            if ($code === '') throw new RuntimeException('请输入客户代码。');
-            $register_date = date('Y-m-d'); // 根据填写时间自动
-            $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, visitor, register_date, bank_details) VALUES (?, ?, ?, ?, ?, 'VISITOR', ?, ?)");
-            $stmt->execute([
-                $code, $name !== '' ? $name : null, $phone !== '' ? $phone : null, $remark !== '' ? $remark : null, (int)($_SESSION['user_id'] ?? 0),
-                $register_date, $bank_details !== '' ? $bank_details : null
-            ]);
-            $msg = '已添加客户。';
-        } elseif ($action === 'toggle' && $is_admin) {
+        if ($action === 'toggle' && $is_admin) {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
             $stmt = $pdo->prepare("UPDATE customers SET is_active = IF(is_active=1,0,1) WHERE id = ?");
@@ -96,22 +82,6 @@ try {
             <div class="summary-item"><strong>T1. Customer</strong><span><?= $summary['total'] ?></span></div>
             <div class="summary-item"><strong>Active Member</strong><span><?= $summary['active'] ?></span></div>
             <div class="summary-item"><strong>TARGET</strong><span>1</span></div>
-        </div>
-
-        <div class="card">
-            <h3 style="margin:0 0 8px;">新增顾客</h3>
-            <form method="post">
-                <input type="hidden" name="action" value="create">
-                <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
-                    <div><label>客户代码 *</label><input name="code" required placeholder="C001"></div>
-                    <div><label>姓名</label><input name="name" placeholder="FULL NAME"></div>
-                    <div><label>联系电话</label><input name="phone" placeholder="CONTACT"></div>
-                    <div><label>备注</label><input name="remark" placeholder="REMARK"></div>
-                    <div style="grid-column: span 2;"><label>银行资料</label><input name="bank_details" placeholder="例如 TNG 160402395453、PBB 8413574015"></div>
-                </div>
-                <p style="margin-top:6px; font-size:12px; color:#888;">注册日期将自动按填写时间记录。</p>
-                <div style="margin-top:12px;"><button type="submit">添加</button></div>
-            </form>
         </div>
 
         <div class="card" style="overflow-x: auto;">
