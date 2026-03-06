@@ -33,9 +33,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0) {
         foreach ($to_insert as $key) {
             $stmt->execute([$selected_id, $key]);
         }
-        $msg = '已保存该 Member 的权限。';
+        $msg = '已保存该员工的权限。';
     } catch (Throwable $e) {
-        $err = '保存失败：' . $e->getMessage();
+        $msg = $e->getMessage();
+        if (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false)) {
+            $err = '保存失败：尚未创建权限表。请到 Hostinger 的 phpMyAdmin 中选中当前数据库，执行一次 <strong>migrate_user_permissions.sql</strong> 里的 SQL（创建 user_permissions 表），保存后再试。';
+        } else {
+            $err = '保存失败：' . htmlspecialchars($msg);
+        }
     }
 }
 
@@ -48,6 +53,10 @@ if ($selected_id > 0) {
         $current = $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         $current = [];
+        $msg = $e->getMessage();
+        if (empty($err) && (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false))) {
+            $err = '当前数据库缺少 <strong>user_permissions</strong> 表。请到 phpMyAdmin 选中数据库，执行 <strong>migrate_user_permissions.sql</strong> 中的 SQL 创建该表后刷新本页。';
+        }
     }
 }
 ?>

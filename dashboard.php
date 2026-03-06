@@ -11,6 +11,8 @@ $db_error = '';
 $day_in = $day_out = $day_profit = 0;
 $month_in = $month_out = $month_profit = 0;
 $pending_count = 0;
+$by_product_today = [];
+$by_bank_today = [];
 
 try {
     // 今日统计（只统计已批准）
@@ -36,6 +38,24 @@ try {
     if (($_SESSION['user_role'] ?? '') === 'admin') {
         $pending_count = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
     }
+
+    // 今日按产品汇总（已批准）
+    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
+                           COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
+                           COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+                           FROM transactions WHERE day = ? AND status = 'approved'
+                           GROUP BY product ORDER BY total_in + total_out DESC");
+    $stmt->execute([$today]);
+    $by_product_today = $stmt->fetchAll();
+
+    // 今日按银行/渠道汇总（已批准）
+    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
+                           COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
+                           COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+                           FROM transactions WHERE day = ? AND status = 'approved'
+                           GROUP BY bank ORDER BY total_in + total_out DESC");
+    $stmt->execute([$today]);
+    $by_bank_today = $stmt->fetchAll();
 } catch (Throwable $e) {
     $db_error = $e->getMessage();
 }
@@ -95,6 +115,15 @@ try {
         .stat-card.in .value { color: var(--success); }
         .stat-card.out .value { color: var(--danger); }
         .stat-card.profit .value { color: var(--primary); }
+        .total-table-wrap { margin-top: 16px; overflow-x: auto; }
+        .total-table-wrap h4 { font-size: 14px; color: #475569; margin: 0 0 8px; font-weight: 600; }
+        .total-table { width: 100%; font-size: 13px; border-collapse: collapse; }
+        .total-table th, .total-table td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+        .total-table th { background: #f8fafc; color: var(--muted); font-weight: 600; }
+        .total-table .num { text-align: right; }
+        .total-table .num.in { color: var(--success); }
+        .total-table .num.out { color: var(--danger); }
+        .total-table .num.profit { color: var(--primary); font-weight: 600; }
         .month-toggle { margin-bottom: 16px; font-size: 14px; color: #64748b; display: flex; align-items: center; gap: 8px; }
         .month-toggle input { cursor: pointer; width: 18px; height: 18px; }
         #month-card { display: none; }
@@ -107,6 +136,7 @@ try {
             .dashboard-sidebar .nav-item { padding: 12px 14px; min-height: 44px; margin: 0; border-left: none; border-radius: 8px; }
             .dashboard-main { padding: 16px; }
             .stat-cards { flex-direction: column; }
+            .total-table-wrap { grid-template-columns: 1fr; }
         }
     </style>
 </head>
@@ -167,6 +197,49 @@ try {
                         <div class="value"><?= number_format($day_profit, 2) ?></div>
                     </div>
                 </div>
+                <?php if (!empty($by_product_today) || !empty($by_bank_today)): ?>
+                <?php if (($_SESSION['user_role'] ?? '') === 'member'): ?>
+                <p class="form-hint" style="margin-top:12px;">以下为只读汇总，银行与产品的增删改仅管理员可操作。您可查看银行目前多少、产品剩下多少。</p>
+                <?php endif; ?>
+                <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
+                    <?php if (!empty($by_product_today)): ?>
+                    <div>
+                        <h4>产品剩下多少（今日）</h4>
+                        <table class="total-table">
+                            <thead><tr><th>产品</th><th class="num">入账</th><th class="num">出账</th><th class="num">利润</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($by_product_today as $r): $pi = (float)($r['total_in'] ?? 0); $po = (float)($r['total_out'] ?? 0); ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($r['product'] ?? '—') ?></td>
+                                    <td class="num in"><?= number_format($pi, 2) ?></td>
+                                    <td class="num out"><?= number_format($po, 2) ?></td>
+                                    <td class="num profit"><?= number_format($pi - $po, 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php endif; ?>
+                    <?php if (!empty($by_bank_today)): ?>
+                    <div>
+                        <h4>银行目前有多少（今日）</h4>
+                        <table class="total-table">
+                            <thead><tr><th>银行/渠道</th><th class="num">入账</th><th class="num">出账</th><th class="num">利润</th></tr></thead>
+                            <tbody>
+                            <?php foreach ($by_bank_today as $r): $bi = (float)($r['total_in'] ?? 0); $bo = (float)($r['total_out'] ?? 0); ?>
+                                <tr>
+                                    <td><?= htmlspecialchars($r['bank'] ?? '—') ?></td>
+                                    <td class="num in"><?= number_format($bi, 2) ?></td>
+                                    <td class="num out"><?= number_format($bo, 2) ?></td>
+                                    <td class="num profit"><?= number_format($bi - $bo, 2) ?></td>
+                                </tr>
+                            <?php endforeach; ?>
+                            </tbody>
+                        </table>
+                    </div>
+                    <?php endif; ?>
+                </div>
+                <?php endif; ?>
             </div>
 
             <label class="month-toggle">
