@@ -101,9 +101,7 @@ try {
                                 <thead>
                                     <tr>
                                         <th>银行/渠道</th>
-                                        <?php if ($is_admin): ?><th class="num">初始余额</th><?php endif; ?>
-                                        <th class="num">入账</th>
-                                        <th class="num">出账</th>
+                                        <?php if ($is_admin): ?><th class="num">初始余额</th><th class="num">入账</th><th class="num">出账</th><?php endif; ?>
                                         <th class="num">余额</th>
                                     </tr>
                                 </thead>
@@ -127,14 +125,14 @@ try {
                                                 <button type="submit" class="btn btn-sm btn-primary">改</button>
                                             </form>
                                         </td>
-                                        <?php endif; ?>
                                         <td class="num in"><?= number_format($in, 2) ?></td>
                                         <td class="num out"><?= number_format($out, 2) ?></td>
+                                        <?php endif; ?>
                                         <td class="num profit"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($by_bank)): ?>
-                                    <tr><td colspan="<?= $is_admin ? 5 : 4 ?>">暂无今日银行流水</td></tr>
+                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无今日银行流水</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
@@ -145,9 +143,7 @@ try {
                                 <thead>
                                     <tr>
                                         <th>产品</th>
-                                        <?php if ($is_admin): ?><th class="num">初始余额</th><?php endif; ?>
-                                        <th class="num">入账</th>
-                                        <th class="num">出账</th>
+                                        <?php if ($is_admin): ?><th class="num">初始余额</th><th class="num">入账</th><th class="num">出账</th><?php endif; ?>
                                         <th class="num">余额</th>
                                     </tr>
                                 </thead>
@@ -171,20 +167,20 @@ try {
                                                 <button type="submit" class="btn btn-sm btn-primary">改</button>
                                             </form>
                                         </td>
-                                        <?php endif; ?>
                                         <td class="num in"><?= number_format($in, 2) ?></td>
                                         <td class="num out"><?= number_format($out, 2) ?></td>
+                                        <?php endif; ?>
                                         <td class="num profit"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($by_product)): ?>
-                                    <tr><td colspan="<?= $is_admin ? 5 : 4 ?>">暂无今日产品流水</td></tr>
+                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无今日产品流水</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <p class="form-hint" style="margin-top:12px;">说明：初始余额由管理员在表中填写（例如银行目前 5000，顾客今日进 300、出 400，则余额 = 5000 + 300 − 400 = 4900）。入账/出账为今日已批准流水汇总。</p>
+                    <?php if ($is_admin): ?><p class="form-hint" style="margin-top:12px;">说明：初始余额由管理员在表中填写（例如银行目前 5000，顾客今日进 300、出 400，则余额 = 5000 + 300 − 400 = 4900）。入账/出账为今日已批准流水汇总。</p><?php endif; ?>
                 </div>
             </div>
         </main>
