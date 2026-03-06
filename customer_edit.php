@@ -9,7 +9,7 @@ if ($id <= 0) {
     exit;
 }
 
-$row = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
+$row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ?");
 $row->execute([$id]);
 $row = $row->fetch();
 if (!$row) {
@@ -17,58 +17,100 @@ if (!$row) {
     exit;
 }
 
-// 选项来源：VERIFY 从 option_sets 表读取
-$option_lists = ['verify' => []];
+// 产品列表（来自 product 管理）
+$products = [];
 try {
-    $stmt = $pdo->prepare("SELECT option_value FROM option_sets WHERE option_type = 'verify' ORDER BY sort_order, option_value");
-    $stmt->execute();
-    $option_lists['verify'] = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
-    $option_lists['verify'] = [];
+    $products = [];
+}
+if (!$products) {
+    $products = ['918KISS', 'MEGAB', 'MEGA'];
+}
+
+// 该顾客已有的产品账号
+$product_accounts = [];
+try {
+    $stmt = $pdo->prepare("SELECT id, product_name, account, password FROM customer_product_accounts WHERE customer_id = ? ORDER BY id ASC");
+    $stmt->execute([$id]);
+    $product_accounts = $stmt->fetchAll();
+} catch (Throwable $e) {
+    $product_accounts = [];
 }
 
 $msg = '';
 $err = '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// 删除产品账号（GET 或 POST，优先处理）
+if (isset($_GET['del_account']) || (isset($_POST['action']) && $_POST['action'] === 'del_product' && isset($_POST['account_id']))) {
+    $aid = (int)($_GET['del_account'] ?? $_POST['account_id'] ?? 0);
+    if ($aid > 0) {
+        try {
+            $pdo->prepare("DELETE FROM customer_product_accounts WHERE id = ? AND customer_id = ?")->execute([$aid, $id]);
+            header("Location: customer_edit.php?id=$id&deleted=1");
+            exit;
+        } catch (Throwable $e) {
+            $err = $e->getMessage();
+        }
+    }
+}
+
+// 添加产品账号（单独表单提交）
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product') {
+    $product_name = trim($_POST['product_name'] ?? '');
+    $account = trim($_POST['account'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+    if ($product_name === '') {
+        $err = '请选择产品。';
+    } else {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (customer_id, product_name, account, password) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$id, $product_name, $account ?: null, $password ?: null]);
+            $msg = '已添加产品账号。';
+            header("Location: customer_edit.php?id=$id&msg=1");
+            exit;
+        } catch (Throwable $e) {
+            $err = '添加失败：' . $e->getMessage();
+        }
+    }
+}
+
+if (isset($_GET['msg'])) {
+    $msg = '已添加产品账号。';
+}
+if (isset($_GET['deleted'])) {
+    $msg = '已删除。';
+}
+
+// 主表单：保存顾客基本信息
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $code = trim($_POST['code'] ?? '');
     $name = trim($_POST['name'] ?? '');
     $phone = trim($_POST['phone'] ?? '');
     $remark = trim($_POST['remark'] ?? '');
     $register_date = trim($_POST['register_date'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
-    $regular_customer = trim($_POST['regular_customer'] ?? '');
-    $verify = trim($_POST['verify'] ?? '');
-    $old_total_deposit = str_replace(',', '', trim($_POST['old_total_deposit'] ?? '0'));
-    $old_total_withdraw = str_replace(',', '', trim($_POST['old_total_withdraw'] ?? '0'));
-    $deposit = str_replace(',', '', trim($_POST['deposit'] ?? '0'));
-    $withdraw = str_replace(',', '', trim($_POST['withdraw'] ?? '0'));
-    $ref_918kiss = trim($_POST['ref_918kiss'] ?? '');
-    $ref_megab = trim($_POST['ref_megab'] ?? '');
 
     if ($code === '') {
         $err = '客户代码不能为空。';
     } else {
-        $old_total_deposit = is_numeric($old_total_deposit) ? (float)$old_total_deposit : 0;
-        $old_total_withdraw = is_numeric($old_total_withdraw) ? (float)$old_total_withdraw : 0;
-        $deposit = is_numeric($deposit) ? (float)$deposit : 0;
-        $withdraw = is_numeric($withdraw) ? (float)$withdraw : 0;
-
         try {
-            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, regular_customer=?,
-                verify=?, old_total_deposit=?, old_total_withdraw=?, deposit=?, withdraw=?, ref_918kiss=?, ref_megab=? WHERE id=?");
-            $stmt->execute([
-                $code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $regular_customer ?: null,
-                $verify ?: null, $old_total_deposit, $old_total_withdraw, $deposit, $withdraw, $ref_918kiss ?: null, $ref_megab ?: null, $id
-            ]);
+            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=? WHERE id=?");
+            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $id]);
             $msg = '已保存。';
-            $row = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
+            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ?");
             $row->execute([$id]);
             $row = $row->fetch();
         } catch (Throwable $e) {
             $err = $e->getMessage();
         }
     }
+}
+
+// 注册日期若为空则显示创建日期（根据填写时间）
+$display_register_date = $row['register_date'] ?? '';
+if ($display_register_date === '' && !empty($row['created_at'])) {
+    $display_register_date = date('Y-m-d', strtotime($row['created_at']));
 }
 ?>
 <!doctype html>
@@ -87,6 +129,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         .ok { background: #d4edda; padding: 10px; border-radius: 6px; color: #155724; margin-bottom: 10px; }
         .err { background: #f8d7da; padding: 10px; border-radius: 6px; color: #721c24; margin-bottom: 10px; }
         a { color: #007bff; }
+        .product-accounts { margin-top: 16px; }
+        .product-accounts table { width: 100%; border-collapse: collapse; font-size: 13px; }
+        .product-accounts th, .product-accounts td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+        .product-accounts th { background: #e8f4fc; }
+        .add-product-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 8px; align-items: end; margin-top: 8px; }
+        .add-product-row label { margin-top: 0; }
+        .btn-sm { padding: 4px 10px; font-size: 12px; background: #dc3545; color: #fff; border-radius: 4px; text-decoration: none; display: inline-block; }
+        .btn-sm:hover { background: #c82333; color: #fff; }
+        .muted { color: #666; }
     </style>
 </head>
 <body>
@@ -99,24 +150,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <form method="post">
             <div class="grid">
                 <div><label>CODE *</label><input name="code" required value="<?= htmlspecialchars($row['code']) ?>"></div>
-                <div><label>REGISTER DATE</label><input type="date" name="register_date" value="<?= htmlspecialchars($row['register_date'] ?? '') ?>"></div>
+                <div><label>REGISTER DATE</label><input type="date" name="register_date" value="<?= htmlspecialchars($display_register_date) ?>" title="可根据填写时间自动记录"></div>
                 <div><label>FULL NAME</label><input name="name" value="<?= htmlspecialchars($row['name'] ?? '') ?>"></div>
                 <div><label>CONTACT</label><input name="phone" value="<?= htmlspecialchars($row['phone'] ?? '') ?>"></div>
-                <div><label>REGULAR CUSTOMER</label><select name="regular_customer"><option value="">-</option><option value="Y" <?= ($row['regular_customer'] ?? '') === 'Y' ? 'selected' : '' ?>>Y</option><option value="N" <?= ($row['regular_customer'] ?? '') === 'N' ? 'selected' : '' ?>>N</option></select></div>
-                <div><label>VERIFY</label><select name="verify"><option value="">—</option><?php foreach ($option_lists['verify'] as $v): ?><option value="<?= htmlspecialchars($v) ?>" <?= ($row['verify'] ?? '') === $v ? 'selected' : '' ?>><?= htmlspecialchars($v) ?></option><?php endforeach; ?></select></div>
             </div>
             <div style="margin-top:12px;"><label>BANK DETAILS</label><input name="bank_details" value="<?= htmlspecialchars($row['bank_details'] ?? '') ?>" placeholder="TNG 160402395453, PBB 8413574015"></div>
-            <div style="margin-top:12px;"><label>REMARK</label><input name="remark" value="<?= htmlspecialchars($row['remark'] ?? '') ?>"></div>
-            <div class="grid" style="margin-top:12px;">
-                <div><label>OLD TOTAL DEPOSIT</label><input name="old_total_deposit" value="<?= htmlspecialchars($row['old_total_deposit'] ?? '0') ?>"></div>
-                <div><label>OLD TOTAL WITHDRAW</label><input name="old_total_withdraw" value="<?= htmlspecialchars($row['old_total_withdraw'] ?? '0') ?>"></div>
-                <div><label>DEPOSIT</label><input name="deposit" value="<?= htmlspecialchars($row['deposit'] ?? '0') ?>"></div>
-                <div><label>WITHDRAW</label><input name="withdraw" value="<?= htmlspecialchars($row['withdraw'] ?? '0') ?>"></div>
-                <div><label>918KISS</label><input name="ref_918kiss" value="<?= htmlspecialchars($row['ref_918kiss'] ?? '') ?>"></div>
-                <div><label>MEGAB</label><input name="ref_megab" value="<?= htmlspecialchars($row['ref_megab'] ?? '') ?>"></div>
-            </div>
+            <div style="margin-top:12px;"><label>REMARK</label><textarea name="remark" rows="2"><?= htmlspecialchars($row['remark'] ?? '') ?></textarea></div>
             <button type="submit">保存</button>
         </form>
+    </div>
+
+    <div class="card product-accounts">
+        <h3 style="margin:0 0 8px;">产品账号</h3>
+        <p class="muted" style="font-size:12px; color:#666; margin:0 0 8px;">从下方选择产品并填写账号、密码后添加；可在「产品管理」中维护产品选项。</p>
+
+        <form method="post">
+            <input type="hidden" name="action" value="add_product">
+            <div class="add-product-row">
+                <div>
+                    <label>产品</label>
+                    <select name="product_name" required>
+                        <option value="">— 请选择 —</option>
+                        <?php foreach ($products as $p): ?>
+                            <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div><label>账号</label><input name="account" placeholder="账号"></div>
+                <div><label>密码</label><input name="password" type="password" placeholder="密码"></div>
+                <div><button type="submit">添加</button></div>
+            </div>
+        </form>
+
+        <?php if ($product_accounts): ?>
+        <table style="margin-top:12px;">
+            <thead>
+                <tr><th>产品</th><th>账号</th><th>密码</th><th>操作</th></tr>
+            </thead>
+            <tbody>
+            <?php foreach ($product_accounts as $pa): ?>
+                <tr>
+                    <td><?= htmlspecialchars($pa['product_name']) ?></td>
+                    <td><?= htmlspecialchars($pa['account'] ?? '') ?></td>
+                    <td><?= $pa['password'] !== '' && $pa['password'] !== null ? '••••••' : '—' ?></td>
+                    <td>
+                        <form method="post" style="display:inline;" onsubmit="return confirm('确定删除这条产品账号？');">
+                            <input type="hidden" name="action" value="del_product">
+                            <input type="hidden" name="account_id" value="<?= (int)$pa['id'] ?>">
+                            <button type="submit" class="btn-sm">删除</button>
+                        </form>
+                    </td>
+                </tr>
+            <?php endforeach; ?>
+            </tbody>
+        </table>
+        <?php else: ?>
+        <p style="margin-top:12px; color:#888; font-size:13px;">暂无产品账号，请在上方选择产品并填写账号、密码后点击「添加」。</p>
+        <?php endif; ?>
     </div>
 </body>
 </html>

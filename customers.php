@@ -16,14 +16,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim($_POST['name'] ?? '');
             $phone = trim($_POST['phone'] ?? '');
             $remark = trim($_POST['remark'] ?? '');
-            $register_date = trim($_POST['register_date'] ?? '');
             $bank_details = trim($_POST['bank_details'] ?? '');
-            $regular_customer = trim($_POST['regular_customer'] ?? '');
             if ($code === '') throw new RuntimeException('请输入客户代码。');
-            $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, visitor, register_date, bank_details, regular_customer) VALUES (?, ?, ?, ?, ?, 'VISITOR', ?, ?, ?)");
+            $register_date = date('Y-m-d'); // 根据填写时间自动
+            $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, visitor, register_date, bank_details) VALUES (?, ?, ?, ?, ?, 'VISITOR', ?, ?)");
             $stmt->execute([
                 $code, $name !== '' ? $name : null, $phone !== '' ? $phone : null, $remark !== '' ? $remark : null, (int)($_SESSION['user_id'] ?? 0),
-                $register_date !== '' ? $register_date : null, $bank_details !== '' ? $bank_details : null, $regular_customer !== '' ? $regular_customer : null
+                $register_date, $bank_details !== '' ? $bank_details : null
             ]);
             $msg = '已添加客户。';
         } elseif ($action === 'toggle' && $is_admin) {
@@ -44,22 +43,14 @@ try {
     $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
     $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
     $sql = "SELECT c.id, c.code, c.name, c.phone, c.remark, c.is_active, c.created_at,
-                   c.visitor, c.register_date, c.bank_details, c.regular_customer, c.sms, c.fd, c.ws, c.wc, c.verify,
-                   c.old_total_deposit, c.old_total_withdraw, c.deposit, c.withdraw,
-                   c.ref_918kiss, c.ref_megab
+                   c.register_date, c.bank_details, c.regular_customer, c.verify
             FROM customers c
             ORDER BY c.is_active DESC, c.code ASC";
     $rows = $pdo->query($sql)->fetchAll();
 } catch (Throwable $e) {
     $rows = [];
-    $err = $err ?: '请先在 phpMyAdmin 执行 migrate_customers_detail.sql 以增加顾客详细字段。' . ' (' . $e->getMessage() . ')';
+    $err = $err ?: '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。' . ' (' . $e->getMessage() . ')';
 }
-
-foreach ($rows as &$r) {
-    $r['total_deposit'] = (float)($r['old_total_deposit'] ?? 0) + (float)($r['deposit'] ?? 0);
-    $r['total_withdraw'] = (float)($r['old_total_withdraw'] ?? 0) + (float)($r['withdraw'] ?? 0);
-}
-unset($r);
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -113,13 +104,12 @@ unset($r);
                 <input type="hidden" name="action" value="create">
                 <div style="display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px;">
                     <div><label>客户代码 *</label><input name="code" required placeholder="C001"></div>
-                    <div><label>注册日期</label><input type="date" name="register_date" placeholder=""></div>
                     <div><label>姓名</label><input name="name" placeholder="FULL NAME"></div>
                     <div><label>联系电话</label><input name="phone" placeholder="CONTACT"></div>
-                    <div style="grid-column: span 2;"><label>银行资料</label><input name="bank_details" placeholder="例如 TNG 160402395453、PBB 8413574015"></div>
-                    <div><label>常客</label><select name="regular_customer"><option value="">-</option><option value="Y">Y</option><option value="N">N</option></select></div>
                     <div><label>备注</label><input name="remark" placeholder="REMARK"></div>
+                    <div style="grid-column: span 2;"><label>银行资料</label><input name="bank_details" placeholder="例如 TNG 160402395453、PBB 8413574015"></div>
                 </div>
+                <p style="margin-top:6px; font-size:12px; color:#888;">注册日期将自动按填写时间记录。</p>
                 <div style="margin-top:12px;"><button type="submit">添加</button></div>
             </form>
         </div>
@@ -137,14 +127,6 @@ unset($r);
                         <th>REGULAR</th>
                         <th>REMARK</th>
                         <th>VERIFY</th>
-                        <th>OLD TOTAL DEPOSIT</th>
-                        <th>OLD TOTAL WITHDRAW</th>
-                        <th>DEPOSIT</th>
-                        <th>WITHDRAW</th>
-                        <th class="total-col">TOTAL DEPOSIT</th>
-                        <th class="total-col">TOTAL WITHDRAW</th>
-                        <th>918KISS</th>
-                        <th>MEGAB</th>
                         <?php if ($is_admin): ?><th>操作</th><?php endif; ?>
                     </tr>
                 </thead>
@@ -159,14 +141,6 @@ unset($r);
                         <td><?= htmlspecialchars($r['regular_customer'] ?? '-') ?></td>
                         <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['verify'] ?? '') ?></td>
-                        <td class="num"><?= number_format((float)($r['old_total_deposit'] ?? 0), 2) ?></td>
-                        <td class="num"><?= number_format((float)($r['old_total_withdraw'] ?? 0), 2) ?></td>
-                        <td class="num"><?= number_format((float)($r['deposit'] ?? 0), 2) ?></td>
-                        <td class="num"><?= number_format((float)($r['withdraw'] ?? 0), 2) ?></td>
-                        <td class="num total-col"><?= number_format($r['total_deposit'], 2) ?></td>
-                        <td class="num total-col"><?= number_format($r['total_withdraw'], 2) ?></td>
-                        <td><?= htmlspecialchars($r['ref_918kiss'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['ref_megab'] ?? '') ?></td>
                         <?php if ($is_admin): ?>
                         <td>
                             <a href="customer_edit.php?id=<?= (int)$r['id'] ?>">编辑</a>
@@ -180,7 +154,7 @@ unset($r);
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 17 : 16 ?>">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= $is_admin ? 10 : 9 ?>">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
