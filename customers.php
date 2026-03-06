@@ -73,7 +73,7 @@ try {
 <body>
     <div class="wrap">
         <h2 style="margin:0 0 8px;">顾客资料</h2>
-        <p class="muted"><a href="dashboard.php">返回首页</a> | <a href="transaction_create.php">去记一笔</a><?php if ($is_admin): ?> | <a href="admin_option_sets.php">选项设置（SMS/FD/WS/WC/VERIFY）</a><?php endif; ?></p>
+        <p class="muted"><a href="dashboard.php">返回首页</a> | <a href="transaction_create.php">去记一笔</a> | <a href="customer_create.php">填写顾客资料</a> | <a href="product_library.php">顾客产品资料库</a><?php if ($is_admin): ?> | <a href="admin_option_sets.php">选项设置（SMS/FD/WS/WC/VERIFY）</a><?php endif; ?></p>
 
         <?php if ($msg): ?><div class="ok"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="err"><?= htmlspecialchars($err) ?></div><?php endif; ?>

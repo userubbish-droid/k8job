@@ -85,6 +85,9 @@ if (isset($_GET['msg'])) {
 if (isset($_GET['deleted'])) {
     $msg = '已删除。';
 }
+if (isset($_GET['created'])) {
+    $msg = '顾客已创建，可在此补充产品账号。';
+}
 
 // 主表单：保存顾客基本信息
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
