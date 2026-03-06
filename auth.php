@@ -5,6 +5,57 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+/** 权限 key => 显示名称（供 admin 打勾设置 member 用） */
+function get_permission_options(): array
+{
+    return [
+        'transaction_create' => '记一笔流水',
+        'transaction_list'   => '流水列表',
+        'customers'          => '客户资料（查看列表）',
+        'customer_create'    => '填写顾客资料',
+        'customer_edit'      => '编辑顾客（含产品账号）',
+        'product_library'    => '顾客产品资料库',
+    ];
+}
+
+/**
+ * 当前用户是否拥有某权限。admin 默认全部允许；member 查 role_permissions 表。
+ */
+function has_permission(string $key): bool
+{
+    $role = $_SESSION['user_role'] ?? '';
+    if ($role === 'admin') {
+        return true;
+    }
+    if ($role !== 'member') {
+        return false;
+    }
+    global $pdo;
+    if (!isset($pdo)) {
+        return false;
+    }
+    try {
+        $stmt = $pdo->prepare("SELECT 1 FROM role_permissions WHERE role = 'member' AND permission_key = ? LIMIT 1");
+        $stmt->execute([$key]);
+        return (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        return true;
+    }
+}
+
+/**
+ * 无该权限则 403 并退出。
+ */
+function require_permission(string $key): void
+{
+    require_login();
+    if (!has_permission($key)) {
+        http_response_code(403);
+        echo '无权限访问此功能。如需开通，请联系管理员在「权限设置」中勾选。';
+        exit;
+    }
+}
+
 function require_login(): void
 {
     if (empty($_SESSION['user_id'])) {

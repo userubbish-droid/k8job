@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('transaction_list');
 
 $id = (int)($_GET['id'] ?? 0);
 $return_to = trim($_GET['return_to'] ?? 'transaction_list.php');

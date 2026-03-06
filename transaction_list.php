@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('transaction_list');
 
 $day_from = $_GET['day_from'] ?? date('Y-m-01');
 $day_to   = $_GET['day_to'] ?? date('Y-m-d');

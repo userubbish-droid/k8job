@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('customers');
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
@@ -51,10 +51,11 @@ try {
         <div class="page-header">
             <h2>顾客资料</h2>
             <p class="breadcrumb">
-                <a href="dashboard.php">首页</a><span>·</span>
-                <a href="transaction_create.php">去记一笔</a><span>·</span>
-                <a href="customer_create.php">填写顾客资料</a><span>·</span>
-                <a href="product_library.php">顾客产品资料库</a><?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php">选项设置</a><?php endif; ?>
+                <a href="dashboard.php">首页</a>
+                <?php if (has_permission('transaction_create')): ?><span>·</span><a href="transaction_create.php">去记一笔</a><?php endif; ?>
+                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">填写顾客资料</a><?php endif; ?>
+                <?php if (has_permission('product_library')): ?><span>·</span><a href="product_library.php">顾客产品资料库</a><?php endif; ?>
+                <?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php">选项设置</a><?php endif; ?>
             </p>
         </div>
 

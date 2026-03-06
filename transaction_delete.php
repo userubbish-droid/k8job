@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('transaction_list');
 
 $id = (int)($_REQUEST['id'] ?? 0);
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';

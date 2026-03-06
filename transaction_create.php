@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('transaction_create');
 
 $saved = false;
 $error = '';

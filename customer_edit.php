@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('customer_edit');
 
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
@@ -184,7 +184,7 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                     <div class="form-group">
                         <label>产品</label>
                         <select name="product_name" class="form-control" required>
-                            <option value="">— 请选择 —</option>
+                            <option value="">-- 请选 --</option>
                             <?php foreach ($products as $p): ?>
                                 <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
                             <?php endforeach; ?>

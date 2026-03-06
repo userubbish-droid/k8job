@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('product_library');
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
@@ -32,8 +32,8 @@ try {
             <h2>顾客产品资料库</h2>
             <p class="breadcrumb">
                 <a href="dashboard.php">首页</a><span>·</span>
-                <a href="customers.php">顾客资料</a><span>·</span>
-                <a href="customer_create.php">填写顾客资料</a>
+                <a href="customers.php">顾客资料</a>
+                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">填写顾客资料</a><?php endif; ?>
                 <?php if ($is_admin): ?><span>·</span><a href="admin_products.php">产品管理</a><?php endif; ?>
             </p>
         </div>

@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_login();
+require_permission('customer_create');
 
 $msg = '';
 $err = '';
