@@ -103,6 +103,11 @@ $month_profit = $month_in - $month_out;
         <div class="nav">
             <a href="transaction_create.php">记一笔流水</a>
             <a href="transaction_list.php">流水列表</a>
+            <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
+                <a href="admin_users.php" class="outline">用户管理</a>
+                <a href="admin_banks.php" class="outline">银行管理</a>
+                <a href="admin_products.php" class="outline">产品管理</a>
+            <?php endif; ?>
             <a href="logout.php" class="outline">退出</a>
         </div>
     </div>

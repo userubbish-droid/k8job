@@ -40,10 +40,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $today = date('Y-m-d');
 $now   = date('H:i');
 
-// 银行/渠道 下拉选项（可自行增删）
-$banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
-// 产品/平台 下拉选项（可自行增删）
-$products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
+// 银行/产品下拉：优先从数据库读取（admin 可在管理页维护），没有表/无数据时回退到内置列表
+$banks = [];
+$products = [];
+try {
+    $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {
+    $banks = [];
+}
+try {
+    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {
+    $products = [];
+}
+if (!$banks) {
+    $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
+}
+if (!$products) {
+    $products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
