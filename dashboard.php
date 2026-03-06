@@ -11,7 +11,8 @@ $sidebar_current = 'dashboard';
 $db_error = '';
 $day_in = $day_out = $day_profit = 0;
 $month_in = $month_out = $month_profit = 0;
-$by_product_today = [];
+$day_customers_count = 0;
+$day_orders_count = 0;
 $by_bank_today = [];
 
 try {
@@ -35,14 +36,14 @@ try {
     $month_out   = (float)($month['total_out'] ?? 0);
     $month_profit = $month_in - $month_out;
 
-    // 今日按产品汇总（已批准）
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
-                           COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-                           COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-                           FROM transactions WHERE day = ? AND status = 'approved'
-                           GROUP BY product ORDER BY 2 + 3 DESC");
+    // 今日上线客户数（今日已批准流水中不重复的顾客 code 数）
+    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE day = ? AND status = 'approved' AND code IS NOT NULL AND code != ''");
     $stmt->execute([$today]);
-    $by_product_today = $stmt->fetchAll();
+    $day_customers_count = (int) $stmt->fetchColumn();
+    // 今日单数（今日已批准流水条数）
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE day = ? AND status = 'approved'");
+    $stmt->execute([$today]);
+    $day_orders_count = (int) $stmt->fetchColumn();
 
     // 今日按银行/渠道汇总（已批准）
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
@@ -105,29 +106,23 @@ try {
                         <div class="value"><?= number_format($day_profit, 2) ?></div>
                     </div>
                 </div>
-                <?php if (!empty($by_product_today) || !empty($by_bank_today)): ?>
+                <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px;">
                 <?php if (($_SESSION['user_role'] ?? '') === 'member'): ?>
-                <p class="form-hint" style="margin-top:12px;">以下为只读汇总，银行与产品的增删改仅管理员可操作。您可查看银行目前多少、产品剩下多少。</p>
+                <p class="form-hint" style="margin-top:0; grid-column: 1 / -1;">以下为只读汇总，银行与产品的增删改仅管理员可操作。</p>
                 <?php endif; ?>
-                <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
-                    <?php if (!empty($by_product_today)): ?>
                     <div>
-                        <h4>产品剩下多少（今日）</h4>
-                        <table class="total-table">
-                            <thead><tr><th>产品</th><th class="num">入账</th><th class="num">出账</th><th class="num">利润</th></tr></thead>
-                            <tbody>
-                            <?php foreach ($by_product_today as $r): $pi = (float)($r['total_in'] ?? 0); $po = (float)($r['total_out'] ?? 0); ?>
-                                <tr>
-                                    <td><?= htmlspecialchars($r['product'] ?? '—') ?></td>
-                                    <td class="num in"><?= number_format($pi, 2) ?></td>
-                                    <td class="num out"><?= number_format($po, 2) ?></td>
-                                    <td class="num profit"><?= number_format($pi - $po, 2) ?></td>
-                                </tr>
-                            <?php endforeach; ?>
-                            </tbody>
-                        </table>
+                        <h4>今日客户与单数</h4>
+                        <div class="stat-cards" style="margin-top:8px;">
+                            <div class="stat-card" style="border-left-color: var(--primary);">
+                                <div class="label">上线客户数</div>
+                                <div class="value" style="color: var(--primary);"><?= (int)$day_customers_count ?></div>
+                            </div>
+                            <div class="stat-card" style="border-left-color: var(--muted);">
+                                <div class="label">几张单</div>
+                                <div class="value" style="color: #475569;"><?= (int)$day_orders_count ?></div>
+                            </div>
+                        </div>
                     </div>
-                    <?php endif; ?>
                     <?php if (!empty($by_bank_today)): ?>
                     <div>
                         <h4>银行目前有多少（今日）</h4>
@@ -147,7 +142,6 @@ try {
                     </div>
                     <?php endif; ?>
                 </div>
-                <?php endif; ?>
             </div>
 
             <label class="month-toggle">
