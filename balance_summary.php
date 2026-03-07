@@ -33,26 +33,29 @@ $cum_out_product = [];
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE day < ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
     $stmt->execute([$day_from]);
     foreach ($stmt->fetchAll() as $r) {
-        $b = trim((string)$r['bank']);
+        $b = strtolower(trim((string)$r['bank']));
         if ($b !== '') {
-            $cum_in_bank[$b] = (float)$r['ti'];
-            $cum_out_bank[$b] = (float)$r['to'];
+            $cum_in_bank[$b] = ($cum_in_bank[$b] ?? 0) + (float)$r['ti'];
+            $cum_out_bank[$b] = ($cum_out_bank[$b] ?? 0) + (float)($r['tout'] ?? $r['to'] ?? 0);
         }
     }
 } catch (Throwable $e) {}
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE day < ? AND status = 'approved' GROUP BY product");
     $stmt->execute([$day_from]);
     foreach ($stmt->fetchAll() as $r) {
-        $cum_in_product[$r['product']] = (float)$r['ti'];
-        $cum_out_product[$r['product']] = (float)$r['to'];
+        $p = strtolower(trim((string)($r['product'] ?? '')));
+        if ($p !== '' && $p !== '—') {
+            $cum_in_product[$p] = ($cum_in_product[$p] ?? 0) + (float)$r['ti'];
+            $cum_out_product[$p] = ($cum_out_product[$p] ?? 0) + (float)($r['tout'] ?? $r['to'] ?? 0);
+        }
     }
 } catch (Throwable $e) {}
 
@@ -66,10 +69,10 @@ try {
     $range_in_bank = [];
     $range_out_bank = [];
     foreach ($stmt->fetchAll() as $r) {
-        $b = trim((string)($r['bank'] ?? ''));
+        $b = strtolower(trim((string)($r['bank'] ?? '')));
         if ($b !== '') {
-            $range_in_bank[$b] = (float)$r['total_in'];
-            $range_out_bank[$b] = (float)$r['total_out'];
+            $range_in_bank[$b] = ($range_in_bank[$b] ?? 0) + (float)$r['total_in'];
+            $range_out_bank[$b] = ($range_out_bank[$b] ?? 0) + (float)$r['total_out'];
         }
     }
 } catch (Throwable $e) { $range_in_bank = []; $range_out_bank = []; }
@@ -84,30 +87,15 @@ try {
     $range_in_product = [];
     $range_out_product = [];
     foreach ($stmt->fetchAll() as $r) {
-        $p = trim((string)($r['product'] ?? ''));
+        $p = strtolower(trim((string)($r['product'] ?? '')));
         if ($p !== '' && $p !== '—') {
-            $range_in_product[$p] = (float)$r['total_in'];
-            $range_out_product[$p] = (float)$r['total_out'];
+            $range_in_product[$p] = ($range_in_product[$p] ?? 0) + (float)$r['total_in'];
+            $range_out_product[$p] = ($range_out_product[$p] ?? 0) + (float)$r['total_out'];
         }
     }
 } catch (Throwable $e) { $range_in_product = []; $range_out_product = []; }
 
-try {
-    $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
-    foreach ($rows as $r) {
-        $base = (float)$r['initial_balance'];
-        $name = $r['name'];
-        if ($r['adjust_type'] === 'bank') {
-            $initial_bank[$name] = $base + ($cum_in_bank[$name] ?? 0) - ($cum_out_bank[$name] ?? 0);
-        } else {
-            $initial_product[$name] = $base - ($cum_in_product[$name] ?? 0) + ($cum_out_product[$name] ?? 0);
-        }
-    }
-} catch (Throwable $e) {
-    $initial_bank = [];
-    $initial_product = [];
-}
-// 所有银行、产品（用于始终显示完整列表，无流水时 In/Out 为 0）
+// 所有银行、产品（先取名单，便于用统一 key 做汇总）
 $all_banks = [];
 $all_products = [];
 try {
@@ -117,16 +105,35 @@ try {
     $all_products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {}
 
-// 未在 balance_adjust 中设定的银行/产品：前日 Balance Now = 累计入 - 累计出（或 0）
+try {
+    $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
+    foreach ($rows as $r) {
+        $base = (float)$r['initial_balance'];
+        $name = trim((string)$r['name']);
+        $key = strtolower($name);
+        if ($r['adjust_type'] === 'bank') {
+            $initial_bank[$name] = $base + ($cum_in_bank[$key] ?? 0) - ($cum_out_bank[$key] ?? 0);
+        } else {
+            $initial_product[$name] = $base - ($cum_in_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
+        }
+    }
+} catch (Throwable $e) {
+    $initial_bank = [];
+    $initial_product = [];
+}
+
+// 未在 balance_adjust 中设定的：前日 Balance Now = 累计入 - 累计出（key 小写匹配）
 foreach ($all_banks as $name) {
     $name = trim((string)$name);
     if ($name === '') continue;
-    if (!isset($initial_bank[$name])) $initial_bank[$name] = ($cum_in_bank[$name] ?? 0) - ($cum_out_bank[$name] ?? 0);
+    $key = strtolower($name);
+    if (!isset($initial_bank[$name])) $initial_bank[$name] = ($cum_in_bank[$key] ?? 0) - ($cum_out_bank[$key] ?? 0);
 }
 foreach ($all_products as $name) {
     $name = trim((string)$name);
     if ($name === '') continue;
-    if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$name] ?? 0) + ($cum_out_product[$name] ?? 0);
+    $key = strtolower($name);
+    if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
 }
 ?>
 <!DOCTYPE html>
@@ -184,8 +191,9 @@ foreach ($all_products as $name) {
                                     <?php foreach ($all_banks as $name):
                                         $name = trim((string)$name);
                                         if ($name === '') continue;
-                                        $in = (float)($range_in_bank[$name] ?? 0);
-                                        $out = (float)($range_out_bank[$name] ?? 0);
+                                        $key = strtolower($name);
+                                        $in = (float)($range_in_bank[$key] ?? 0);
+                                        $out = (float)($range_out_bank[$key] ?? 0);
                                         $init = $initial_bank[$name] ?? 0;
                                         $balance = $init + $in - $out;
                                     ?>
@@ -219,8 +227,9 @@ foreach ($all_products as $name) {
                                     <?php foreach ($all_products as $name):
                                         $name = trim((string)$name);
                                         if ($name === '') continue;
-                                        $in = (float)($range_in_product[$name] ?? 0);
-                                        $out = (float)($range_out_product[$name] ?? 0);
+                                        $key = strtolower($name);
+                                        $in = (float)($range_in_product[$key] ?? 0);
+                                        $out = (float)($range_out_product[$key] ?? 0);
                                         $init = $initial_product[$name] ?? 0;
                                         $balance = $init - $in + $out;
                                     ?>
