@@ -161,7 +161,7 @@ try {
                                 <th>状态</th>
                                 <th>排序</th>
                                 <th>创建时间</th>
-                                <th class="num">目前余额</th>
+                                <th class="num">Starting Balance</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -221,7 +221,7 @@ try {
                                 <th>状态</th>
                                 <th>排序</th>
                                 <th>创建时间</th>
-                                <th class="num">目前余额</th>
+                                <th class="num">Starting Balance</th>
                                 <th>操作</th>
                             </tr>
                         </thead>

@@ -9,13 +9,10 @@ $day = isset($_GET['day']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day']) 
 $msg = '';
 $err = '';
 
-$yesterday = date('Y-m-d', strtotime($day . ' -1 day'));
 $by_bank = [];
 $by_product = [];
 $initial_bank = [];
 $initial_product = [];
-$yesterday_closing_bank = [];
-$yesterday_closing_product = [];
 
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
@@ -36,24 +33,6 @@ try {
     $stmt->execute([$day]);
     $by_product = $stmt->fetchAll();
 } catch (Throwable $e) { $by_product = []; }
-
-try {
-    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS closing
-        FROM transactions WHERE day = ? AND status = 'approved'
-        GROUP BY bank");
-    $stmt->execute([$yesterday]);
-    foreach ($stmt->fetchAll() as $r) { $yesterday_closing_bank[$r['bank']] = (float)$r['closing']; }
-} catch (Throwable $e) {}
-
-try {
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS closing
-        FROM transactions WHERE day = ? AND status = 'approved'
-        GROUP BY product");
-    $stmt->execute([$yesterday]);
-    foreach ($stmt->fetchAll() as $r) { $yesterday_closing_product[$r['product']] = (float)$r['closing']; }
-} catch (Throwable $e) {}
 
 try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
@@ -83,7 +62,7 @@ try {
                     <h2>statement</h2>
                     <p class="breadcrumb">
                         <a href="dashboard.php">首页</a><span>·</span>
-                        初始余额 = 昨日余额；今日余额 = 初始 + 入账 − 出账
+                        Starting Balance 来自「银行与产品」页的 Starting Balance；余额 = 初始 + 入 − 出
                     </p>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -115,7 +94,7 @@ try {
                                         $name = $r['bank'] ?? '—';
                                         $in = (float)($r['total_in'] ?? 0);
                                         $out = (float)($r['total_out'] ?? 0);
-                                        $init = isset($initial_bank[$name]) ? $initial_bank[$name] : ($yesterday_closing_bank[$name] ?? 0);
+                                        $init = $initial_bank[$name] ?? 0;
                                         $balance = $init + $in - $out;
                                     ?>
                                     <tr>
@@ -149,7 +128,7 @@ try {
                                         $name = $r['product'] ?? '—';
                                         $in = (float)($r['total_in'] ?? 0);
                                         $out = (float)($r['total_out'] ?? 0);
-                                        $init = isset($initial_product[$name]) ? $initial_product[$name] : ($yesterday_closing_product[$name] ?? 0);
+                                        $init = $initial_product[$name] ?? 0;
                                         $balance = $init + $in - $out;
                                     ?>
                                     <tr>
@@ -169,7 +148,7 @@ try {
                             </table>
                         </div>
                     </div>
-                    <p class="form-hint" style="margin-top:12px;">初始 = 昨日余额；余额 = 初始 + 入 − 出。产品 In=－、Out=＋。</p>
+                    <p class="form-hint" style="margin-top:12px;">Starting Balance 请在「银行与产品」页用「更改」设定。余额 = Starting Balance + 入 − 出。产品 In=－、Out=＋。</p>
                 </div>
             </div>
         </main>
