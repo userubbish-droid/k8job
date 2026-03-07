@@ -10,7 +10,13 @@ $submitted_status = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
-    $can_edit_dt = $is_admin ? !empty($_POST['edit_dt']) : ($_SERVER['REQUEST_METHOD'] === 'POST');
+    // member：未点击「+」修改日期时间则用当前时间且自动通过审核
+    $member_use_current = !$is_admin && isset($_POST['member_use_current_time']) && (string)$_POST['member_use_current_time'] === '1';
+    if ($is_admin) {
+        $can_edit_dt = !empty($_POST['edit_dt']);
+    } else {
+        $can_edit_dt = !$member_use_current; // member 点了「+」才用表单里的日期时间
+    }
     $day     = $can_edit_dt && isset($_POST['day']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($_POST['day'] ?? '')) ? trim($_POST['day']) : date('Y-m-d');
     $timeRaw = $can_edit_dt && isset($_POST['time']) ? trim($_POST['time'] ?? '00:00') : date('H:i');
     $time    = (strlen($timeRaw) === 5 && preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/', $timeRaw)) ? $timeRaw . ':00' : ($timeRaw ?: '00:00:00');
@@ -38,9 +44,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         $total  = $amount + $bonus;
 
-        $status = $is_admin ? 'approved' : 'pending';
-        $approved_by = $is_admin ? (int)($_SESSION['user_id'] ?? 0) : null;
-        $approved_at = $is_admin ? date('Y-m-d H:i:s') : null;
+        // member 使用当前时间提交则无需审核，否则待审核
+        $status = $is_admin ? 'approved' : ($member_use_current ? 'approved' : 'pending');
+        $approved_by = ($status === 'approved') ? (int)($_SESSION['user_id'] ?? 0) : null;
+        $approved_at = ($status === 'approved') ? date('Y-m-d H:i:s') : null;
         $staff = (string) ($_SESSION['user_name'] ?? ($_SESSION['user_id'] ?? ''));
 
         $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
@@ -193,13 +200,18 @@ if ($is_admin) {
             <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。可输入数字如 1513 自动变为 15:13。</p>
         </div>
         <?php else: ?>
-        <div class="form-section">
+        <div class="form-section member-dt-section">
             <div class="form-section-title">日期 / 时间</div>
-            <div class="form-row-2">
-                <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>" required></div>
-                <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13" required></div>
+            <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
+            <p style="margin:0 0 8px 0; font-size:14px; color:var(--muted);">不修改则按当前时间记录，且无需审核。</p>
+            <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="margin-bottom:8px;" aria-label="展开修改日期时间">+ 需要修改日期/时间</button>
+            <div id="member_dt_box" style="display:none;">
+                <div class="form-row-2">
+                    <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+                </div>
+                <p class="form-hint" style="margin-top:4px;">可输入数字如 1513 自动变为 15:13。修改后提交需管理员审核。</p>
             </div>
-            <p class="form-hint" style="margin-top:4px;">可输入数字如 1513 自动变为 15:13。</p>
         </div>
         <?php endif; ?>
 
@@ -341,6 +353,18 @@ if ($is_admin) {
             }
             if (modeEl) modeEl.addEventListener('change', applyBankRequired);
             applyBankRequired();
+        })();
+        (function(){
+            var btn = document.getElementById('member_dt_toggle');
+            var box = document.getElementById('member_dt_box');
+            var hidden = document.getElementById('member_use_current_time');
+            if (!btn || !box || !hidden) return;
+            btn.addEventListener('click', function(){
+                var show = box.style.display === 'none';
+                box.style.display = show ? 'block' : 'none';
+                hidden.value = show ? '0' : '1';
+                btn.textContent = show ? '− 收起日期/时间' : '+ 需要修改日期/时间';
+            });
         })();
         (function(){
             var timeEl = document.getElementById('time');
