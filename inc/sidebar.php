@@ -26,3 +26,15 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     <?php endif; ?>
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>退出登录</a>
 </aside>
+<button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开菜单">☰ 菜单</button>
+<div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
+<script>
+(function(){
+    var btn = document.getElementById('sidebar-toggle');
+    var overlay = document.getElementById('sidebar-overlay');
+    if (!btn || !overlay) return;
+    btn.addEventListener('click', function(){ document.body.classList.toggle('sidebar-open'); overlay.setAttribute('aria-hidden', document.body.classList.contains('sidebar-open') ? 'false' : 'true'); });
+    overlay.addEventListener('click', function(){ document.body.classList.remove('sidebar-open'); overlay.setAttribute('aria-hidden', 'true'); });
+    document.querySelectorAll('.dashboard-sidebar a').forEach(function(a){ a.addEventListener('click', function(){ if (window.innerWidth <= 768) { document.body.classList.remove('sidebar-open'); overlay.setAttribute('aria-hidden', 'true'); } }); });
+})();
+</script>
