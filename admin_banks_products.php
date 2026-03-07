@@ -120,7 +120,7 @@ try {
     $balance_product = [];
 }
 
-// Balance Now = 全部已审核流水的 deposit − withdraw 对口（不含 Starting Balance）
+// Balance Now = Starting Balance + 全部已审核流水(入账 − 出账) 对扣
 $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
@@ -207,7 +207,7 @@ try {
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_bank[$bname] ?? 0;
                                 $tout = $total_out_bank[$bname] ?? 0;
-                                $balance_now = $tin - $tout;
+                                $balance_now = $start + $tin - $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$b['id'] ?></td>
@@ -240,7 +240,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = 全部已审核流水的<strong>入账 − 出账</strong>（对口），与 Starting Balance 无关，由系统自动计算。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> 对扣全部已审核流水的入账、出账（即 初始 + 入账 − 出账），由系统自动计算。</p>
                 </div>
 
                 <div class="card">
@@ -278,7 +278,7 @@ try {
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pname] ?? 0;
                                 $tout = $total_out_product[$pname] ?? 0;
-                                $balance_now = $tin - $tout;
+                                $balance_now = $start + $tin - $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
@@ -311,7 +311,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = 全部已审核流水的<strong>入账 − 出账</strong>（对口），与 Starting Balance 无关，由系统自动计算。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> 对扣全部已审核流水的入账、出账（即 初始 + 入账 − 出账），由系统自动计算。</p>
                 </div>
             </div>
         </main>
