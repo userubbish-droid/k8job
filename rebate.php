@@ -20,12 +20,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($action === 'submit') {
                 $given = isset($_POST['given']) && is_array($_POST['given']) ? $_POST['given'] : [];
                 $given = array_filter(array_map('trim', $given));
+                $pct = isset($_POST['pct']) && is_array($_POST['pct']) ? $_POST['pct'] : [];
                 $uid = (int)($_SESSION['user_id'] ?? 0);
-                $stmt = $pdo->prepare("INSERT INTO rebate_given (day, code, given_at, given_by) VALUES (?, ?, NOW(), ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by)");
-                foreach ($given as $code) {
-                    if ($code !== '') $stmt->execute([$post_day, $code, $uid]);
+                if (!empty($given)) {
+                    $placeholders = implode(',', array_fill(0, count($given), '?'));
+                    $stmt_bal = $pdo->prepare("SELECT code, COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance FROM transactions WHERE day = ? AND status = 'approved' AND code IN ($placeholders) GROUP BY code");
+                    $stmt_bal->execute(array_merge([$post_day], $given));
+                    $balances = [];
+                    while ($row = $stmt_bal->fetch(PDO::FETCH_ASSOC)) {
+                        $balances[$row['code']] = (float)$row['balance'];
+                    }
+                    $stmt = $pdo->prepare("INSERT INTO rebate_given (day, code, given_at, given_by, rebate_pct, rebate_amount) VALUES (?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by), rebate_pct = VALUES(rebate_pct), rebate_amount = VALUES(rebate_amount)");
+                    foreach ($given as $code) {
+                        if ($code === '') continue;
+                        $balance = $balances[$code] ?? 0;
+                        $pct_val = isset($pct[$code]) ? (float)str_replace(',', '.', trim($pct[$code])) : 0;
+                        $rebate_amount = $pct_val > 0 ? round($balance * $pct_val / 100, 2) : 0;
+                        $stmt->execute([$post_day, $code, $uid, $pct_val ?: null, $rebate_amount]);
+                    }
                 }
-                $msg = count($given) ? '已标记所选客户为「已给」。' : '请勾选「已给了」再提交。';
+                $msg = count($given) ? '已标记所选客户为「已给」，返点金额已保存。' : '请勾选「已给了」再提交。';
             } elseif ($action === 'cancel' && $is_admin) {
                 $code = trim($_POST['code'] ?? '');
                 if ($code !== '') {
@@ -39,6 +53,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } catch (Throwable $e) {
             if (strpos($e->getMessage(), 'rebate_given') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
                 $err = '请先在 phpMyAdmin 执行 migrate_rebate_given.sql 创建 rebate_given 表。';
+            } elseif (strpos($e->getMessage(), 'Unknown column') !== false && strpos($e->getMessage(), 'rebate_pct') !== false) {
+                $err = '请执行 migrate_rebate_given_columns.sql 为 rebate_given 表添加 rebate_pct、rebate_amount 列。';
             } else {
                 $err = '操作失败：' . $e->getMessage();
             }
@@ -55,11 +71,21 @@ $err = $_SESSION['rebate_err'] ?? '';
 unset($_SESSION['rebate_msg'], $_SESSION['rebate_err']);
 
 $given_codes = [];
+$given_info = [];
 try {
-    $stmt = $pdo->prepare("SELECT code FROM rebate_given WHERE day = ?");
+    $stmt = $pdo->prepare("SELECT code, rebate_pct, rebate_amount FROM rebate_given WHERE day = ?");
     $stmt->execute([$day]);
-    $given_codes = $stmt->fetchAll(PDO::FETCH_COLUMN);
-} catch (Throwable $e) {}
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $given_codes[] = $row['code'];
+        $given_info[$row['code']] = ['pct' => $row['rebate_pct'], 'amount' => $row['rebate_amount']];
+    }
+} catch (Throwable $e) {
+    try {
+        $stmt = $pdo->prepare("SELECT code FROM rebate_given WHERE day = ?");
+        $stmt->execute([$day]);
+        $given_codes = $stmt->fetchAll(PDO::FETCH_COLUMN);
+    } catch (Throwable $e2) {}
+}
 
 // 当日按客户汇总：进、出、对扣(余额)。只统计已批准流水
 $stmt = $pdo->prepare("
@@ -168,10 +194,22 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             <td class="num"><?= number_format($balance, 2) ?></td>
                             <td class="num">
                                 <?php if (!$is_given): ?>
-                                <input type="text" class="form-control percent js-percent" name="pct_<?= $i ?>" placeholder="%" inputmode="decimal" data-row="<?= $i ?>">
+                                <input type="text" class="form-control percent js-percent" name="pct[<?= htmlspecialchars($code) ?>]" placeholder="%" inputmode="decimal" data-row="<?= $i ?>">
+                                <?php else:
+                                    $info = $given_info[$code] ?? [];
+                                    $pct_display = isset($info['pct']) && $info['pct'] !== null && $info['pct'] !== '' ? number_format((float)$info['pct'], 2) . '%' : '—';
+                                ?>
+                                <?= $pct_display ?>
+                                <?php endif; ?>
+                            </td>
+                            <td class="num total-amount js-total" data-row="<?= $i ?>">
+                                <?php if ($is_given):
+                                    $info = $given_info[$code] ?? [];
+                                    $amt_display = isset($info['amount']) && $info['amount'] !== null && $info['amount'] !== '' ? number_format((float)$info['amount'], 2) : '—';
+                                ?>
+                                <?= $amt_display ?>
                                 <?php else: ?>—<?php endif; ?>
                             </td>
-                            <td class="num total-amount js-total" data-row="<?= $i ?>"><?= $is_given ? '—' : '—' ?></td>
                             <?php if ($is_admin && $is_given): ?>
                             <td class="num">
                                 <form method="post" style="display:inline;">
