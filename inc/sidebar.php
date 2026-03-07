@@ -12,6 +12,7 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     <a href="dashboard.php" class="nav-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>首页</a>
     <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item <?= $sidebar_current === 'transaction_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>记一笔</a><?php endif; ?>
     <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span>流水记录</a><?php endif; ?>
+    <?php if (has_permission('rebate')): ?><a href="rebate.php" class="nav-item <?= $sidebar_current === 'rebate' ? 'primary' : '' ?>"><span class="nav-icon"></span>返点 Rebate</a><?php endif; ?>
     <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item <?= $sidebar_current === 'customers' ? 'primary' : '' ?>"><span class="nav-icon"></span>顾客列表</a><?php endif; ?>
     <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item <?= $sidebar_current === 'product_library' ? 'primary' : '' ?>"><span class="nav-icon"></span>产品账号</a><?php endif; ?>
     <a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>余额汇总</a>
@@ -33,8 +34,12 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     var btn = document.getElementById('sidebar-toggle');
     var overlay = document.getElementById('sidebar-overlay');
     if (!btn || !overlay) return;
-    btn.addEventListener('click', function(){ document.body.classList.toggle('sidebar-open'); overlay.setAttribute('aria-hidden', document.body.classList.contains('sidebar-open') ? 'false' : 'true'); });
-    overlay.addEventListener('click', function(){ document.body.classList.remove('sidebar-open'); overlay.setAttribute('aria-hidden', 'true'); });
-    document.querySelectorAll('.dashboard-sidebar a').forEach(function(a){ a.addEventListener('click', function(){ if (window.innerWidth <= 768) { document.body.classList.remove('sidebar-open'); overlay.setAttribute('aria-hidden', 'true'); } }); });
+    // 网页版（桌面）默认展开侧栏；手机版默认收起
+    if (window.innerWidth > 768) document.body.classList.add('sidebar-open');
+    function syncAria() { overlay.setAttribute('aria-hidden', document.body.classList.contains('sidebar-open') ? 'false' : 'true'); }
+    syncAria();
+    btn.addEventListener('click', function(){ document.body.classList.toggle('sidebar-open'); syncAria(); });
+    overlay.addEventListener('click', function(){ document.body.classList.remove('sidebar-open'); syncAria(); });
+    document.querySelectorAll('.dashboard-sidebar a').forEach(function(a){ a.addEventListener('click', function(){ if (window.innerWidth <= 768) { document.body.classList.remove('sidebar-open'); syncAria(); } }); });
 })();
 </script>

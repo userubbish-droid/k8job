@@ -17,26 +17,47 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($code === '') {
         $err = '请输入客户代码。';
     } else {
-        try {
-            $register_date = date('Y-m-d');
-            $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, register_date, bank_details) VALUES (?, ?, ?, ?, ?, ?, ?)");
-            $stmt->execute([
-                $code,
-                $name !== '' ? $name : null,
-                $phone !== '' ? $phone : null,
-                $remark !== '' ? $remark : null,
-                (int)($_SESSION['user_id'] ?? 0),
-                $register_date,
-                $bank_details !== '' ? $bank_details : null
-            ]);
-            $new_id = (int) $pdo->lastInsertId();
-            header('Location: customer_edit.php?id=' . $new_id . '&created=1');
-            exit;
-        } catch (Throwable $e) {
-            if (strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
-                $err = '该客户代码已存在，请换一个。';
-            } else {
-                $err = '保存失败：' . $e->getMessage();
+        $conflicts = [];
+        if ($phone !== '') {
+            $stmt = $pdo->prepare("SELECT code FROM customers WHERE phone = ? LIMIT 1");
+            $stmt->execute([$phone]);
+            $row = $stmt->fetch();
+            if ($row) {
+                $conflicts[] = $row['code'] . ' 电话号码同样';
+            }
+        }
+        if ($bank_details !== '') {
+            $stmt = $pdo->prepare("SELECT code FROM customers WHERE bank_details = ? LIMIT 1");
+            $stmt->execute([$bank_details]);
+            $row = $stmt->fetch();
+            if ($row) {
+                $conflicts[] = $row['code'] . ' 银行号码同样';
+            }
+        }
+        if (!empty($conflicts)) {
+            $err = '顾客已注册：' . implode('；', $conflicts);
+        } else {
+            try {
+                $register_date = date('Y-m-d');
+                $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, register_date, bank_details) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt->execute([
+                    $code,
+                    $name !== '' ? $name : null,
+                    $phone !== '' ? $phone : null,
+                    $remark !== '' ? $remark : null,
+                    (int)($_SESSION['user_id'] ?? 0),
+                    $register_date,
+                    $bank_details !== '' ? $bank_details : null
+                ]);
+                $new_id = (int) $pdo->lastInsertId();
+                header('Location: customer_edit.php?id=' . $new_id . '&created=1');
+                exit;
+            } catch (Throwable $e) {
+                if (strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
+                    $err = '该客户代码已存在，请换一个。';
+                } else {
+                    $err = '保存失败：' . $e->getMessage();
+                }
             }
         }
     }

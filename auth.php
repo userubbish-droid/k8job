@@ -11,6 +11,7 @@ function get_permission_options(): array
     return [
         'transaction_create' => '记一笔',
         'transaction_list'   => '流水记录',
+        'rebate'             => '返点 Rebate',
         'customers'          => '顾客列表',
         'customer_create'    => '新增顾客',
         'customer_edit'      => '编辑顾客（含产品账号）',
