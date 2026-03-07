@@ -126,32 +126,39 @@ $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
 $total_out_product = [];
-// 用不区分大小写的 key 汇总，避免流水里的名称与列表不一致导致对不上
 try {
-    $stmt = $pdo->query("SELECT COALESCE(TRIM(bank), '') AS bank,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''
-        GROUP BY LOWER(TRIM(bank))");
+    $stmt = $pdo->query("SELECT TRIM(COALESCE(`bank`, '')) AS bank,
+        COALESCE(SUM(CASE WHEN `mode` = 'DEPOSIT' THEN `amount` ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN `mode` = 'WITHDRAW' THEN `amount` ELSE 0 END), 0) AS to
+        FROM transactions WHERE `status` = 'approved' GROUP BY TRIM(COALESCE(`bank`, ''))");
     foreach ($stmt->fetchAll() as $r) {
-        $k = strtolower(trim((string)$r['bank']));
+        $k = trim((string)$r['bank']);
         if ($k === '') continue;
+        $k = strtolower($k);
         $total_in_bank[$k] = (float)$r['ti'];
         $total_out_bank[$k] = (float)$r['to'];
     }
 } catch (Throwable $e) {}
 try {
-    $stmt = $pdo->query("SELECT COALESCE(TRIM(product), '') AS product,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND TRIM(product) != ''
-        GROUP BY LOWER(TRIM(product))");
+    $stmt = $pdo->query("SELECT TRIM(COALESCE(`product`, '')) AS product,
+        COALESCE(SUM(CASE WHEN `mode` = 'DEPOSIT' THEN `amount` ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN `mode` = 'WITHDRAW' THEN `amount` ELSE 0 END), 0) AS to
+        FROM transactions WHERE `status` = 'approved' GROUP BY TRIM(COALESCE(`product`, ''))");
     foreach ($stmt->fetchAll() as $r) {
-        $k = strtolower(trim((string)$r['product']));
+        $k = trim((string)$r['product']);
         if ($k === '') continue;
+        $k = strtolower($k);
         $total_in_product[$k] = (float)$r['ti'];
         $total_out_product[$k] = (float)$r['to'];
     }
+} catch (Throwable $e) {}
+
+// 用于提示：是否有已审核且填写了银行/产品的流水
+$cnt_bank = 0;
+$cnt_product = 0;
+try {
+    $cnt_bank = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''")->fetchColumn();
+    $cnt_product = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND TRIM(product) != ''")->fetchColumn();
 } catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
@@ -173,6 +180,9 @@ try {
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+                <?php if ($cnt_bank === 0 && $cnt_product === 0): ?>
+                <div class="alert" style="background:#f0f4f8;color:#555;">当前没有任何「已审核」且填写了 bank / game 的流水，因此 Balance Now 会与 Starting Balance 相同。记流水时请选择银行和产品，并确保流水已批准。</div>
+                <?php endif; ?>
 
                 <div class="card">
                     <h3>银行/渠道</h3>
@@ -243,7 +253,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> 对扣全部已审核流水的入账、出账（即 初始 + 入账 − 出账），由系统自动计算。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> + 入账 − 出账（仅统计<strong>已审核</strong>且记流水时选了该银行/产品的记录）。若始终与 Starting Balance 相同，请到「流水记录」确认：1) 每笔流水是否已选 bank 和 game；2) 是否为「已批准」状态。</p>
                 </div>
 
                 <div class="card">
@@ -315,7 +325,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> 对扣全部已审核流水的入账、出账（即 初始 + 入账 − 出账），由系统自动计算。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> + 入账 − 出账（仅统计已审核且记流水时选了该产品的记录）。</p>
                 </div>
             </div>
         </main>
