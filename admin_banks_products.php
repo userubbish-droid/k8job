@@ -133,7 +133,7 @@ try {
     $stmt = $pdo->query("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved' GROUP BY bank");
+        FROM transactions WHERE status = 'approved' GROUP BY COALESCE(bank, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
         $bankVal = $r['bank'] ?? $r['Bank'] ?? '';
@@ -152,7 +152,7 @@ try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved' GROUP BY product");
+        FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
         $prodVal = $r['product'] ?? $r['Product'] ?? '';
@@ -176,6 +176,12 @@ try {
     $cnt_approved = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved'")->fetchColumn();
     $cnt_bank = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND bank != '' AND TRIM(bank) != ''")->fetchColumn();
     $cnt_product = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND product != '' AND TRIM(product) != ''")->fetchColumn();
+} catch (Throwable $e) {}
+
+// 最近流水（用于排查 In/Out 是否连上）
+$recent_transactions = [];
+try {
+    $recent_transactions = $pdo->query("SELECT id, day, mode, bank, product, amount, status FROM transactions ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
@@ -204,6 +210,29 @@ try {
                     <strong>In/Out 说明：</strong>已审核流水共 <strong><?= (int)$cnt_approved ?></strong> 笔，其中填写了<strong>银行</strong>的有 <strong><?= (int)$cnt_bank ?></strong> 笔、<strong>产品</strong>的有 <strong><?= (int)$cnt_product ?></strong> 笔。
                     <?php if ($cnt_bank === 0 && $cnt_product === 0): ?>若 In/Out 一直为 0，请到「<a href="transaction_create.php">记一笔流水</a>」保存时<strong>务必选择 bank 和 产品/平台</strong>，并到「<a href="admin_approvals.php">待批准</a>」或流水记录里确保状态为<strong>已批准</strong>。<?php endif; ?>
                 </div>
+
+                <?php if (!empty($recent_transactions)): ?>
+                <details class="card" style="margin-bottom:16px;">
+                    <summary style="cursor:pointer;font-weight:600;">最近 10 笔流水（排查用：确认 bank / status 是否写入）</summary>
+                    <table class="data-table" style="margin-top:10px;">
+                        <thead><tr><th>ID</th><th>日期</th><th>mode</th><th>bank</th><th>product</th><th>金额</th><th>status</th></tr></thead>
+                        <tbody>
+                        <?php foreach ($recent_transactions as $t): ?>
+                        <tr>
+                            <td><?= (int)($t['id'] ?? 0) ?></td>
+                            <td><?= htmlspecialchars($t['day'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($t['mode'] ?? '') ?></td>
+                            <td><?= htmlspecialchars($t['bank'] ?? '—') ?></td>
+                            <td><?= htmlspecialchars($t['product'] ?? '—') ?></td>
+                            <td class="num"><?= number_format((float)($t['amount'] ?? 0), 2) ?></td>
+                            <td><?= htmlspecialchars($t['status'] ?? '') ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                    <p class="form-hint" style="margin-top:8px;">只有 <strong>status = approved</strong> 且 <strong>bank 有值</strong>（如 HLB）的流水才会计入上方 In/Out。若这里是 pending 请先去「<a href="admin_approvals.php">待批准</a>」通过。</p>
+                </details>
+                <?php endif; ?>
 
                 <div class="card">
                     <h3>银行/渠道</h3>

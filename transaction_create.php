@@ -151,7 +151,7 @@ if ($is_admin) {
     <?php if ($saved): ?>
         <div class="card" style="margin-bottom: 20px;">
             <div class="alert alert-success" style="margin-bottom: 0;">
-                <?php if ($submitted_status === 'pending'): ?>已提交，等待管理员批准。<?php else: ?>已保存并生效。<?php endif; ?>
+                <?php if ($submitted_status === 'pending'): ?>已提交，等待管理员批准。<strong>批准后</strong>才会在「银行与产品」页的 In/Out 中显示。<?php else: ?>已保存并生效，已计入「银行与产品」In/Out。<?php endif; ?>
             </div>
             <?php if (!empty($saved_code) || !empty($saved_product) || $saved_mode === 'WITHDRAW'): ?>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px;">
