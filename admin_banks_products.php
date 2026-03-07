@@ -395,7 +395,7 @@ try {
                             <input type="text" name="amount" class="form-control" placeholder="数目" inputmode="decimal" required style="width:90px;">
                             <button type="submit" class="btn btn-primary">提交</button>
                         </form>
-                        <p class="form-hint" style="margin:8px 0 0; font-size:12px;">提交后该产品的 In 会增加，Balance = Starting Balance + In − Out 会随之增加。</p>
+                        <p class="form-hint" style="margin:8px 0 0; font-size:12px;">提交后该产品的 In 会增加（显示为负），公式与 Statement Game Platform 一致：Balance = Starting − In + Out。</p>
                     </div>
                     <div id="product-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
@@ -435,7 +435,7 @@ try {
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
-                                $balance_now = $start + $tin - $tout;
+                                $balance_now = $start - $tin + $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
@@ -444,8 +444,8 @@ try {
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
-                                <td class="num in"><?= number_format($tin, 2) ?></td>
-                                <td class="num out"><?= number_format($tout, 2) ?></td>
+                                <td class="num out"><?= $tin != 0 ? '−' . number_format($tin, 2) : '—' ?></td>
+                                <td class="num in"><?= $tout != 0 ? '+' . number_format($tout, 2) : '—' ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
@@ -470,7 +470,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="10">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式：<strong>Balance = Starting Balance + In − Out</strong>。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式（与 Statement Game Platform 一致）：<strong>Balance = Starting − In + Out</strong>，In 显示为负、Out 显示为正。</p>
                 </div>
             </div>
         </main>
