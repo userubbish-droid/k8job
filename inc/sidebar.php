@@ -9,6 +9,9 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
 }
 ?>
 <aside class="dashboard-sidebar">
+    <div class="sidebar-drawer-header">
+        <button type="button" class="sidebar-close" id="sidebar-close" aria-label="关闭导航">×</button>
+    </div>
     <a href="dashboard.php" class="nav-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>首页</a>
     <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item <?= $sidebar_current === 'transaction_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>记一笔</a><?php endif; ?>
     <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span>流水记录</a><?php endif; ?>
@@ -27,7 +30,7 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     <?php endif; ?>
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>退出登录</a>
 </aside>
-<button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开菜单">☰ 菜单</button>
+<button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开导航"><span class="sidebar-toggle-icon">☰</span> MENU</button>
 <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 <script>
 (function(){
@@ -38,8 +41,11 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     if (window.innerWidth > 768) document.body.classList.add('sidebar-open');
     function syncAria() { overlay.setAttribute('aria-hidden', document.body.classList.contains('sidebar-open') ? 'false' : 'true'); }
     syncAria();
+    function closeSidebar() { document.body.classList.remove('sidebar-open'); syncAria(); }
     btn.addEventListener('click', function(){ document.body.classList.toggle('sidebar-open'); syncAria(); });
-    overlay.addEventListener('click', function(){ document.body.classList.remove('sidebar-open'); syncAria(); });
-    document.querySelectorAll('.dashboard-sidebar a').forEach(function(a){ a.addEventListener('click', function(){ if (window.innerWidth <= 768) { document.body.classList.remove('sidebar-open'); syncAria(); } }); });
+    overlay.addEventListener('click', closeSidebar);
+    var closeBtn = document.getElementById('sidebar-close');
+    if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
+    document.querySelectorAll('.dashboard-sidebar a').forEach(function(a){ a.addEventListener('click', function(){ if (window.innerWidth <= 768) closeSidebar(); }); });
 })();
 </script>

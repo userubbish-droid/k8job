@@ -146,13 +146,11 @@ $rows_for_sum = $all_rows; // 合计用全部客户
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <form method="get" class="filters-bar" style="margin-bottom:16px;">
+            <form method="get" class="filters-bar js-date-form" style="margin-bottom:16px;">
                 <label>日期</label>
-                <input type="date" name="day" value="<?= htmlspecialchars($day) ?>">
+                <input type="date" name="day" value="<?= htmlspecialchars($day) ?>" class="js-date-input">
                 <button type="submit" class="btn btn-primary">查询</button>
             </form>
-            <p class="form-hint">按客户汇总当日进、出，对扣 = 进 − 出 = 余额；填写 % 后自动计算返点金额。勾选「已给了」并提交后，member 只看到还没给的；admin 端已给的显示绿色。</p>
-
             <form method="post" id="rebate-form">
                 <input type="hidden" name="day" value="<?= htmlspecialchars($day) ?>">
                 <input type="hidden" name="action" value="submit">
@@ -162,9 +160,9 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             <th>客户代码</th>
                             <th class="num">今日进</th>
                             <th class="num">今日出</th>
-                            <th class="num">对扣（余额）</th>
+                            <th class="num">win/lose amount</th>
                             <th class="num">%</th>
-                            <th class="num">返点金额 (Total Amount)</th>
+                            <th class="num">amount</th>
                             <?php if ($is_admin): ?><th class="num">操作</th><?php endif; ?>
                         </tr>
                     </thead>
@@ -179,7 +177,6 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                         <tr data-balance="<?= $balance ?>" data-row="<?= $i ?>" data-code="<?= htmlspecialchars($code) ?>" class="<?= $is_given ? 'rebate-given-row' : '' ?>">
                             <td class="rebate-code-cell">
                                 <?php if ($is_given): ?>
-                                    <span class="rebate-given-label">已给</span>
                                     <?= htmlspecialchars($code) ?>
                                 <?php else: ?>
                                     <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
@@ -197,7 +194,8 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                                 <input type="text" class="form-control percent js-percent" name="pct[<?= htmlspecialchars($code) ?>]" placeholder="%" inputmode="decimal" data-row="<?= $i ?>">
                                 <?php else:
                                     $info = $given_info[$code] ?? [];
-                                    $pct_display = isset($info['pct']) && $info['pct'] !== null && $info['pct'] !== '' ? number_format((float)$info['pct'], 2) . '%' : '—';
+                                    $pct_val = isset($info['pct']) && $info['pct'] !== null && $info['pct'] !== '' ? (float)$info['pct'] : null;
+                                    $pct_display = $pct_val !== null ? number_format($pct_val, 2) . '%' : '—';
                                 ?>
                                 <?= $pct_display ?>
                                 <?php endif; ?>
@@ -205,7 +203,14 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             <td class="num total-amount js-total" data-row="<?= $i ?>">
                                 <?php if ($is_given):
                                     $info = $given_info[$code] ?? [];
-                                    $amt_display = isset($info['amount']) && $info['amount'] !== null && $info['amount'] !== '' ? number_format((float)$info['amount'], 2) : '—';
+                                    $amt_val = null;
+                                    if (isset($info['amount']) && $info['amount'] !== null && $info['amount'] !== '') {
+                                        $amt_val = (float)$info['amount'];
+                                    }
+                                    if ($amt_val === null && isset($info['pct']) && $info['pct'] !== null && $info['pct'] !== '') {
+                                        $amt_val = round($balance * (float)$info['pct'] / 100, 2);
+                                    }
+                                    $amt_display = $amt_val !== null ? number_format($amt_val, 2) : '—';
                                 ?>
                                 <?= $amt_display ?>
                                 <?php else: ?>—<?php endif; ?>
@@ -301,6 +306,12 @@ $rows_for_sum = $all_rows; // 合计用全部客户
         });
         table.querySelectorAll('tbody tr[data-balance]').forEach(updateRow);
         updateSums();
+
+        var dateForm = document.querySelector('.js-date-form');
+        var dateInput = document.querySelector('.js-date-input');
+        if (dateForm && dateInput) {
+            dateInput.addEventListener('change', function() { dateForm.submit(); });
+        }
     })();
     </script>
 </body>
