@@ -111,7 +111,8 @@ try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
     $balance_adjust_ok = true;
     foreach ($rows as $r) {
-        $k = trim((string)$r['name']);
+        $k = strtolower(trim((string)$r['name']));
+        if ($k === '') continue;
         if ($r['adjust_type'] === 'bank') $balance_bank[$k] = (float)$r['initial_balance'];
         else $balance_product[$k] = (float)$r['initial_balance'];
     }
@@ -125,28 +126,29 @@ $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
 $total_out_product = [];
+// 用不区分大小写的 key 汇总，避免流水里的名称与列表不一致导致对不上
 try {
-    $stmt = $pdo->query("SELECT COALESCE(TRIM(bank), '—') AS bank,
+    $stmt = $pdo->query("SELECT COALESCE(TRIM(bank), '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved'
-        GROUP BY COALESCE(TRIM(bank), '—')");
+        FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''
+        GROUP BY LOWER(TRIM(bank))");
     foreach ($stmt->fetchAll() as $r) {
-        $k = trim((string)$r['bank']);
-        if ($k === '') $k = '—';
+        $k = strtolower(trim((string)$r['bank']));
+        if ($k === '') continue;
         $total_in_bank[$k] = (float)$r['ti'];
         $total_out_bank[$k] = (float)$r['to'];
     }
 } catch (Throwable $e) {}
 try {
-    $stmt = $pdo->query("SELECT COALESCE(TRIM(product), '—') AS product,
+    $stmt = $pdo->query("SELECT COALESCE(TRIM(product), '') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved'
-        GROUP BY COALESCE(TRIM(product), '—')");
+        FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND TRIM(product) != ''
+        GROUP BY LOWER(TRIM(product))");
     foreach ($stmt->fetchAll() as $r) {
-        $k = trim((string)$r['product']);
-        if ($k === '') $k = '—';
+        $k = strtolower(trim((string)$r['product']));
+        if ($k === '') continue;
         $total_in_product[$k] = (float)$r['ti'];
         $total_out_product[$k] = (float)$r['to'];
     }
@@ -203,10 +205,11 @@ try {
                             <?php
                             foreach ($banks as $b):
                                 $bname = trim((string)$b['name']);
-                                $cur = $balance_bank[$bname] ?? null;
+                                $bkey = strtolower($bname);
+                                $cur = $balance_bank[$bkey] ?? null;
                                 $start = $cur !== null ? (float)$cur : 0;
-                                $tin = $total_in_bank[$bname] ?? 0;
-                                $tout = $total_out_bank[$bname] ?? 0;
+                                $tin = $total_in_bank[$bkey] ?? 0;
+                                $tout = $total_out_bank[$bkey] ?? 0;
                                 $balance_now = $start + $tin - $tout;
                             ?>
                             <tr>
@@ -274,10 +277,11 @@ try {
                             <?php
                             foreach ($products as $p):
                                 $pname = trim((string)$p['name']);
-                                $cur = $balance_product[$pname] ?? null;
+                                $pkey = strtolower($pname);
+                                $cur = $balance_product[$pkey] ?? null;
                                 $start = $cur !== null ? (float)$cur : 0;
-                                $tin = $total_in_product[$pname] ?? 0;
-                                $tout = $total_out_product[$pname] ?? 0;
+                                $tin = $total_in_product[$pkey] ?? 0;
+                                $tout = $total_out_product[$pkey] ?? 0;
                                 $balance_now = $start + $tin - $tout;
                             ?>
                             <tr>
