@@ -205,7 +205,9 @@ try {
                                 <th>排序</th>
                                 <th>创建时间</th>
                                 <th class="num">Starting Balance</th>
-                                <th class="num">Balance Now</th>
+                                <th class="num">In</th>
+                                <th class="num">Out</th>
+                                <th class="num">Balance</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -226,8 +228,10 @@ try {
                                 <td><?= ((int)$b['is_active'] === 1) ? '启用' : '禁用' ?></td>
                                 <td><?= (int)$b['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
-                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
-                                <td class="num"><?= number_format($balance_now, 2) ?></td>
+                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
+                                <td class="num in"><?= number_format($tin, 2) ?></td>
+                                <td class="num out"><?= number_format($tout, 2) ?></td>
+                                <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
                                         <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
@@ -248,10 +252,10 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
+                            <?php if (!$banks): ?><tr><td colspan="10">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。<strong>Balance Now = Starting Balance + 该银行全部 DEPOSIT − 该银行全部 WITHDRAW</strong>（例：HLB 初始 1000，c004 deposit HLB 100、c002 withdraw HLB 50 → 1000+100−50=1050）。仅统计<strong>已审核</strong>且记流水时选了该银行的记录。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。</p>
                 </div>
 
                 <div class="card">
@@ -277,7 +281,9 @@ try {
                                 <th>排序</th>
                                 <th>创建时间</th>
                                 <th class="num">Starting Balance</th>
-                                <th class="num">Balance Now</th>
+                                <th class="num">In</th>
+                                <th class="num">Out</th>
+                                <th class="num">Balance</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -298,8 +304,10 @@ try {
                                 <td><?= ((int)$p['is_active'] === 1) ? '启用' : '禁用' ?></td>
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
-                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
-                                <td class="num"><?= number_format($balance_now, 2) ?></td>
+                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
+                                <td class="num in"><?= number_format($tin, 2) ?></td>
+                                <td class="num out"><?= number_format($tout, 2) ?></td>
+                                <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
                                         <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
@@ -320,10 +328,10 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
+                            <?php if (!$products): ?><tr><td colspan="10">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 该产品全部 DEPOSIT − 该产品全部 WITHDRAW（仅已审核且记流水时选了该产品的记录）。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式：<strong>Balance = Starting Balance + In − Out</strong>。</p>
                 </div>
             </div>
         </main>

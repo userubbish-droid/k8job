@@ -235,6 +235,9 @@ body {
 }
 .data-table a:hover { text-decoration: underline; }
 .data-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.data-table .num.in { color: var(--success); font-weight: 600; }
+.data-table .num.out { color: var(--danger); font-weight: 600; }
+.data-table .num.profit { color: var(--primary); font-weight: 600; }
 .data-table .value-in { color: var(--success); font-weight: 600; }
 .data-table .value-out { color: var(--danger); font-weight: 600; }
 
