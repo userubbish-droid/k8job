@@ -241,9 +241,9 @@ if ($is_admin) {
             </div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label>bank *</label>
+                    <label>bank <span id="bank_req_mark">*</span></label>
                     <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="bank" id="bank" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
+                    <select name="bank" id="bank" class="form-control" title="REBATE/FREE 不必选；其他模式必选则银行与产品页会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
                         <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
@@ -323,6 +323,24 @@ if ($is_admin) {
             if (modeEl) modeEl.addEventListener('change', updateWithdrawCustomer);
             if (codeEl) codeEl.addEventListener('change', updateWithdrawCustomer);
             updateWithdrawCustomer();
+
+            function applyBankRequired() {
+                var mode = (modeEl && modeEl.value) ? modeEl.value : '';
+                var bankSelect = document.getElementById('bank');
+                var bankMark = document.getElementById('bank_req_mark');
+                var noBankModes = ['REBATE', 'FREE', 'FREE WITHDRAW', 'EXPENSE'];
+                if (bankSelect && bankMark) {
+                    if (noBankModes.indexOf(mode) >= 0) {
+                        bankSelect.removeAttribute('required');
+                        bankMark.style.display = 'none';
+                    } else {
+                        bankSelect.setAttribute('required', 'required');
+                        bankMark.style.display = 'inline';
+                    }
+                }
+            }
+            if (modeEl) modeEl.addEventListener('change', applyBankRequired);
+            applyBankRequired();
         })();
         (function(){
             var timeEl = document.getElementById('time');
