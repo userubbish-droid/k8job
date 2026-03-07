@@ -4,6 +4,18 @@ require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_banks_products';
 
+function _ensure_balance_adjust_table(PDO $pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS balance_adjust (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        adjust_type ENUM('bank','product') NOT NULL,
+        name VARCHAR(80) NOT NULL,
+        initial_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
+        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        updated_by INT UNSIGNED NULL,
+        UNIQUE KEY (adjust_type, name)
+    )");
+}
+
 $msg = '';
 $err = '';
 
@@ -48,9 +60,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $msg = '已更新为更改余额。';
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'balance_adjust') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
-                    throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_balance_adjust.sql 创建 balance_adjust 表后再使用「更改」功能。');
+                    _ensure_balance_adjust_table($pdo);
+                    try {
+                        $stmt = $pdo->prepare("INSERT INTO balance_adjust (adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)
+                            ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
+                        $stmt->execute([$type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
+                        $msg = '已更新为更改余额。';
+                    } catch (Throwable $e2) {
+                        throw new RuntimeException('无法创建 balance_adjust 表，请检查数据库用户是否有建表权限，或在 phpMyAdmin 执行 migrate_balance_adjust.sql。');
+                    }
+                } else {
+                    throw $e;
                 }
-                throw $e;
             }
         }
     } catch (Throwable $e) {
@@ -68,6 +89,9 @@ try {
 } catch (Throwable $e) {}
 try {
     $products = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM products ORDER BY sort_order DESC, name ASC")->fetchAll();
+} catch (Throwable $e) {}
+try {
+    _ensure_balance_adjust_table($pdo);
 } catch (Throwable $e) {}
 try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
@@ -100,7 +124,6 @@ try {
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
-                <?php if (!$balance_adjust_ok): ?><div class="alert" style="background:#e8f4fd;color:#0c5460;">如需使用「目前余额」与「更改」功能，请先在 phpMyAdmin 执行 <strong>migrate_balance_adjust.sql</strong> 创建 balance_adjust 表。</div><?php endif; ?>
 
                 <div class="card">
                     <h3>银行/渠道</h3>
