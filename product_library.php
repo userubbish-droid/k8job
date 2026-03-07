@@ -79,7 +79,6 @@ try {
 
         <div class="card">
             <h3>顾客产品资料</h3>
-            <p class="form-hint" style="margin-bottom:12px;">第一列为顾客 CODE，后面各列为产品（MEGA、918KISS 等）。每格显示该顾客在该产品下的账号与密码。在「编辑顾客」里添加后在此显示。</p>
             <?php if ($products || $codes): ?>
             <div style="overflow-x: auto;">
             <table class="data-table">
