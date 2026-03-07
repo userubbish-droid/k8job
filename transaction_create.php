@@ -201,10 +201,11 @@ if ($is_admin) {
         </div>
         <?php else: ?>
         <div class="form-section member-dt-section">
-            <div class="form-section-title">日期 / 时间</div>
-            <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
-            <p style="margin:0 0 8px 0; font-size:14px; color:var(--muted);">不修改则按当前时间记录，且无需审核。</p>
-            <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="margin-bottom:8px;" aria-label="展开修改日期时间">+ 需要修改日期/时间</button>
+            <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
+                time
+                <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
+                <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="展开修改日期时间">+</button>
+            </div>
             <div id="member_dt_box" style="display:none;">
                 <div class="form-row-2">
                     <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
@@ -363,7 +364,7 @@ if ($is_admin) {
                 var show = box.style.display === 'none';
                 box.style.display = show ? 'block' : 'none';
                 hidden.value = show ? '0' : '1';
-                btn.textContent = show ? '− 收起日期/时间' : '+ 需要修改日期/时间';
+                btn.textContent = show ? '−' : '+';
             });
         })();
         (function(){
