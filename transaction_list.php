@@ -41,6 +41,12 @@ if ($is_admin) {
         $where[] = "status = 'approved'";
         $status = 'approved';
     }
+    try {
+        $pdo->query("SELECT hide_from_member FROM transactions LIMIT 0");
+        $where[] = "COALESCE(hide_from_member, 0) = 0";
+    } catch (Throwable $e) {
+        if (strpos($e->getMessage(), 'hide_from_member') === false) throw $e;
+    }
 }
 
 if ($day_from !== '') {

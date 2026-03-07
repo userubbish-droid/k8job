@@ -62,6 +62,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ?");
             $stmt->execute([$id]);
             $msg = '已更新状态。';
+        } elseif ($action === 'do_transfer') {
+            $from_bank = trim($_POST['from_bank'] ?? '');
+            $to_bank   = trim($_POST['to_bank'] ?? '');
+            $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
+            if ($from_bank === '' || $to_bank === '' || $from_bank === $to_bank) throw new RuntimeException('请选择不同的转出、转入银行。');
+            if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException('请输入正确金额。');
+            $amount = (float)$amount;
+            $day = date('Y-m-d');
+            $time = date('H:i:s');
+            $uid = (int)($_SESSION['user_id'] ?? 0);
+            $staff = (string)($_SESSION['user_name'] ?? $uid);
+            $remark_out = '转至 ' . $to_bank;
+            $remark_in  = '来自 ' . $from_bank;
+            try {
+                $cols = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
+                $vals = "?, ?, 'WITHDRAW', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
+                $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
+                $stmt->execute([$day, $time, $from_bank, $amount, $amount, $staff, $remark_out, $uid, $uid]);
+                $cols2 = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
+                $vals2 = "?, ?, 'DEPOSIT', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
+                $stmt2 = $pdo->prepare("INSERT INTO transactions ($cols2) VALUES ($vals2)");
+                $stmt2->execute([$day, $time, $to_bank, $amount, $amount, $staff, $remark_in, $uid, $uid]);
+                $msg = $from_bank . ' 转 ' . number_format($amount, 2) . ' 至 ' . $to_bank . ' 已记录，可在流水记录中查看（member 不可见）。';
+            } catch (Throwable $e) {
+                if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
+                    throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_hide_from_member.sql 后再使用转账功能。');
+                }
+                throw $e;
+            }
         } elseif ($action === 'save_balance') {
             $type = $_POST['adjust_type'] ?? '';
             $name = trim($_POST['name'] ?? '');
@@ -168,20 +197,10 @@ try {
     if (empty($diag_error)) $diag_error = $e->getMessage();
 }
 
-// 诊断：已审核流水数、其中填写了银行/产品的笔数
-$cnt_approved = 0;
-$cnt_bank = 0;
-$cnt_product = 0;
+// 仅当有待审核流水时显示提示
+$cnt_pending = 0;
 try {
-    $cnt_approved = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved'")->fetchColumn();
-    $cnt_bank = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND bank != '' AND TRIM(bank) != ''")->fetchColumn();
-    $cnt_product = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND product != '' AND TRIM(product) != ''")->fetchColumn();
-} catch (Throwable $e) {}
-
-// 最近流水（用于排查 In/Out 是否连上）
-$recent_transactions = [];
-try {
-    $recent_transactions = $pdo->query("SELECT id, day, mode, bank, product, amount, status FROM transactions ORDER BY id DESC LIMIT 10")->fetchAll(PDO::FETCH_ASSOC);
+    $cnt_pending = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
 } catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
@@ -206,48 +225,31 @@ try {
                 <?php if (!empty($diag_error)): ?>
                 <div class="alert alert-error">汇总流水时出错：<?= htmlspecialchars($diag_error) ?></div>
                 <?php endif; ?>
-                <div class="alert" style="background:#f0f4f8;color:#555;font-size:13px;">
-                    <strong>In/Out 说明：</strong>已审核流水共 <strong><?= (int)$cnt_approved ?></strong> 笔，其中填写了<strong>银行</strong>的有 <strong><?= (int)$cnt_bank ?></strong> 笔、<strong>产品</strong>的有 <strong><?= (int)$cnt_product ?></strong> 笔。
-                    <?php if ($cnt_bank === 0 && $cnt_product === 0): ?>若 In/Out 一直为 0，请到「<a href="transaction_create.php">记一笔流水</a>」保存时<strong>务必选择 bank 和 产品/平台</strong>，并到「<a href="admin_approvals.php">待批准</a>」或流水记录里确保状态为<strong>已批准</strong>。<?php endif; ?>
+                <?php if ($cnt_pending > 0): ?>
+                <div class="alert" style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;">
+                    <span style="font-size:1.2em;" aria-hidden="true">⚠</span> <strong><?= (int)$cnt_pending ?> 笔流水需通过审核</strong>，通过后才会计入上方 In/Out。<a href="admin_approvals.php">去审核</a>
                 </div>
-
-                <?php if (!empty($recent_transactions)): ?>
-                <details class="card" style="margin-bottom:16px;">
-                    <summary style="cursor:pointer;font-weight:600;">最近 10 笔流水（排查用：确认 bank / status 是否写入）</summary>
-                    <table class="data-table" style="margin-top:10px;">
-                        <thead><tr><th>ID</th><th>日期</th><th>mode</th><th>bank</th><th>product</th><th>金额</th><th>status</th></tr></thead>
-                        <tbody>
-                        <?php foreach ($recent_transactions as $t): ?>
-                        <tr>
-                            <td><?= (int)($t['id'] ?? 0) ?></td>
-                            <td><?= htmlspecialchars($t['day'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($t['mode'] ?? '') ?></td>
-                            <td><?= htmlspecialchars($t['bank'] ?? '—') ?></td>
-                            <td><?= htmlspecialchars($t['product'] ?? '—') ?></td>
-                            <td class="num"><?= number_format((float)($t['amount'] ?? 0), 2) ?></td>
-                            <td><?= htmlspecialchars($t['status'] ?? '') ?></td>
-                        </tr>
-                        <?php endforeach; ?>
-                        </tbody>
-                    </table>
-                    <p class="form-hint" style="margin-top:8px;">只有 <strong>status = approved</strong> 且 <strong>bank 有值</strong>（如 HLB）的流水才会计入上方 In/Out。若这里是 pending 请先去「<a href="admin_approvals.php">待批准</a>」通过。</p>
-                </details>
                 <?php endif; ?>
 
                 <div class="card">
-                    <h3>银行/渠道</h3>
-                    <form method="post" style="margin-bottom:16px;">
-                        <input type="hidden" name="action" value="create_bank">
-                        <div class="form-group">
-                            <label>名称 *</label>
-                            <input name="name" class="form-control" required placeholder="例如 HLB">
-                        </div>
-                        <div class="form-group">
-                            <label>排序</label>
-                            <input name="sort_order" class="form-control" type="number" value="0">
-                        </div>
-                        <button type="submit" class="btn btn-primary">添加</button>
-                    </form>
+                    <h3 style="display:flex;align-items:center;gap:8px;">
+                        银行/渠道
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="显示添加表单">+</button>
+                    </h3>
+                    <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
+                        <form method="post" style="margin-bottom:0;">
+                            <input type="hidden" name="action" value="create_bank">
+                            <div class="form-group">
+                                <label>名称 *</label>
+                                <input name="name" class="form-control" required placeholder="例如 HLB">
+                            </div>
+                            <div class="form-group">
+                                <label>排序</label>
+                                <input name="sort_order" class="form-control" type="number" value="0">
+                            </div>
+                            <button type="submit" class="btn btn-primary">添加</button>
+                        </form>
+                    </div>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -296,6 +298,23 @@ try {
                                             <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
                                         </form>
                                     </span>
+                                    <span class="transfer-cell-inline" style="display:inline-block;">
+                                        <button type="button" class="btn btn-sm btn-outline js-transfer-open" data-bank="<?= htmlspecialchars($bname) ?>">转账</button>
+                                        <form method="post" class="transfer-inline-form" style="display:none;">
+                                            <input type="hidden" name="action" value="do_transfer">
+                                            <input type="hidden" name="from_bank" class="transfer-from-bank" value="">
+                                            <span class="transfer-label">转至</span>
+                                            <select name="to_bank" class="form-control transfer-to-bank" required style="display:inline-block;width:auto;min-width:90px;">
+                                                <option value="">— 选银行 —</option>
+                                                <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); if ($oname === $bname) continue; ?>
+                                                <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
+                                            <input type="text" name="amount" class="form-control transfer-amount" placeholder="金额" inputmode="decimal" required size="6" style="display:inline-block;width:80px;">
+                                            <button type="submit" class="btn btn-sm btn-primary">确定</button>
+                                            <button type="button" class="btn btn-sm btn-outline js-transfer-cancel">取消</button>
+                                        </form>
+                                    </span>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_bank">
                                         <input type="hidden" name="id" value="<?= (int)$b['id'] ?>">
@@ -311,19 +330,24 @@ try {
                 </div>
 
                 <div class="card">
-                    <h3>产品管理</h3>
-                    <form method="post" style="margin-bottom:16px;">
-                        <input type="hidden" name="action" value="create_product">
-                        <div class="form-group">
-                            <label>名称 *</label>
-                            <input name="name" class="form-control" required placeholder="例如 MEGA">
-                        </div>
-                        <div class="form-group">
-                            <label>排序</label>
-                            <input name="sort_order" class="form-control" type="number" value="0">
-                        </div>
-                        <button type="submit" class="btn btn-primary">添加</button>
-                    </form>
+                    <h3 style="display:flex;align-items:center;gap:8px;">
+                        产品管理
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="product-add-wrap" aria-label="显示添加表单">+</button>
+                    </h3>
+                    <div id="product-add-wrap" style="display:none; margin-bottom:16px;">
+                        <form method="post" style="margin-bottom:0;">
+                            <input type="hidden" name="action" value="create_product">
+                            <div class="form-group">
+                                <label>名称 *</label>
+                                <input name="name" class="form-control" required placeholder="例如 MEGA">
+                            </div>
+                            <div class="form-group">
+                                <label>排序</label>
+                                <input name="sort_order" class="form-control" type="number" value="0">
+                            </div>
+                            <button type="submit" class="btn btn-primary">添加</button>
+                        </form>
+                    </div>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -407,12 +431,46 @@ try {
                 btn.style.display = '';
             });
         });
+        document.querySelectorAll('.js-toggle-add').forEach(function(btn){
+            var id = btn.getAttribute('data-target');
+            if (!id) return;
+            var el = document.getElementById(id);
+            if (!el) return;
+            btn.addEventListener('click', function(){
+                var show = el.style.display === 'none' || !el.style.display;
+                el.style.display = show ? 'block' : 'none';
+                btn.textContent = show ? '−' : '+';
+            });
+        });
+        document.querySelectorAll('.transfer-cell-inline').forEach(function(cell){
+            var btn = cell.querySelector('.js-transfer-open');
+            var form = cell.querySelector('.transfer-inline-form');
+            var fromInput = cell.querySelector('.transfer-from-bank');
+            var cancel = cell.querySelector('.js-transfer-cancel');
+            if (!btn || !form) return;
+            btn.addEventListener('click', function(){
+                if (fromInput) fromInput.value = btn.getAttribute('data-bank') || '';
+                btn.style.display = 'none';
+                form.style.display = 'inline-flex';
+                form.style.flexWrap = 'wrap';
+                form.style.alignItems = 'center';
+                form.style.gap = '6px';
+                var amt = cell.querySelector('.transfer-amount');
+                if (amt) { amt.value = ''; amt.focus(); }
+            });
+            if (cancel) cancel.addEventListener('click', function(){
+                form.style.display = 'none';
+                btn.style.display = '';
+            });
+        });
     })();
     </script>
     <style>
     /* 表单默认由 HTML 的 style="display:none" 隐藏；点击「更改」后 JS 设为 inline-flex 才显示 */
     .balance-cell-inline .balance-inline-form { align-items: center; gap: 6px; vertical-align: middle; }
     .balance-cell-inline .balance-inline-input { width: 72px; padding: 4px 6px; font-size: 0.9rem; text-align: right; }
+    .transfer-cell-inline .transfer-inline-form { align-items: center; gap: 6px; vertical-align: middle; }
+    .transfer-cell-inline .transfer-label { font-size: 13px; margin-right: 4px; }
     </style>
 </body>
 </html>
