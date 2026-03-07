@@ -217,7 +217,7 @@ try {
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="bank">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($bname) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="数字" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>">
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="Starting Balance" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>" title="仅修改 Starting Balance">
                                             <button type="submit" class="btn btn-sm btn-primary">确定</button>
                                             <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
                                         </form>
@@ -233,6 +233,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 累计 deposit − 累计 withdraw，由系统按流水自动计算，不可手动修改。</p>
                 </div>
 
                 <div class="card">
@@ -287,7 +288,7 @@ try {
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="product">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($pname) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="数字" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>">
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="Starting Balance" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>" title="仅修改 Starting Balance">
                                             <button type="submit" class="btn btn-sm btn-primary">确定</button>
                                             <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
                                         </form>
@@ -303,6 +304,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 累计 deposit − 累计 withdraw，由系统按流水自动计算，不可手动修改。</p>
                 </div>
             </div>
         </main>
