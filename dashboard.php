@@ -74,7 +74,7 @@ try {
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
             <div class="page-header dashboard-header">
-                <h1>算账网</h1>
+                <h1>K8 欢迎（<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>）</h1>
                 <p class="welcome-role">
                     欢迎，<strong><?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></strong>
                     <span class="role-badge"><?= ($_SESSION['user_role'] ?? '') === 'admin' ? '管理员' : '员工' ?></span>
