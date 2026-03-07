@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uid = (int)($_SESSION['user_id'] ?? 0);
                 $stmt = $pdo->prepare("INSERT INTO rebate_given (day, code, given_at, given_by) VALUES (?, ?, NOW(), ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by)");
                 foreach ($given as $code) {
-                    if ($code !== '') $stmt->execute([$post_day, $code]);
+                    if ($code !== '') $stmt->execute([$post_day, $code, $uid]);
                 }
                 $msg = count($given) ? '已标记所选客户为「已给」。' : '请勾选「已给了」再提交。';
             } elseif ($action === 'cancel' && $is_admin) {
