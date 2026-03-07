@@ -157,12 +157,12 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                 <table class="data-table rebate-table" style="margin-top:16px;">
                     <thead>
                         <tr>
-                            <th>客户代码</th>
-                            <th class="num">今日进</th>
-                            <th class="num">今日出</th>
-                            <th class="num">win/lose amount</th>
+                            <th>customer</th>
+                            <th class="num">deposit</th>
+                            <th class="num">withdraw</th>
+                            <th class="num">winlose</th>
                             <th class="num">%</th>
-                            <th class="num">amount</th>
+                            <th class="num">rebate</th>
                             <?php if ($is_admin): ?><th class="num">操作</th><?php endif; ?>
                         </tr>
                     </thead>
@@ -179,11 +179,10 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                                 <?php if ($is_given): ?>
                                     <?= htmlspecialchars($code) ?>
                                 <?php else: ?>
-                                    <label style="display:inline-flex;align-items:center;gap:4px;cursor:pointer;">
+                                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
                                         <input type="checkbox" name="given[]" value="<?= htmlspecialchars($code) ?>">
-                                        <span>已给了</span>
+                                        <?= htmlspecialchars($code) ?>
                                     </label>
-                                    <?= htmlspecialchars($code) ?>
                                 <?php endif; ?>
                             </td>
                             <td class="num"><?= number_format($in, 2) ?></td>
@@ -250,7 +249,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
 
                 <?php if (!empty($rows_not_given)): ?>
                 <div class="rebate-actions" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-                    <button type="submit" class="btn btn-primary">提交（确认已给出）</button>
+                    <button type="submit" class="btn btn-primary">提交</button>
                 </div>
                 <?php endif; ?>
             </form>

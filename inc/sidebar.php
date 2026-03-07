@@ -24,13 +24,14 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>账号管理</a>
         <a href="admin_banks.php" class="nav-item <?= $sidebar_current === 'admin_banks' ? 'primary' : '' ?>"><span class="nav-icon"></span>银行/渠道</a>
         <a href="admin_products.php" class="nav-item <?= $sidebar_current === 'admin_products' ? 'primary' : '' ?>"><span class="nav-icon"></span>产品管理</a>
-        <a href="admin_option_sets.php" class="nav-item <?= $sidebar_current === 'admin_option_sets' ? 'primary' : '' ?>"><span class="nav-icon"></span>选项设置</a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span>员工权限</a>
-        <a href="admin_approvals.php" class="nav-item <?= $sidebar_current === 'admin_approvals' ? 'primary' : '' ?>"><span class="nav-icon"></span>待审核<?= $sidebar_pending ? '（' . $sidebar_pending . '）' : '' ?></a>
     <?php endif; ?>
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>退出登录</a>
 </aside>
 <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开导航"><span class="sidebar-toggle-icon">☰</span> MENU</button>
+<?php if (($_SESSION['user_role'] ?? '') === 'admin' && $sidebar_pending > 0): ?>
+<a href="admin_approvals.php" class="sidebar-bell" title="待审核 <?= $sidebar_pending ?> 条" aria-label="待审核"><span class="sidebar-bell-icon">🔔</span><span class="sidebar-bell-badge"><?= $sidebar_pending ?></span></a>
+<?php endif; ?>
 <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 <script>
 (function(){
