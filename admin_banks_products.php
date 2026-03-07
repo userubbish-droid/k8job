@@ -91,6 +91,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 throw $e;
             }
+        } elseif ($action === 'do_product_topup') {
+            $product = trim($_POST['product'] ?? '');
+            $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
+            if ($product === '') throw new RuntimeException('请选择产品。');
+            if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException('请输入正确加额数目。');
+            $amount = (float)$amount;
+            $day = date('Y-m-d');
+            $time = date('H:i:s');
+            $uid = (int)($_SESSION['user_id'] ?? 0);
+            $staff = (string)($_SESSION['user_name'] ?? $uid);
+            try {
+                $cols = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
+                $vals = "?, ?, 'DEPOSIT', NULL, NULL, ?, ?, 0, ?, ?, '产品加额', 'approved', ?, ?, NOW(), 1";
+                $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
+                $stmt->execute([$day, $time, $product, $amount, $amount, $staff, $uid, $uid]);
+                $msg = $product . ' 已加额 ' . number_format($amount, 2) . '，Balance 已更新。';
+            } catch (Throwable $e) {
+                if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
+                    throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_hide_from_member.sql 后再使用加额功能。');
+                }
+                throw $e;
+            }
         } elseif ($action === 'save_balance') {
             $type = $_POST['adjust_type'] ?? '';
             $name = trim($_POST['name'] ?? '');
@@ -236,6 +258,30 @@ try {
                         银行/渠道
                         <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="显示添加表单">+</button>
                     </h3>
+                    <div class="bank-transfer-box" style="margin-bottom:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+                        <div style="font-weight:600; margin-bottom:8px; font-size:13px;">银行互转（contra）</div>
+                        <form method="post" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                            <input type="hidden" name="action" value="do_transfer">
+                            <span style="font-size:13px;">从</span>
+                            <select name="from_bank" class="form-control" required style="width:auto; min-width:100px;">
+                                <option value="">— 转出 —</option>
+                                <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?>
+                                <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <span style="font-size:13px;">转</span>
+                            <input type="text" name="amount" class="form-control" placeholder="金额" inputmode="decimal" required style="width:90px;">
+                            <span style="font-size:13px;">至</span>
+                            <select name="to_bank" class="form-control" required style="width:auto; min-width:100px;">
+                                <option value="">— 转入 —</option>
+                                <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?>
+                                <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <button type="submit" class="btn btn-primary">确定</button>
+                        </form>
+                        <p class="form-hint" style="margin:8px 0 0; font-size:12px;">转出银行 − 金额，转入银行 + 金额，会记入流水（member 不可见）。</p>
+                    </div>
                     <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
                             <input type="hidden" name="action" value="create_bank">
@@ -334,6 +380,23 @@ try {
                         产品管理
                         <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="product-add-wrap" aria-label="显示添加表单">+</button>
                     </h3>
+                    <div class="product-topup-box" style="margin-bottom:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+                        <div style="font-weight:600; margin-bottom:8px; font-size:13px;">产品加额（balance 不够时加分）</div>
+                        <form method="post" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                            <input type="hidden" name="action" value="do_product_topup">
+                            <span style="font-size:13px;">选择产品</span>
+                            <select name="product" class="form-control" required style="width:auto; min-width:110px;">
+                                <option value="">— 请选 —</option>
+                                <?php foreach ($products as $op): $oname = trim((string)$op['name']); ?>
+                                <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                            <span style="font-size:13px;">加</span>
+                            <input type="text" name="amount" class="form-control" placeholder="数目" inputmode="decimal" required style="width:90px;">
+                            <button type="submit" class="btn btn-primary">提交</button>
+                        </form>
+                        <p class="form-hint" style="margin:8px 0 0; font-size:12px;">提交后该产品的 In 会增加，Balance = Starting Balance + In − Out 会随之增加。</p>
+                    </div>
                     <div id="product-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
                             <input type="hidden" name="action" value="create_product">

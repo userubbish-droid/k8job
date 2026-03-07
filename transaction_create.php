@@ -264,12 +264,18 @@ if ($is_admin) {
 
         <div class="form-section">
             <div class="form-section-title">金额</div>
-            <div class="form-group">
-                <label>金额 *</label>
-                <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
-                <input type="hidden" name="reward_pct" value="">
-                <input type="hidden" name="bonus" value="0">
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>金额 *</label>
+                    <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
+                </div>
+                <div class="form-group">
+                    <label>奖励/返点 %</label>
+                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="选填，如 5" inputmode="decimal" title="按金额的百分比计算奖励">
+                    <input type="hidden" name="bonus" id="bonus_hidden" value="0">
+                </div>
             </div>
+            <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
         </div>
 
         <div class="form-section">
@@ -342,6 +348,34 @@ if ($is_admin) {
                     timeEl.value = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
                 }
             });
+        })();
+        (function(){
+            var amountEl = document.getElementById('amount');
+            var pctEl = document.getElementById('reward_pct');
+            var bonusEl = document.getElementById('bonus_hidden');
+            var hintEl = document.getElementById('reward_hint');
+            var rewardAmountSpan = document.getElementById('reward_amount');
+            var rewardTotalSpan = document.getElementById('reward_total');
+            function updateReward() {
+                var amt = parseFloat((amountEl && amountEl.value || '').replace(/,/g, '')) || 0;
+                var pct = parseFloat((pctEl && pctEl.value || '').replace(/,/g, '')) || 0;
+                var bonus = pct ? Math.round(amt * pct / 100 * 100) / 100 : 0;
+                var total = amt + bonus;
+                if (bonusEl) bonusEl.value = bonus;
+                if (hintEl && rewardAmountSpan && rewardTotalSpan) {
+                    if (pct > 0 && amt > 0) {
+                        hintEl.style.display = 'block';
+                        rewardAmountSpan.textContent = bonus.toFixed(2);
+                        rewardTotalSpan.textContent = total.toFixed(2);
+                    } else {
+                        hintEl.style.display = 'none';
+                    }
+                }
+            }
+            if (amountEl) amountEl.addEventListener('input', updateReward);
+            if (amountEl) amountEl.addEventListener('blur', updateReward);
+            if (pctEl) pctEl.addEventListener('input', updateReward);
+            if (pctEl) pctEl.addEventListener('blur', updateReward);
         })();
         <?php if ($is_admin): ?>
         function toggleOther(selId, inputId) {
