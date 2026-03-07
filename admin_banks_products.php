@@ -26,16 +26,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $name = trim($_POST['name'] ?? '');
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException('请输入银行/渠道名称。');
-            $stmt = $pdo->prepare("INSERT INTO banks (name, sort_order) VALUES (?, ?)");
-            $stmt->execute([$name, $sort]);
-            $msg = '已添加银行/渠道。';
+            try {
+                $stmt = $pdo->prepare("INSERT INTO banks (name, sort_order) VALUES (?, ?)");
+                $stmt->execute([$name, $sort]);
+                $msg = '已添加银行/渠道。';
+            } catch (Throwable $e) {
+                if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
+                    throw new RuntimeException('银行/渠道「' . htmlspecialchars($name) . '」已存在，请换一个名称。');
+                }
+                throw $e;
+            }
         } elseif ($action === 'create_product') {
             $name = trim($_POST['name'] ?? '');
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException('请输入产品名称。');
-            $stmt = $pdo->prepare("INSERT INTO products (name, sort_order) VALUES (?, ?)");
-            $stmt->execute([$name, $sort]);
-            $msg = '已添加产品。';
+            try {
+                $stmt = $pdo->prepare("INSERT INTO products (name, sort_order) VALUES (?, ?)");
+                $stmt->execute([$name, $sort]);
+                $msg = '已添加产品。';
+            } catch (Throwable $e) {
+                if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
+                    throw new RuntimeException('产品「' . htmlspecialchars($name) . '」已存在，请换一个名称。');
+                }
+                throw $e;
+            }
         } elseif ($action === 'toggle_bank') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
