@@ -301,6 +301,11 @@ textarea.form-control {
 }
 .filters-bar .btn { margin-left: 4px; }
 
+/* 流水记录：筛选与汇总可折叠，默认收起 */
+.list-advanced-wrap { margin-bottom: 16px; }
+.list-advanced-wrap.collapsed { display: none; }
+.list-advanced-toggle-wrap .btn { font-size: 14px; }
+
 /* 分页 */
 .pagination {
     margin-top: 20px;

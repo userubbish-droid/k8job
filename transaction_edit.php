@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_permission('transaction_list');
+require_admin(); // 仅管理员可编辑流水
 $sidebar_current = 'transaction_list';
 
 $id = (int)($_GET['id'] ?? 0);

@@ -156,8 +156,12 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_create.php">记一笔</a></p>
         </div>
 
+    <?php if ($is_admin): ?>
+    <div class="list-advanced-toggle-wrap" style="margin-bottom:12px;">
+        <button type="button" class="btn btn-outline" id="list-advanced-toggle" aria-expanded="false">展开筛选与汇总</button>
+    </div>
+    <div class="list-advanced-wrap collapsed" id="list-advanced-wrap">
     <form class="filters-bar" method="get">
-        <?php if ($is_admin): ?>
             <label>状态</label>
             <select name="status">
                 <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
@@ -165,13 +169,6 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>已拒绝</option>
                 <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>全部</option>
             </select>
-        <?php else: ?>
-            <label>状态</label>
-            <select name="status">
-                <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
-                <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>待批准（我的）</option>
-            </select>
-        <?php endif; ?>
         <label>从</label>
         <input type="date" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
         <label>到</label>
@@ -215,6 +212,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
         <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
     </div>
+    </div>
+    <?php endif; ?>
 
     <p class="form-hint">共 <?= $total_rows ?> 条，第 <?= $page ?>/<?= $total_pages ?> 页</p>
 
@@ -233,7 +232,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <th>合计</th>
                 <th>员工</th>
                 <th>备注</th>
-                <th>操作</th>
+                <?php if ($is_admin): ?><th>操作</th><?php endif; ?>
             </tr>
         </thead>
         <tbody>
@@ -250,15 +249,17 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <td><?= number_format((float)($r['total'] ?? 0), 2) ?></td>
                 <td><?= htmlspecialchars($r['staff'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
+                <?php if ($is_admin): ?>
                 <td>
                     <?php $edit_return = 'transaction_list.php?' . ($query_string ? $query_string . '&' : '') . 'page=' . $page; ?>
                     <a href="transaction_edit.php?id=<?= (int)$r['id'] ?>&return_to=<?= urlencode($edit_return) ?>">编辑</a>
                     <a href="transaction_delete.php?id=<?= (int)$r['id'] ?>&<?= $query_string ?>&page=<?= $page ?>" onclick="return confirm('确定删除这条流水？');">删除</a>
                 </td>
+                <?php endif; ?>
             </tr>
             <?php endforeach; ?>
             <?php if (empty($rows)): ?>
-            <tr><td colspan="12">暂无流水</td></tr>
+            <tr><td colspan="<?= $is_admin ? 12 : 11 ?>">暂无流水</td></tr>
             <?php endif; ?>
         </tbody>
     </table>
@@ -284,5 +285,24 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     </div>
         </main>
     </div>
+<?php if ($is_admin): ?>
+<script>
+(function(){
+    var btn = document.getElementById('list-advanced-toggle');
+    var wrap = document.getElementById('list-advanced-wrap');
+    if (!btn || !wrap) return;
+    function updateBtn() {
+        var open = !wrap.classList.contains('collapsed');
+        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        btn.textContent = open ? '收起筛选与汇总' : '展开筛选与汇总';
+    }
+    btn.addEventListener('click', function(){
+        wrap.classList.toggle('collapsed');
+        updateBtn();
+    });
+    updateBtn();
+})();
+</script>
+<?php endif; ?>
 </body>
 </html>
