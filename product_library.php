@@ -10,12 +10,44 @@ $products = [];
 $by_code = [];
 $codes = [];
 $err = '';
+$msg = '';
+
+// 顾客列表（用于 add 表单下拉）
+$customers_list = [];
+try {
+    $customers_list = $pdo->query("SELECT id, code FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 try {
     $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $products = [];
 }
+
+// 在产品账号页添加产品账号（与编辑顾客页相同功能）
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product') {
+    $customer_id = (int)($_POST['customer_id'] ?? 0);
+    $product_name = trim($_POST['product_name'] ?? '');
+    $account = trim($_POST['account'] ?? '');
+    $password = trim($_POST['password'] ?? '');
+    if ($customer_id <= 0 || $product_name === '') {
+        $err = '请选择顾客和产品。';
+    } else {
+        try {
+            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (customer_id, product_name, account, password) VALUES (?, ?, ?, ?)");
+            $stmt->execute([$customer_id, $product_name, $account ?: null, $password ?: null]);
+            $msg = '已添加。';
+            header("Location: product_library.php?msg=1");
+            exit;
+        } catch (Throwable $e) {
+            $err = '添加失败：' . $e->getMessage();
+        }
+    }
+}
+if (isset($_GET['msg'])) {
+    $msg = '已添加。';
+}
+$show_add_box = !empty($err) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product';
 
 try {
     $rows = $pdo->query("SELECT a.customer_id, a.product_name, a.account, a.password, c.code
@@ -76,9 +108,49 @@ try {
         </div>
 
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+        <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
 
         <div class="card">
-            <h3>顾客产品资料</h3>
+            <h3 style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                顾客产品资料
+                <button type="button" id="product_lib_add_btn" class="btn btn-outline btn-sm" style="padding:2px 10px; font-size:13px;">add</button>
+            </h3>
+            <div id="product_lib_add_box" style="display:<?= $show_add_box ? 'block' : 'none' ?>; margin-top:12px; padding:12px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+                <form method="post">
+                    <input type="hidden" name="action" value="add_product">
+                    <div class="form-row-2" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; align-items:end;">
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>顾客</label>
+                            <select name="customer_id" class="form-control" required>
+                                <option value="">-- 请选 --</option>
+                                <?php foreach ($customers_list as $c): ?>
+                                <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['code']) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>产品</label>
+                            <select name="product_name" class="form-control" required>
+                                <option value="">-- 请选 --</option>
+                                <?php foreach ($products as $p): ?>
+                                <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>账号</label>
+                            <input name="account" class="form-control" placeholder="账号">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <label>密码</label>
+                            <input name="password" type="password" class="form-control" placeholder="密码">
+                        </div>
+                        <div class="form-group" style="margin-bottom:0;">
+                            <button type="submit" class="btn btn-primary btn-sm">添加</button>
+                        </div>
+                    </div>
+                </form>
+            </div>
             <?php if ($products || $codes): ?>
             <div style="overflow-x: auto;">
             <table class="data-table">
@@ -126,5 +198,14 @@ try {
     </div>
         </main>
     </div>
+    <script>
+    (function(){
+        var btn = document.getElementById('product_lib_add_btn');
+        var box = document.getElementById('product_lib_add_box');
+        if (btn && box) {
+            btn.addEventListener('click', function(){ box.style.display = box.style.display === 'none' ? 'block' : 'none'; });
+        }
+    })();
+    </script>
 </body>
 </html>
