@@ -161,13 +161,9 @@ try {
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
                                 <td>
-                                    <form method="post" class="inline" style="display:inline-flex;align-items:center;gap:6px;">
-                                        <input type="hidden" name="action" value="save_balance">
-                                        <input type="hidden" name="adjust_type" value="bank">
-                                        <input type="hidden" name="name" value="<?= htmlspecialchars($bname) ?>">
-                                        <input type="text" name="balance" value="<?= $cur !== null ? sprintf('%.2f', $cur) : '' ?>" class="form-control" style="width:90px;text-align:right;padding:6px 8px;" placeholder="数字">
-                                        <button type="submit" class="btn btn-sm btn-primary">更改</button>
-                                    </form>
+                                    <?php if ($cur === null): ?>
+                                    <button type="button" class="btn btn-sm btn-primary js-balance-change" data-type="bank" data-name="<?= htmlspecialchars($bname) ?>">更改</button>
+                                    <?php endif; ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_bank">
                                         <input type="hidden" name="id" value="<?= (int)$b['id'] ?>">
@@ -217,13 +213,9 @@ try {
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
                                 <td>
-                                    <form method="post" class="inline" style="display:inline-flex;align-items:center;gap:6px;">
-                                        <input type="hidden" name="action" value="save_balance">
-                                        <input type="hidden" name="adjust_type" value="product">
-                                        <input type="hidden" name="name" value="<?= htmlspecialchars($pname) ?>">
-                                        <input type="text" name="balance" value="<?= $cur !== null ? sprintf('%.2f', $cur) : '' ?>" class="form-control" style="width:90px;text-align:right;padding:6px 8px;" placeholder="数字">
-                                        <button type="submit" class="btn btn-sm btn-primary">更改</button>
-                                    </form>
+                                    <?php if ($cur === null): ?>
+                                    <button type="button" class="btn btn-sm btn-primary js-balance-change" data-type="product" data-name="<?= htmlspecialchars($pname) ?>">更改</button>
+                                    <?php endif; ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_product">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
@@ -239,5 +231,65 @@ try {
             </div>
         </main>
     </div>
+
+    <div id="balance-modal" class="balance-modal" role="dialog" aria-labelledby="balance-modal-title" aria-hidden="true" style="display:none;">
+        <div class="balance-modal-backdrop"></div>
+        <div class="balance-modal-box">
+            <h3 id="balance-modal-title">填写余额</h3>
+            <form method="post" id="balance-modal-form">
+                <input type="hidden" name="action" value="save_balance">
+                <input type="hidden" name="adjust_type" id="balance-modal-type">
+                <input type="hidden" name="name" id="balance-modal-name">
+                <div class="form-group">
+                    <label for="balance-modal-input">金额</label>
+                    <input type="text" name="balance" id="balance-modal-input" class="form-control" placeholder="数字" inputmode="decimal" required>
+                </div>
+                <div class="balance-modal-actions">
+                    <button type="submit" class="btn btn-primary">确定</button>
+                    <button type="button" class="btn btn-outline js-balance-modal-cancel">取消</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <script>
+    (function(){
+        var modal = document.getElementById('balance-modal');
+        var form = document.getElementById('balance-modal-form');
+        var input = document.getElementById('balance-modal-input');
+        var typeEl = document.getElementById('balance-modal-type');
+        var nameEl = document.getElementById('balance-modal-name');
+        if (!modal || !form) return;
+
+        function openModal(type, name) {
+            typeEl.value = type;
+            nameEl.value = name;
+            input.value = '';
+            input.focus();
+            modal.style.display = '';
+            modal.setAttribute('aria-hidden', 'false');
+        }
+        function closeModal() {
+            modal.style.display = 'none';
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        document.querySelectorAll('.js-balance-change').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                openModal(btn.getAttribute('data-type'), btn.getAttribute('data-name'));
+            });
+        });
+        modal.querySelector('.js-balance-modal-cancel').addEventListener('click', closeModal);
+        modal.querySelector('.balance-modal-backdrop').addEventListener('click', closeModal);
+        form.addEventListener('submit', function(){ closeModal(); });
+    })();
+    </script>
+    <style>
+    .balance-modal { position: fixed; inset: 0; z-index: 9999; align-items: center; justify-content: center; }
+    .balance-modal-backdrop { position: absolute; inset: 0; background: rgba(0,0,0,0.4); }
+    .balance-modal-box { position: relative; background: #fff; padding: 24px; border-radius: 8px; box-shadow: 0 4px 20px rgba(0,0,0,0.2); min-width: 280px; }
+    .balance-modal-box h3 { margin: 0 0 16px 0; font-size: 1.1rem; }
+    .balance-modal-actions { margin-top: 16px; display: flex; gap: 10px; }
+    </style>
 </body>
 </html>
