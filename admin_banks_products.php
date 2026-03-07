@@ -175,19 +175,17 @@ try {
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
                                 <td>
-                                    <?php if ($cur === null): ?>
                                     <span class="balance-cell-inline">
                                         <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
                                         <form method="post" class="balance-inline-form" style="display:none;">
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="bank">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($bname) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="数字" inputmode="decimal" required size="6">
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="数字" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>">
                                             <button type="submit" class="btn btn-sm btn-primary">确定</button>
                                             <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
                                         </form>
                                     </span>
-                                    <?php endif; ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_bank">
                                         <input type="hidden" name="id" value="<?= (int)$b['id'] ?>">
@@ -237,19 +235,17 @@ try {
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
                                 <td>
-                                    <?php if ($cur === null): ?>
                                     <span class="balance-cell-inline">
                                         <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
                                         <form method="post" class="balance-inline-form" style="display:none;">
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="product">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($pname) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="数字" inputmode="decimal" required size="6">
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="数字" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>">
                                             <button type="submit" class="btn btn-sm btn-primary">确定</button>
                                             <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
                                         </form>
                                     </span>
-                                    <?php endif; ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_product">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">

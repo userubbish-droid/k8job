@@ -24,9 +24,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-// REGULAR 等级：按顾客 deposit - withdraw 对扣余额计算。normal 0~1000, sliver 1001~3000, gold 3001~7000, platinum 7001+
+// REGULAR 等级：按顾客 deposit - withdraw 对扣余额计算。normal 20~1000, sliver 1001~3000, gold 3001~7000, platinum 7001+
 function customer_regular_tier($balance) {
     $b = (float) $balance;
+    if ($b < 20) return '—';
     if ($b <= 1000) return 'normal';
     if ($b <= 3000) return 'sliver';
     if ($b <= 7000) return 'gold';
@@ -40,8 +41,10 @@ try {
     $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
     $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
     $sql = "SELECT c.id, c.code, c.name, c.phone, c.remark, c.is_active, c.created_at,
-                   c.register_date, c.bank_details, c.regular_customer, c.verify
+                   c.register_date, c.bank_details, c.regular_customer, c.recommend, c.created_by,
+                   u.username AS created_by_name
             FROM customers c
+            LEFT JOIN users u ON c.created_by = u.id
             ORDER BY c.is_active DESC, c.code ASC";
     $rows = $pdo->query($sql)->fetchAll();
     $stmt = $pdo->query("SELECT code,
@@ -51,9 +54,9 @@ try {
     foreach ($stmt->fetchAll() as $r) {
         $balance_by_code[$r['code']] = (float) $r['balance'];
     }
-} catch (Throwable $e) {
+    } catch (Throwable $e) {
     $rows = [];
-    $err = $err ?: '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。' . ' (' . $e->getMessage() . ')';
+    $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。') . ' (' . $e->getMessage() . ')';
 }
 ?>
 <!doctype html>
@@ -91,6 +94,9 @@ try {
 
         <div class="card" style="overflow-x: auto;">
             <h3>列表</h3>
+            <?php if ($is_admin): ?>
+            <p style="margin-bottom:10px;"><button type="button" class="btn btn-sm btn-outline" id="toggle-created-by" aria-pressed="false">显示填写人</button></p>
+            <?php endif; ?>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -101,7 +107,8 @@ try {
                         <th>BANK DETAILS</th>
                         <th>REGULAR</th>
                         <th>REMARK</th>
-                        <th>VERIFY</th>
+                        <th>RECOMMEND</th>
+                        <?php if ($is_admin): ?><th class="col-created-by" style="display:none;">填写人</th><?php endif; ?>
                         <?php if ($is_admin): ?><th>操作</th><?php endif; ?>
                     </tr>
                 </thead>
@@ -115,7 +122,8 @@ try {
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
                         <td><?= htmlspecialchars(customer_regular_tier($balance_by_code[$r['code']] ?? 0)) ?></td>
                         <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['verify'] ?? '') ?></td>
+                        <td><?= htmlspecialchars($r['recommend'] ?? '') ?></td>
+                        <?php if ($is_admin): ?><td class="col-created-by" style="display:none;"><?= htmlspecialchars($r['created_by_name'] ?? '—') ?></td><?php endif; ?>
                         <?php if ($is_admin): ?>
                         <td>
                             <a href="customer_edit.php?id=<?= (int)$r['id'] ?>">编辑</a>
@@ -137,5 +145,19 @@ try {
     </div>
         </main>
     </div>
+    <script>
+    (function(){
+        var btn = document.getElementById('toggle-created-by');
+        if (!btn) return;
+        var cells = document.querySelectorAll('.col-created-by');
+        btn.addEventListener('click', function(){
+            var show = btn.getAttribute('aria-pressed') === 'true';
+            show = !show;
+            btn.setAttribute('aria-pressed', show ? 'true' : 'false');
+            btn.textContent = show ? '隐藏填写人' : '显示填写人';
+            cells.forEach(function(el){ el.style.display = show ? '' : 'none'; });
+        });
+    })();
+    </script>
 </body>
 </html>

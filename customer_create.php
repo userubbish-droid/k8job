@@ -13,6 +13,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = trim($_POST['phone'] ?? '');
     $remark = trim($_POST['remark'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
+    $recommend = trim($_POST['recommend'] ?? '');
 
     if ($code === '') {
         $err = '请输入客户代码。';
@@ -39,7 +40,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } else {
             try {
                 $register_date = date('Y-m-d');
-                $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, register_date, bank_details) VALUES (?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, register_date, bank_details, recommend) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([
                     $code,
                     $name !== '' ? $name : null,
@@ -47,7 +48,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $remark !== '' ? $remark : null,
                     (int)($_SESSION['user_id'] ?? 0),
                     $register_date,
-                    $bank_details !== '' ? $bank_details : null
+                    $bank_details !== '' ? $bank_details : null,
+                    $recommend !== '' ? $recommend : null
                 ]);
                 $new_id = (int) $pdo->lastInsertId();
                 header('Location: customer_edit.php?id=' . $new_id . '&created=1');
@@ -55,6 +57,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
                     $err = '该客户代码已存在，请换一个。';
+                } elseif (strpos($e->getMessage(), 'recommend') !== false) {
+                    $err = '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql 后再保存。';
                 } else {
                     $err = '保存失败：' . $e->getMessage();
                 }
@@ -103,6 +107,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-group">
                     <label>备注</label>
                     <textarea name="remark" class="form-control" placeholder="REMARK"><?= htmlspecialchars($_POST['remark'] ?? '') ?></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Recommend</label>
+                    <input name="recommend" class="form-control" placeholder="推荐人/推荐码" value="<?= htmlspecialchars($_POST['recommend'] ?? '') ?>">
                 </div>
                 <p class="form-hint">注册日期将按当前日期自动记录。</p>
                 <button type="submit" class="btn btn-primary">保存并继续</button>

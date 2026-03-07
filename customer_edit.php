@@ -10,9 +10,16 @@ if ($id <= 0) {
     exit;
 }
 
-$row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ?");
-$row->execute([$id]);
-$row = $row->fetch();
+try {
+    $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ?");
+    $row->execute([$id]);
+    $row = $row->fetch();
+} catch (Throwable $e) {
+    $stmt = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ?");
+    $stmt->execute([$id]);
+    $row = $stmt->fetch();
+    if ($row) $row['recommend'] = '';
+}
 if (!$row) {
     header('Location: customers.php');
     exit;
@@ -98,19 +105,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $remark = trim($_POST['remark'] ?? '');
     $register_date = trim($_POST['register_date'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
+    $recommend = trim($_POST['recommend'] ?? '');
 
     if ($code === '') {
         $err = '客户代码不能为空。';
     } else {
         try {
-            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=? WHERE id=?");
-            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $id]);
+            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, recommend=? WHERE id=?");
+            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $recommend !== '' ? $recommend : null, $id]);
             $msg = '已保存。';
-            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ?");
+            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ?");
             $row->execute([$id]);
             $row = $row->fetch();
         } catch (Throwable $e) {
-            $err = $e->getMessage();
+            $err = (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : $e->getMessage());
         }
     }
 }
@@ -173,6 +181,10 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                 <div class="form-group">
                     <label>REMARK</label>
                     <textarea name="remark" class="form-control" rows="2"><?= htmlspecialchars($row['remark'] ?? '') ?></textarea>
+                </div>
+                <div class="form-group">
+                    <label>Recommend</label>
+                    <input name="recommend" class="form-control" value="<?= htmlspecialchars($row['recommend'] ?? '') ?>" placeholder="推荐人/推荐码">
                 </div>
                 <button type="submit" class="btn btn-primary">保存</button>
             </form>
