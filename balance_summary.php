@@ -61,20 +61,36 @@ try {
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''
-        GROUP BY bank ORDER BY 2 + 3 DESC");
+        GROUP BY bank");
     $stmt->execute([$day_from, $day_to]);
-    $by_bank = $stmt->fetchAll();
-} catch (Throwable $e) { $by_bank = []; }
+    $range_in_bank = [];
+    $range_out_bank = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $b = trim((string)($r['bank'] ?? ''));
+        if ($b !== '') {
+            $range_in_bank[$b] = (float)$r['total_in'];
+            $range_out_bank[$b] = (float)$r['total_out'];
+        }
+    }
+} catch (Throwable $e) { $range_in_bank = []; $range_out_bank = []; }
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
+    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'
-        GROUP BY product ORDER BY 2 + 3 DESC");
+        GROUP BY product");
     $stmt->execute([$day_from, $day_to]);
-    $by_product = $stmt->fetchAll();
-} catch (Throwable $e) { $by_product = []; }
+    $range_in_product = [];
+    $range_out_product = [];
+    foreach ($stmt->fetchAll() as $r) {
+        $p = trim((string)($r['product'] ?? ''));
+        if ($p !== '' && $p !== '—') {
+            $range_in_product[$p] = (float)$r['total_in'];
+            $range_out_product[$p] = (float)$r['total_out'];
+        }
+    }
+} catch (Throwable $e) { $range_in_product = []; $range_out_product = []; }
 
 try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
@@ -91,13 +107,25 @@ try {
     $initial_bank = [];
     $initial_product = [];
 }
-// 未在 balance_adjust 中设定的银行/产品：前日 Balance Now = 0 + 累计入 - 累计出
-foreach ($by_bank as $r) {
-    $name = $r['bank'] ?? '—';
+// 所有银行、产品（用于始终显示完整列表，无流水时 In/Out 为 0）
+$all_banks = [];
+$all_products = [];
+try {
+    $all_banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {}
+try {
+    $all_products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {}
+
+// 未在 balance_adjust 中设定的银行/产品：前日 Balance Now = 累计入 - 累计出（或 0）
+foreach ($all_banks as $name) {
+    $name = trim((string)$name);
+    if ($name === '') continue;
     if (!isset($initial_bank[$name])) $initial_bank[$name] = ($cum_in_bank[$name] ?? 0) - ($cum_out_bank[$name] ?? 0);
 }
-foreach ($by_product as $r) {
-    $name = $r['product'] ?? '—';
+foreach ($all_products as $name) {
+    $name = trim((string)$name);
+    if ($name === '') continue;
     if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$name] ?? 0) + ($cum_out_product[$name] ?? 0);
 }
 ?>
@@ -153,10 +181,11 @@ foreach ($by_product as $r) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($by_bank as $r):
-                                        $name = $r['bank'] ?? '—';
-                                        $in = (float)($r['total_in'] ?? 0);
-                                        $out = (float)($r['total_out'] ?? 0);
+                                    <?php foreach ($all_banks as $name):
+                                        $name = trim((string)$name);
+                                        if ($name === '') continue;
+                                        $in = (float)($range_in_bank[$name] ?? 0);
+                                        $out = (float)($range_out_bank[$name] ?? 0);
                                         $init = $initial_bank[$name] ?? 0;
                                         $balance = $init + $in - $out;
                                     ?>
@@ -170,7 +199,7 @@ foreach ($by_product as $r) {
                                         <td class="num profit"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
-                                    <?php if (empty($by_bank)): ?>
+                                    <?php if (empty($all_banks)): ?>
                                     <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -187,10 +216,11 @@ foreach ($by_product as $r) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($by_product as $r):
-                                        $name = $r['product'] ?? '—';
-                                        $in = (float)($r['total_in'] ?? 0);
-                                        $out = (float)($r['total_out'] ?? 0);
+                                    <?php foreach ($all_products as $name):
+                                        $name = trim((string)$name);
+                                        if ($name === '') continue;
+                                        $in = (float)($range_in_product[$name] ?? 0);
+                                        $out = (float)($range_out_product[$name] ?? 0);
                                         $init = $initial_product[$name] ?? 0;
                                         $balance = $init - $in + $out;
                                     ?>
@@ -204,7 +234,7 @@ foreach ($by_product as $r) {
                                         <td class="num profit"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
-                                    <?php if (empty($by_product)): ?>
+                                    <?php if (empty($all_products)): ?>
                                     <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                 </tbody>
