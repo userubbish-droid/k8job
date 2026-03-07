@@ -118,6 +118,32 @@ try {
     $balance_bank = [];
     $balance_product = [];
 }
+
+// Balance Now = Starting Balance + 累计 deposit - 累计 withdraw（全部已审核流水对扣）
+$total_in_bank = [];
+$total_out_bank = [];
+$total_in_product = [];
+$total_out_product = [];
+try {
+    $stmt = $pdo->query("SELECT COALESCE(bank, '—') AS bank,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        FROM transactions WHERE status = 'approved' GROUP BY bank");
+    foreach ($stmt->fetchAll() as $r) {
+        $total_in_bank[$r['bank']] = (float)$r['ti'];
+        $total_out_bank[$r['bank']] = (float)$r['to'];
+    }
+} catch (Throwable $e) {}
+try {
+    $stmt = $pdo->query("SELECT COALESCE(product, '—') AS product,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        FROM transactions WHERE status = 'approved' GROUP BY product");
+    foreach ($stmt->fetchAll() as $r) {
+        $total_in_product[$r['product']] = (float)$r['ti'];
+        $total_out_product[$r['product']] = (float)$r['to'];
+    }
+} catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -162,11 +188,20 @@ try {
                                 <th>排序</th>
                                 <th>创建时间</th>
                                 <th class="num">Starting Balance</th>
+                                <th class="num">Balance Now</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($banks as $b): $bname = $b['name']; $cur = $balance_bank[$bname] ?? null; ?>
+                            <?php
+                            foreach ($banks as $b):
+                                $bname = $b['name'];
+                                $cur = $balance_bank[$bname] ?? null;
+                                $start = $cur !== null ? (float)$cur : 0;
+                                $tin = $total_in_bank[$bname] ?? 0;
+                                $tout = $total_out_bank[$bname] ?? 0;
+                                $balance_now = $start + $tin - $tout;
+                            ?>
                             <tr>
                                 <td><?= (int)$b['id'] ?></td>
                                 <td><?= htmlspecialchars($bname) ?></td>
@@ -174,6 +209,7 @@ try {
                                 <td><?= (int)$b['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
+                                <td class="num"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
                                         <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
@@ -194,7 +230,7 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$banks): ?><tr><td colspan="7">暂无银行/渠道</td></tr><?php endif; ?>
+                            <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -222,11 +258,20 @@ try {
                                 <th>排序</th>
                                 <th>创建时间</th>
                                 <th class="num">Starting Balance</th>
+                                <th class="num">Balance Now</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($products as $p): $pname = $p['name']; $cur = $balance_product[$pname] ?? null; ?>
+                            <?php
+                            foreach ($products as $p):
+                                $pname = $p['name'];
+                                $cur = $balance_product[$pname] ?? null;
+                                $start = $cur !== null ? (float)$cur : 0;
+                                $tin = $total_in_product[$pname] ?? 0;
+                                $tout = $total_out_product[$pname] ?? 0;
+                                $balance_now = $start + $tin - $tout;
+                            ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
                                 <td><?= htmlspecialchars($pname) ?></td>
@@ -234,6 +279,7 @@ try {
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
+                                <td class="num"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
                                         <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
@@ -254,7 +300,7 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$products): ?><tr><td colspan="7">暂无产品</td></tr><?php endif; ?>
+                            <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>

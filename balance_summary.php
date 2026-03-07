@@ -14,6 +14,34 @@ $by_product = [];
 $initial_bank = [];
 $initial_product = [];
 
+// Statement 的 Starting Balance = 前一天的 Balance Now（即：Starting Balance + 累计至前日的 deposit - withdraw）
+$cum_in_bank = [];
+$cum_out_bank = [];
+$cum_in_product = [];
+$cum_out_product = [];
+try {
+    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        FROM transactions WHERE day < ? AND status = 'approved' GROUP BY bank");
+    $stmt->execute([$day]);
+    foreach ($stmt->fetchAll() as $r) {
+        $cum_in_bank[$r['bank']] = (float)$r['ti'];
+        $cum_out_bank[$r['bank']] = (float)$r['to'];
+    }
+} catch (Throwable $e) {}
+try {
+    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        FROM transactions WHERE day < ? AND status = 'approved' GROUP BY product");
+    $stmt->execute([$day]);
+    foreach ($stmt->fetchAll() as $r) {
+        $cum_in_product[$r['product']] = (float)$r['ti'];
+        $cum_out_product[$r['product']] = (float)$r['to'];
+    }
+} catch (Throwable $e) {}
+
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
@@ -37,12 +65,26 @@ try {
 try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
     foreach ($rows as $r) {
-        if ($r['adjust_type'] === 'bank') $initial_bank[$r['name']] = (float)$r['initial_balance'];
-        else $initial_product[$r['name']] = (float)$r['initial_balance'];
+        $base = (float)$r['initial_balance'];
+        $name = $r['name'];
+        if ($r['adjust_type'] === 'bank') {
+            $initial_bank[$name] = $base + ($cum_in_bank[$name] ?? 0) - ($cum_out_bank[$name] ?? 0);
+        } else {
+            $initial_product[$name] = $base + ($cum_in_product[$name] ?? 0) - ($cum_out_product[$name] ?? 0);
+        }
     }
 } catch (Throwable $e) {
     $initial_bank = [];
     $initial_product = [];
+}
+// 未在 balance_adjust 中设定的银行/产品：前日 Balance Now = 0 + 累计入 - 累计出
+foreach ($by_bank as $r) {
+    $name = $r['bank'] ?? '—';
+    if (!isset($initial_bank[$name])) $initial_bank[$name] = ($cum_in_bank[$name] ?? 0) - ($cum_out_bank[$name] ?? 0);
+}
+foreach ($by_product as $r) {
+    $name = $r['product'] ?? '—';
+    if (!isset($initial_product[$name])) $initial_product[$name] = ($cum_in_product[$name] ?? 0) - ($cum_out_product[$name] ?? 0);
 }
 ?>
 <!DOCTYPE html>
@@ -62,7 +104,7 @@ try {
                     <h2>statement</h2>
                     <p class="breadcrumb">
                         <a href="dashboard.php">首页</a><span>·</span>
-                        Starting Balance 来自「银行与产品」页的 Starting Balance；余额 = 初始 + 入 − 出
+                        Starting Balance = 前一天的 Balance Now；余额 = 初始 + 入 − 出
                     </p>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -148,7 +190,7 @@ try {
                             </table>
                         </div>
                     </div>
-                    <p class="form-hint" style="margin-top:12px;">Starting Balance 请在「银行与产品」页用「更改」设定。余额 = Starting Balance + 入 − 出。产品 In=－、Out=＋。</p>
+                    <p class="form-hint" style="margin-top:12px;">Starting Balance = 前一天收盘的 Balance Now（银行与产品页的 Balance Now 为累计对扣）。余额 = Starting Balance + 入 − 出。产品 In=－、Out=＋。</p>
                 </div>
             </div>
         </main>
