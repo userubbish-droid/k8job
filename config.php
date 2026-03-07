@@ -21,3 +21,11 @@ try {
 } catch (PDOException $e) {
     die('数据库连接失败：' . htmlspecialchars($e->getMessage()));
 }
+
+// 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
+$NOTIFY_TELEGRAM_BOT_TOKEN = '';
+$NOTIFY_TELEGRAM_CHAT_ID  = '';
+$NOTIFY_BASE_URL = '';  // 如 https://你的域名.com，用于通知里的链接
+if (file_exists(__DIR__ . '/notify_config.php')) {
+    include __DIR__ . '/notify_config.php';
+}

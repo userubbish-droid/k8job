@@ -227,10 +227,17 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                 <tr><th>产品</th><th>账号</th><th>密码</th><th>操作</th></tr>
             </thead>
             <tbody>
-            <?php foreach ($product_accounts as $pa): ?>
+            <?php
+            $product_ord = [];
+            foreach ($product_accounts as $pa):
+                $pn = $pa['product_name'];
+                $product_ord[$pn] = ($product_ord[$pn] ?? 0) + 1;
+                $suffix = $product_ord[$pn] === 1 ? '' : '~' . $product_ord[$pn];
+                $account_display = htmlspecialchars($pa['account'] ?? '') . $suffix;
+            ?>
                 <tr>
-                    <td><?= htmlspecialchars($pa['product_name']) ?></td>
-                    <td><?= htmlspecialchars($pa['account'] ?? '') ?></td>
+                    <td><?= htmlspecialchars($pn) ?></td>
+                    <td><?= $account_display ?></td>
                     <td><?= htmlspecialchars(($pa['password'] ?? '') !== '' ? $pa['password'] : '—') ?></td>
                     <td>
                         <form method="post" class="inline" onsubmit="return confirm('确定删除这条产品账号？');">

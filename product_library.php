@@ -54,12 +54,14 @@ try {
     $rows = $pdo->query("SELECT a.customer_id, a.product_name, a.account, a.password, c.code
             FROM customer_product_accounts a
             LEFT JOIN customers c ON c.id = a.customer_id
-            ORDER BY c.code ASC, a.product_name ASC")->fetchAll();
+            ORDER BY c.code ASC, a.product_name ASC, a.id ASC")->fetchAll();
     foreach ($rows as $r) {
         $code = $r['code'] ?? '';
         if ($code === '') continue;
         if (!isset($by_code[$code])) $by_code[$code] = [];
-        $by_code[$code][$r['product_name']] = [
+        $pn = $r['product_name'];
+        if (!isset($by_code[$code][$pn])) $by_code[$code][$pn] = [];
+        $by_code[$code][$pn][] = [
             'account'  => $r['account'] ?? '',
             'password' => $r['password'] ?? '',
             'customer_id' => (int)$r['customer_id'],
@@ -167,20 +169,27 @@ try {
                 <?php if (empty($codes)): ?>
                     <tr><td colspan="<?= count($products) + 1 ?>">暂无记录。请到「编辑顾客」为顾客添加产品及账号、密码。</td></tr>
                 <?php else: ?>
-                <?php foreach ($codes as $code): ?>
+                <?php foreach ($codes as $code):
+                    $cid = 0;
+                    foreach ($by_code[$code] as $list) { if (!empty($list)) { $cid = (int)($list[0]['customer_id'] ?? 0); break; } }
+                    ?>
                     <tr>
-                        <?php $first_cell = reset($by_code[$code]); $cid = (int)($first_cell['customer_id'] ?? 0); ?>
                         <td><a href="customer_edit.php?id=<?= $cid ?>"><?= htmlspecialchars($code) ?></a></td>
                         <?php foreach ($products as $p): ?>
                         <td class="product-cell">
                             <?php
-                            $cell = $by_code[$code][$p] ?? null;
-                            if ($cell && (($cell['account'] ?? '') !== '' || ($cell['password'] ?? '') !== '')):
-                                $acc = htmlspecialchars($cell['account'] ?? '');
-                                $pwd = ($cell['password'] ?? '') !== '' ? htmlspecialchars($cell['password']) : '—';
+                            $cells = $by_code[$code][$p] ?? [];
+                            if (!empty($cells)):
+                                foreach ($cells as $idx => $entry):
+                                    $acc = trim($entry['account'] ?? '');
+                                    $pwd = trim($entry['password'] ?? '');
+                                    $suffix = $idx === 0 ? '' : '~' . ($idx + 1);
+                                    $accDisplay = $acc !== '' ? htmlspecialchars($acc) . $suffix : '—';
+                                    $pwdDisplay = $pwd !== '' ? htmlspecialchars($pwd) : '—';
                             ?>
-                            <div class="id">id：<?= $acc ?: '—' ?></div>
-                            <div class="ps">ps：<?= $pwd ?></div>
+                            <div class="id">id：<?= $accDisplay ?></div>
+                            <div class="ps">ps：<?= $pwdDisplay ?></div>
+                            <?php endforeach; ?>
                             <?php else: ?>
                             —
                             <?php endif; ?>

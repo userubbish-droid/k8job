@@ -60,6 +60,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         ]);
         $saved = true;
         $submitted_status = $status;
+        if ($status === 'pending') {
+            if (file_exists(__DIR__ . '/inc/notify.php')) {
+                require_once __DIR__ . '/inc/notify.php';
+                send_pending_approval_notify($pdo);
+            }
+        }
         $saved_mode = $mode;
         $saved_code = $code;
         $saved_product = $product;
