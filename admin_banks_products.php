@@ -36,8 +36,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ?");
             $stmt->execute([$id]);
             $msg = '已更新状态。';
-        } else {
-            throw new RuntimeException('未知操作。');
         }
     } catch (Throwable $e) {
         $err = $e->getMessage();
