@@ -132,7 +132,7 @@ $diag_error = '';
 try {
     $stmt = $pdo->query("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(bank, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
@@ -140,7 +140,7 @@ try {
         $k = strtolower(trim((string)$bankVal));
         if ($k === '') continue;
         $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
-        $to = (float)($r['to'] ?? $r['TO'] ?? 0);
+        $to = (float)($r['tout'] ?? $r['TO'] ?? 0);
         $total_in_bank[$k] = $ti;
         $total_out_bank[$k] = $to;
         $diag_bank_rows[$k] = ['in' => $ti, 'out' => $to];
@@ -151,7 +151,7 @@ try {
 try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
@@ -159,7 +159,7 @@ try {
         $k = strtolower(trim((string)$prodVal));
         if ($k === '') continue;
         $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
-        $to = (float)($r['to'] ?? $r['TO'] ?? 0);
+        $to = (float)($r['tout'] ?? $r['TO'] ?? 0);
         $total_in_product[$k] = $ti;
         $total_out_product[$k] = $to;
         $diag_product_rows[$k] = ['in' => $ti, 'out' => $to];
