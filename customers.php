@@ -24,8 +24,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+// REGULAR 等级：按顾客 deposit - withdraw 对扣余额计算。normal 0~1000, sliver 1001~3000, gold 3001~7000, platinum 7001+
+function customer_regular_tier($balance) {
+    $b = (float) $balance;
+    if ($b <= 1000) return 'normal';
+    if ($b <= 3000) return 'sliver';
+    if ($b <= 7000) return 'gold';
+    return 'platinum';
+}
+
 $summary = ['total' => 0, 'active' => 0];
 $rows = [];
+$balance_by_code = []; // code => balance (deposit - withdraw)
 try {
     $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
     $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
@@ -34,6 +44,13 @@ try {
             FROM customers c
             ORDER BY c.is_active DESC, c.code ASC";
     $rows = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->query("SELECT code,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
+        FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != ''
+        GROUP BY code");
+    foreach ($stmt->fetchAll() as $r) {
+        $balance_by_code[$r['code']] = (float) $r['balance'];
+    }
 } catch (Throwable $e) {
     $rows = [];
     $err = $err ?: '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。' . ' (' . $e->getMessage() . ')';
@@ -96,7 +113,7 @@ try {
                         <td><?= htmlspecialchars($r['name'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['phone'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['regular_customer'] ?? '-') ?></td>
+                        <td><?= htmlspecialchars(customer_regular_tier($balance_by_code[$r['code']] ?? 0)) ?></td>
                         <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['verify'] ?? '') ?></td>
                         <?php if ($is_admin): ?>

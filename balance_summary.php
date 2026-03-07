@@ -5,35 +5,11 @@ require_login();
 
 $sidebar_current = 'balance_summary';
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
-$today = date('Y-m-d');
+$day = isset($_GET['day']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day']) ? $_GET['day'] : date('Y-m-d');
 $msg = '';
 $err = '';
 
-// 仅 admin 可调整初始余额；member 只能看
-if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST') {
-    $action = $_POST['action'] ?? '';
-    if ($action === 'save_initial') {
-        $type = $_POST['adjust_type'] ?? '';
-        $name = trim((string)($_POST['name'] ?? ''));
-        $initial = str_replace(',', '', trim((string)($_POST['initial_balance'] ?? '0')));
-        if ($name !== '' && in_array($type, ['bank', 'product'], true) && is_numeric($initial)) {
-            try {
-                $stmt = $pdo->prepare("INSERT INTO balance_adjust (adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)
-                    ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
-                $stmt->execute([$type, $name, (float)$initial, (int)($_SESSION['user_id'] ?? 0)]);
-                $msg = '已保存初始余额。';
-            } catch (Throwable $e) {
-                if (strpos($e->getMessage(), 'balance_adjust') !== false && (strpos($e->getMessage(), "doesn't exist") !== false)) {
-                    $err = '请先在 phpMyAdmin 执行 migrate_balance_adjust.sql 创建 balance_adjust 表。';
-                } else {
-                    $err = '保存失败：' . $e->getMessage();
-                }
-            }
-        }
-    }
-}
-
-$yesterday = date('Y-m-d', strtotime($today . ' -1 day'));
+$yesterday = date('Y-m-d', strtotime($day . ' -1 day'));
 $by_bank = [];
 $by_product = [];
 $initial_bank = [];
@@ -47,7 +23,7 @@ try {
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day = ? AND status = 'approved'
         GROUP BY bank ORDER BY 2 + 3 DESC");
-    $stmt->execute([$today]);
+    $stmt->execute([$day]);
     $by_bank = $stmt->fetchAll();
 } catch (Throwable $e) { $by_bank = []; }
 
@@ -57,7 +33,7 @@ try {
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day = ? AND status = 'approved'
         GROUP BY product ORDER BY 2 + 3 DESC");
-    $stmt->execute([$today]);
+    $stmt->execute([$day]);
     $by_product = $stmt->fetchAll();
 } catch (Throwable $e) { $by_product = []; }
 
@@ -115,15 +91,23 @@ try {
                 <?php if (!$is_admin): ?><p class="form-hint" style="margin-bottom:12px;">您仅有查看权限，不可修改任何数据。</p><?php endif; ?>
 
                 <div class="card">
+                    <p class="form-hint" style="margin-bottom:12px;">显示日期：<?= $day ?><?= $day === date('Y-m-d') ? '（当天）' : '' ?></p>
+                    <div class="statement-filter-wrap" style="margin-bottom:16px;">
+                        <button type="button" class="btn btn-outline" id="stmt-date-toggle">筛选日期</button>
+                        <form method="get" class="stmt-date-form" id="stmt-date-form" style="display:none; margin-top:10px; align-items:center; gap:8px; flex-wrap:wrap;">
+                            <input type="date" name="day" value="<?= htmlspecialchars($day) ?>">
+                            <button type="submit" class="btn btn-primary">查询</button>
+                        </form>
+                    </div>
                     <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                         <div>
-                            <h4>银行目前有多少（今日）</h4>
+                            <h4>Bank</h4>
                             <table class="total-table">
                                 <thead>
                                     <tr>
-                                        <th>银行/渠道</th>
-                                        <?php if ($is_admin): ?><th class="num">初始余额</th><th class="num">入账</th><th class="num">出账</th><?php endif; ?>
-                                        <th class="num">余额</th>
+                                        <th>Bank</th>
+                                        <?php if ($is_admin): ?><th class="num">Starting Balance</th><th class="num">In</th><th class="num">Out</th><?php endif; ?>
+                                        <th class="num">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -137,15 +121,7 @@ try {
                                     <tr>
                                         <td><?= htmlspecialchars($name) ?></td>
                                         <?php if ($is_admin): ?>
-                                        <td class="num">
-                                            <form method="post" class="inline" style="display:inline-flex;align-items:center;gap:6px;">
-                                                <input type="hidden" name="action" value="save_initial">
-                                                <input type="hidden" name="adjust_type" value="bank">
-                                                <input type="hidden" name="name" value="<?= htmlspecialchars($name) ?>">
-                                                <input type="text" name="initial_balance" value="<?= sprintf('%.2f', $init) ?>" class="form-control" style="width:90px;padding:6px 8px;text-align:right;">
-                                                <button type="submit" class="btn btn-sm btn-primary">改</button>
-                                            </form>
-                                        </td>
+                                        <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num in"><?= number_format($in, 2) ?></td>
                                         <td class="num out"><?= number_format($out, 2) ?></td>
                                         <?php endif; ?>
@@ -153,19 +129,19 @@ try {
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($by_bank)): ?>
-                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无今日银行流水</td></tr>
+                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
                         <div>
-                            <h4>产品剩下多少（今日）</h4>
+                            <h4>Game Platform</h4>
                             <table class="total-table">
                                 <thead>
                                     <tr>
-                                        <th>产品</th>
-                                        <?php if ($is_admin): ?><th class="num">初始余额</th><th class="num">入账</th><th class="num">出账</th><?php endif; ?>
-                                        <th class="num">余额</th>
+                                        <th>Game Platform</th>
+                                        <?php if ($is_admin): ?><th class="num">Starting</th><th class="num">In</th><th class="num">Out</th><?php endif; ?>
+                                        <th class="num">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
@@ -173,38 +149,41 @@ try {
                                         $name = $r['product'] ?? '—';
                                         $in = (float)($r['total_in'] ?? 0);
                                         $out = (float)($r['total_out'] ?? 0);
-                                        $init = $initial_product[$name] ?? 0;
+                                        $init = isset($initial_product[$name]) ? $initial_product[$name] : ($yesterday_closing_product[$name] ?? 0);
                                         $balance = $init + $in - $out;
                                     ?>
                                     <tr>
                                         <td><?= htmlspecialchars($name) ?></td>
                                         <?php if ($is_admin): ?>
-                                        <td class="num">
-                                            <form method="post" class="inline" style="display:inline-flex;align-items:center;gap:6px;">
-                                                <input type="hidden" name="action" value="save_initial">
-                                                <input type="hidden" name="adjust_type" value="product">
-                                                <input type="hidden" name="name" value="<?= htmlspecialchars($name) ?>">
-                                                <input type="text" name="initial_balance" value="<?= sprintf('%.2f', $init) ?>" class="form-control" style="width:90px;padding:6px 8px;text-align:right;">
-                                                <button type="submit" class="btn btn-sm btn-primary">改</button>
-                                            </form>
-                                        </td>
-                                        <td class="num in"><?= number_format($in, 2) ?></td>
-                                        <td class="num out"><?= number_format($out, 2) ?></td>
+                                        <td class="num"><?= number_format($init, 2) ?></td>
+                                        <td class="num out"><?= $in != 0 ? '−' . number_format($in, 2) : '—' ?></td>
+                                        <td class="num in"><?= $out != 0 ? '+' . number_format($out, 2) : '—' ?></td>
                                         <?php endif; ?>
                                         <td class="num profit"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($by_product)): ?>
-                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无今日产品流水</td></tr>
+                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
                     </div>
-                    <?php if ($is_admin): ?><p class="form-hint" style="margin-top:12px;">说明：初始余额默认取昨日余额；管理员可改。今日余额 = 初始 + 今日入账 − 今日出账。</p><?php endif; ?>
+                    <p class="form-hint" style="margin-top:12px;">初始 = 昨日余额；余额 = 初始 + 入 − 出。产品 In=－、Out=＋。</p>
                 </div>
             </div>
         </main>
     </div>
+<script>
+(function(){
+    var btn = document.getElementById('stmt-date-toggle');
+    var form = document.getElementById('stmt-date-form');
+    if (btn && form) {
+        btn.addEventListener('click', function(){
+            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+        });
+    }
+})();
+</script>
 </body>
 </html>
