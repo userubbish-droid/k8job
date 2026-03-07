@@ -152,8 +152,7 @@ foreach ($all_products as $name) {
                 <div class="page-header">
                     <h2>statement</h2>
                     <p class="breadcrumb">
-                        <a href="dashboard.php">首页</a><span>·</span>
-                        Starting Balance = 区间开始日前一日 <strong>23:59:59</strong> 时「银行与产品」的 Balance；本页从 <strong>00:00:01</strong> 起以该数为基础，再累加区间内 In/Out 得 Balance
+                        <a href="dashboard.php">首页</a><span>·</span>statement
                     </p>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -250,7 +249,6 @@ foreach ($all_products as $name) {
                             </table>
                         </div>
                     </div>
-                    <p class="form-hint" style="margin-top:12px;">Starting Balance = 区间开始日前一日 <strong>23:59:59</strong> 时「银行与产品」的 Balance，本页从 <strong>00:00:01</strong> 起以该数为基础；Bank：Balance = Starting + In − Out；产品 In=－、Out=＋。</p>
                 </div>
             </div>
         </main>

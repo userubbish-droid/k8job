@@ -214,6 +214,7 @@ if ($is_admin) {
                         <option value="WITHDRAW">WITHDRAW（出）</option>
                         <option value="FREE">FREE</option>
                         <option value="FREE WITHDRAW">FREE WITHDRAW</option>
+                        <option value="EXPENSE">EXPENSE（开销）</option>
                         <option value="BANK">BANK</option>
                         <option value="REBATE">REBATE</option>
                         <option value="OTHER">OTHER</option>

@@ -10,7 +10,7 @@ $month_end   = date('Y-m-t');
 $sidebar_current = 'dashboard';
 $db_error = '';
 $day_in = $day_out = $day_profit = 0;
-$month_in = $month_out = $month_profit = 0;
+$month_in = $month_out = $month_expenses = $month_profit = 0;
 $day_customers_count = 0;
 $day_orders_count = 0;
 $day_new_customers = 0;
@@ -27,15 +27,17 @@ try {
     $day_out  = (float)($day['total_out'] ?? 0);
     $day_profit = $day_in - $day_out;
 
-    // 本月统计（只统计已批准）
+    // 本月统计（只统计已批准）：入账、出账、开销（EXPENSE）
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out,
+                                  COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses
                            FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'");
     $stmt->execute([$month_start, $month_end]);
     $month = $stmt->fetch();
-    $month_in    = (float)($month['total_in'] ?? 0);
-    $month_out   = (float)($month['total_out'] ?? 0);
-    $month_profit = $month_in - $month_out;
+    $month_in       = (float)($month['total_in'] ?? 0);
+    $month_out      = (float)($month['total_out'] ?? 0);
+    $month_expenses = (float)($month['total_expenses'] ?? 0);
+    $month_profit   = $month_in - $month_out - $month_expenses;
 
     // 今日上线客户数（今日已批准流水中不重复的顾客 code 数）
     $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE day = ? AND status = 'approved' AND code IS NOT NULL AND code != ''");
@@ -156,11 +158,16 @@ try {
                         <div class="label">本月出账</div>
                         <div class="value"><?= number_format((float)$month_out, 2) ?></div>
                     </div>
+                    <div class="stat-card expense">
+                        <div class="label">本月开销</div>
+                        <div class="value"><?= number_format((float)$month_expenses, 2) ?></div>
+                    </div>
                     <div class="stat-card profit">
                         <div class="label">本月利润</div>
                         <div class="value"><?= number_format($month_profit, 2) ?></div>
                     </div>
                 </div>
+                <p class="form-hint" style="margin-top:8px; margin-bottom:0;">本月利润 = 入账 − 出账 − 开销</p>
             </div>
         </main>
     </div>
