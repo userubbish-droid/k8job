@@ -178,6 +178,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <option value="">全部</option>
             <option value="DEPOSIT" <?= $mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT</option>
             <option value="WITHDRAW" <?= $mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW</option>
+            <option value="FREE" <?= $mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
+            <option value="FREE WITHDRAW" <?= $mode === 'FREE WITHDRAW' ? 'selected' : '' ?>>FREE WITHDRAW</option>
             <option value="BANK" <?= $mode === 'BANK' ? 'selected' : '' ?>>BANK</option>
             <option value="REBATE" <?= $mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
         </select>

@@ -43,7 +43,8 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $can_edit_dt = $is_admin && !empty($_POST['edit_dt']);
     $day     = $can_edit_dt ? trim($_POST['day'] ?? '') : ($row['day'] ?? date('Y-m-d'));
-    $time    = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : ($row['time'] ?? date('H:i:s'));
+    $timeRaw = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : ($row['time'] ?? date('H:i'));
+    $time    = (strlen($timeRaw) === 5 && preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/', $timeRaw)) ? $timeRaw . ':00' : (strlen($timeRaw) >= 8 ? $timeRaw : ($timeRaw ?: '00:00:00'));
     $mode    = trim($_POST['mode'] ?? '');
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
@@ -152,7 +153,7 @@ if ($product_other !== '') $product = '其他';
             </label>
             <div id="dt_box" style="display:none;">
                 <input type="date" name="day" id="day" value="<?= htmlspecialchars($day) ?>" style="margin-top:6px;">
-                <input type="time" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" style="margin-top:6px;">
+                <input type="text" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" placeholder="如 14:30 (24小时)" style="margin-top:6px;">
             </div>
         <?php else: ?>
             <input type="text" value="<?= htmlspecialchars($day . ' ' . $time) ?>" readonly>
@@ -162,11 +163,13 @@ if ($product_other !== '') $product = '其他';
             <option value="">-- 请选 --</option>
             <option value="DEPOSIT" <?= $mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT（入）</option>
             <option value="WITHDRAW" <?= $mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW（出）</option>
+            <option value="FREE" <?= $mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
+            <option value="FREE WITHDRAW" <?= $mode === 'FREE WITHDRAW' ? 'selected' : '' ?>>FREE WITHDRAW</option>
             <option value="BANK" <?= $mode === 'BANK' ? 'selected' : '' ?>>BANK</option>
             <option value="REBATE" <?= $mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
             <option value="OTHER" <?= $mode === 'OTHER' ? 'selected' : '' ?>>OTHER</option>
         </select>
-        <label>客户代码</label>
+        <label>customer</label>
         <?php if (!$customers): ?>
             <p class="muted" style="margin:4px 0 0;font-size:12px;color:#888;">暂无客户选项，请先到 <a href="customers.php">客户资料</a> 添加。</p>
             <input type="text" value="<?= htmlspecialchars($code) ?>" readonly>
@@ -184,7 +187,7 @@ if ($product_other !== '') $product = '其他';
                 <?php endforeach; ?>
             </select>
         <?php endif; ?>
-        <label>银行/渠道</label>
+        <label>bank</label>
         <select name="bank" id="bank">
             <option value="">-- 请选 --</option>
             <?php foreach ($banks as $b): ?>
@@ -204,8 +207,7 @@ if ($product_other !== '') $product = '其他';
         <?php if ($is_admin): ?><input type="text" name="product_other" id="product_other" value="<?= htmlspecialchars($product_other) ?>" placeholder="输入其他产品/平台" style="margin-top:6px;<?= $product !== '其他' ? ' display:none;' : '' ?>"><?php endif; ?>
         <label>金额 *</label>
         <input type="text" name="amount" value="<?= htmlspecialchars($amount) ?>" required>
-        <label>奖励/返点</label>
-        <input type="text" name="bonus" value="<?= htmlspecialchars($bonus) ?>">
+        <input type="hidden" name="bonus" value="0">
         <label>备注</label>
         <textarea name="remark" rows="2"><?= htmlspecialchars($remark) ?></textarea>
         <button type="submit">保存</button>

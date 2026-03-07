@@ -12,7 +12,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
     $can_edit_dt = $is_admin && !empty($_POST['edit_dt']);
     $day     = $can_edit_dt ? trim($_POST['day'] ?? '') : date('Y-m-d');
-    $time    = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : date('H:i:s');
+    $timeRaw = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : date('H:i');
+    $time    = (strlen($timeRaw) === 5 && preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/', $timeRaw)) ? $timeRaw . ':00' : ($timeRaw ?: '00:00:00');
     $mode    = trim($_POST['mode'] ?? '');
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
@@ -186,10 +187,10 @@ if ($is_admin) {
             <div id="dt_box" style="display:none;">
                 <div class="form-row-2">
                     <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
-                    <div class="form-group" style="margin-bottom:0;"><label>时间</label><input type="time" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 14:30" pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$" title="24小时制，如 09:00 或 23:45"></div>
                 </div>
             </div>
-            <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。</p>
+            <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。时间为24小时制（如 14:30）。</p>
         </div>
         <?php endif; ?>
 
@@ -202,13 +203,15 @@ if ($is_admin) {
                         <option value="">-- 请选 --</option>
                         <option value="DEPOSIT">DEPOSIT（入）</option>
                         <option value="WITHDRAW">WITHDRAW（出）</option>
+                        <option value="FREE">FREE</option>
+                        <option value="FREE WITHDRAW">FREE WITHDRAW</option>
                         <option value="BANK">BANK</option>
                         <option value="REBATE">REBATE</option>
                         <option value="OTHER">OTHER</option>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>客户代码</label>
+                    <label>customer</label>
                     <?php if (empty($customers)): ?>
                     <select name="code" class="form-control" disabled><option value="">-- 暂无 --</option></select>
                     <p class="form-hint"><a href="customers.php">先去添加客户</a></p>
@@ -216,7 +219,7 @@ if ($is_admin) {
                     <select name="code" id="code" class="form-control">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($customers as $c): ?>
-                        <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code'] . (empty($c['name']) ? '' : ' - ' . $c['name'])) ?></option>
+                        <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code']) ?></option>
                         <?php endforeach; ?>
                     </select>
                     <?php endif; ?>
@@ -228,7 +231,7 @@ if ($is_admin) {
             </div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label>银行/渠道</label>
+                    <label>bank</label>
                     <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
                     <select name="bank" id="bank" class="form-control">
                         <option value="">-- 请选 --</option>
@@ -251,23 +254,13 @@ if ($is_admin) {
         </div>
 
         <div class="form-section">
-            <div class="form-section-title">金额与奖励</div>
-            <div class="form-row-2">
-                <div class="form-group">
-                    <label>金额 *</label>
-                    <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
-                </div>
-                <div class="form-group">
-                    <label>奖励 %</label>
-                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="如 10" value="">
-                    <p class="form-hint">填数字即百分比，不填可用下方固定金额</p>
-                </div>
-            </div>
+            <div class="form-section-title">金额</div>
             <div class="form-group">
-                <label>奖励/返点（固定金额）</label>
-                <input type="text" name="bonus" id="bonus" class="form-control" placeholder="0" value="0">
+                <label>金额 *</label>
+                <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
+                <input type="hidden" name="reward_pct" value="">
+                <input type="hidden" name="bonus" value="0">
             </div>
-            <div id="calc_summary" class="calc-box" style="display:none;"><span id="calc_text"></span></div>
         </div>
 
         <div class="form-section">
@@ -314,36 +307,6 @@ if ($is_admin) {
             if (modeEl) modeEl.addEventListener('change', updateWithdrawCustomer);
             if (codeEl) codeEl.addEventListener('change', updateWithdrawCustomer);
             updateWithdrawCustomer();
-        })();
-        (function() {
-            var amountEl = document.getElementById('amount');
-            var rewardPctEl = document.getElementById('reward_pct');
-            var bonusEl = document.getElementById('bonus');
-            var summaryEl = document.getElementById('calc_summary');
-            var textEl = document.getElementById('calc_text');
-            function updateCalc() {
-                var amount = parseFloat((amountEl && amountEl.value) ? amountEl.value.replace(/,/g,'') : '') || 0;
-                var pct = parseFloat((rewardPctEl && rewardPctEl.value) ? rewardPctEl.value.replace(/,/g,'') : '') || NaN;
-                var bonusFix = parseFloat((bonusEl && bonusEl.value) ? bonusEl.value.replace(/,/g,'') : '') || 0;
-                var bonus = 0;
-                if (!isNaN(pct) && pct !== 0) {
-                    bonus = Math.round(amount * pct / 100 * 100) / 100;
-                } else {
-                    bonus = bonusFix;
-                }
-                var total = amount + bonus;
-                if (amount > 0) {
-                    summaryEl.style.display = 'block';
-                    textEl.textContent = '奖励金额：' + bonus.toFixed(2) + '，总数：' + total.toFixed(2);
-                } else {
-                    summaryEl.style.display = 'none';
-                }
-            }
-            if (amountEl) amountEl.addEventListener('input', updateCalc);
-            if (amountEl) amountEl.addEventListener('change', updateCalc);
-            if (rewardPctEl) rewardPctEl.addEventListener('input', updateCalc);
-            if (bonusEl) bonusEl.addEventListener('input', updateCalc);
-            updateCalc();
         })();
         <?php if ($is_admin): ?>
         function toggleOther(selId, inputId) {
