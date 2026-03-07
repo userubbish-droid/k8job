@@ -201,7 +201,7 @@ try {
 }
 try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
