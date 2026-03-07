@@ -283,7 +283,8 @@ try {
     })();
     </script>
     <style>
-    .balance-cell-inline .balance-inline-form { display: inline-flex !important; align-items: center; gap: 6px; vertical-align: middle; }
+    /* 表单默认由 HTML 的 style="display:none" 隐藏；点击「更改」后 JS 设为 inline-flex 才显示 */
+    .balance-cell-inline .balance-inline-form { align-items: center; gap: 6px; vertical-align: middle; }
     .balance-cell-inline .balance-inline-input { width: 72px; padding: 4px 6px; font-size: 0.9rem; text-align: right; }
     </style>
 </body>
