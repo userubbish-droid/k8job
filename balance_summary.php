@@ -104,7 +104,7 @@ foreach ($by_product as $r) {
                     <h2>statement</h2>
                     <p class="breadcrumb">
                         <a href="dashboard.php">首页</a><span>·</span>
-                        Starting Balance = 前一天的 Balance Now；余额 = 初始 + 入 − 出
+                        Starting Balance = 前一天的 Balance Now；本页 <strong>Balance</strong> = 当日收盘余额，与「银行与产品」页当日的 Balance Now 一致
                     </p>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -190,7 +190,7 @@ foreach ($by_product as $r) {
                             </table>
                         </div>
                     </div>
-                    <p class="form-hint" style="margin-top:12px;">Starting Balance = 前一天收盘的 Balance Now（银行与产品页的 Balance Now 为累计对扣）。余额 = Starting Balance + 入 − 出。产品 In=－、Out=＋。</p>
+                    <p class="form-hint" style="margin-top:12px;">Starting Balance = 前一天收盘的 Balance Now。本页 <strong>Balance</strong> = 当日收盘余额，即「银行与产品」里该日的 Balance Now（Starting Balance + 累计入 − 累计出）。产品 In=－、Out=＋。</p>
                 </div>
             </div>
         </main>
