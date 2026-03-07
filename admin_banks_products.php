@@ -121,33 +121,31 @@ try {
     $balance_product = [];
 }
 
-// Balance Now = Starting Balance + 全部已审核流水(入账 − 出账) 对扣
+// Balance Now = Starting Balance + 入账(deposit) − 出账(withdraw)，按银行/产品对扣
 $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
 $total_out_product = [];
 try {
-    $stmt = $pdo->query("SELECT TRIM(COALESCE(`bank`, '')) AS bank,
-        COALESCE(SUM(CASE WHEN `mode` = 'DEPOSIT' THEN `amount` ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN `mode` = 'WITHDRAW' THEN `amount` ELSE 0 END), 0) AS to
-        FROM transactions WHERE `status` = 'approved' GROUP BY TRIM(COALESCE(`bank`, ''))");
+    $stmt = $pdo->query("SELECT COALESCE(bank, '') AS bank,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        FROM transactions WHERE status = 'approved' GROUP BY bank");
     foreach ($stmt->fetchAll() as $r) {
-        $k = trim((string)$r['bank']);
+        $k = strtolower(trim((string)$r['bank']));
         if ($k === '') continue;
-        $k = strtolower($k);
         $total_in_bank[$k] = (float)$r['ti'];
         $total_out_bank[$k] = (float)$r['to'];
     }
 } catch (Throwable $e) {}
 try {
-    $stmt = $pdo->query("SELECT TRIM(COALESCE(`product`, '')) AS product,
-        COALESCE(SUM(CASE WHEN `mode` = 'DEPOSIT' THEN `amount` ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN `mode` = 'WITHDRAW' THEN `amount` ELSE 0 END), 0) AS to
-        FROM transactions WHERE `status` = 'approved' GROUP BY TRIM(COALESCE(`product`, ''))");
+    $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
+        FROM transactions WHERE status = 'approved' GROUP BY product");
     foreach ($stmt->fetchAll() as $r) {
-        $k = trim((string)$r['product']);
+        $k = strtolower(trim((string)$r['product']));
         if ($k === '') continue;
-        $k = strtolower($k);
         $total_in_product[$k] = (float)$r['ti'];
         $total_out_product[$k] = (float)$r['to'];
     }
@@ -253,7 +251,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> + 入账 − 出账（仅统计<strong>已审核</strong>且记流水时选了该银行/产品的记录）。若始终与 Starting Balance 相同，请到「流水记录」确认：1) 每笔流水是否已选 bank 和 game；2) 是否为「已批准」状态。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。<strong>Balance Now = Starting Balance + 该银行全部 DEPOSIT − 该银行全部 WITHDRAW</strong>（例：HLB 初始 1000，c004 deposit HLB 100、c002 withdraw HLB 50 → 1000+100−50=1050）。仅统计<strong>已审核</strong>且记流水时选了该银行的记录。</p>
                 </div>
 
                 <div class="card">
@@ -325,7 +323,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = <strong>Starting Balance</strong> + 入账 − 出账（仅统计已审核且记流水时选了该产品的记录）。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 该产品全部 DEPOSIT − 该产品全部 WITHDRAW（仅已审核且记流水时选了该产品的记录）。</p>
                 </div>
             </div>
         </main>
