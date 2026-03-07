@@ -36,6 +36,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ?");
             $stmt->execute([$id]);
             $msg = '已更新状态。';
+        } elseif ($action === 'save_balance') {
+            $type = $_POST['adjust_type'] ?? '';
+            $name = trim($_POST['name'] ?? '');
+            $val = str_replace(',', '', trim($_POST['balance'] ?? '0'));
+            if ($name === '' || !in_array($type, ['bank', 'product'], true) || !is_numeric($val)) throw new RuntimeException('参数错误。');
+            try {
+                $stmt = $pdo->prepare("INSERT INTO balance_adjust (adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)
+                    ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
+                $stmt->execute([$type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
+                $msg = '已更新为更改余额。';
+            } catch (Throwable $e) {
+                if (strpos($e->getMessage(), 'balance_adjust') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
+                    throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_balance_adjust.sql 创建 balance_adjust 表后再使用「更改」功能。');
+                }
+                throw $e;
+            }
         }
     } catch (Throwable $e) {
         $err = $e->getMessage();
@@ -44,12 +60,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $banks = [];
 $products = [];
+$balance_bank = [];
+$balance_product = [];
+$balance_adjust_ok = false;
 try {
     $banks = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM banks ORDER BY sort_order DESC, name ASC")->fetchAll();
 } catch (Throwable $e) {}
 try {
     $products = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM products ORDER BY sort_order DESC, name ASC")->fetchAll();
 } catch (Throwable $e) {}
+try {
+    $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
+    $balance_adjust_ok = true;
+    foreach ($rows as $r) {
+        if ($r['adjust_type'] === 'bank') $balance_bank[$r['name']] = (float)$r['initial_balance'];
+        else $balance_product[$r['name']] = (float)$r['initial_balance'];
+    }
+} catch (Throwable $e) {
+    $balance_bank = [];
+    $balance_product = [];
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -70,6 +100,7 @@ try {
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+                <?php if (!$balance_adjust_ok): ?><div class="alert" style="background:#e8f4fd;color:#0c5460;">如需使用「目前余额」与「更改」功能，请先在 phpMyAdmin 执行 <strong>migrate_balance_adjust.sql</strong> 创建 balance_adjust 表。</div><?php endif; ?>
 
                 <div class="card">
                     <h3>银行/渠道</h3>
@@ -93,19 +124,28 @@ try {
                                 <th>状态</th>
                                 <th>排序</th>
                                 <th>创建时间</th>
+                                <th class="num">目前余额</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($banks as $b): ?>
+                            <?php foreach ($banks as $b): $bname = $b['name']; $cur = $balance_bank[$bname] ?? null; ?>
                             <tr>
                                 <td><?= (int)$b['id'] ?></td>
-                                <td><?= htmlspecialchars($b['name']) ?></td>
+                                <td><?= htmlspecialchars($bname) ?></td>
                                 <td><?= ((int)$b['is_active'] === 1) ? '启用' : '禁用' ?></td>
                                 <td><?= (int)$b['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
+                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
                                 <td>
-                                    <form method="post" class="inline">
+                                    <form method="post" class="inline" style="display:inline-flex;align-items:center;gap:6px;">
+                                        <input type="hidden" name="action" value="save_balance">
+                                        <input type="hidden" name="adjust_type" value="bank">
+                                        <input type="hidden" name="name" value="<?= htmlspecialchars($bname) ?>">
+                                        <input type="text" name="balance" value="<?= $cur !== null ? sprintf('%.2f', $cur) : '' ?>" class="form-control" style="width:90px;text-align:right;padding:6px 8px;" placeholder="数字">
+                                        <button type="submit" class="btn btn-sm btn-primary">更改</button>
+                                    </form>
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_bank">
                                         <input type="hidden" name="id" value="<?= (int)$b['id'] ?>">
                                         <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$b['is_active'] === 1) ? '禁用' : '启用' ?></button>
@@ -113,7 +153,7 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$banks): ?><tr><td colspan="6">暂无银行/渠道</td></tr><?php endif; ?>
+                            <?php if (!$banks): ?><tr><td colspan="7">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -140,19 +180,28 @@ try {
                                 <th>状态</th>
                                 <th>排序</th>
                                 <th>创建时间</th>
+                                <th class="num">目前余额</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($products as $p): ?>
+                            <?php foreach ($products as $p): $pname = $p['name']; $cur = $balance_product[$pname] ?? null; ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
-                                <td><?= htmlspecialchars($p['name']) ?></td>
+                                <td><?= htmlspecialchars($pname) ?></td>
                                 <td><?= ((int)$p['is_active'] === 1) ? '启用' : '禁用' ?></td>
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
+                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '—' ?></td>
                                 <td>
-                                    <form method="post" class="inline">
+                                    <form method="post" class="inline" style="display:inline-flex;align-items:center;gap:6px;">
+                                        <input type="hidden" name="action" value="save_balance">
+                                        <input type="hidden" name="adjust_type" value="product">
+                                        <input type="hidden" name="name" value="<?= htmlspecialchars($pname) ?>">
+                                        <input type="text" name="balance" value="<?= $cur !== null ? sprintf('%.2f', $cur) : '' ?>" class="form-control" style="width:90px;text-align:right;padding:6px 8px;" placeholder="数字">
+                                        <button type="submit" class="btn btn-sm btn-primary">更改</button>
+                                    </form>
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_product">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
                                         <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$p['is_active'] === 1) ? '禁用' : '启用' ?></button>
@@ -160,7 +209,7 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$products): ?><tr><td colspan="6">暂无产品</td></tr><?php endif; ?>
+                            <?php if (!$products): ?><tr><td colspan="7">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
