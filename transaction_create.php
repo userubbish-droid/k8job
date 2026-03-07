@@ -240,9 +240,9 @@ if ($is_admin) {
             </div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label>bank</label>
+                    <label>bank *</label>
                     <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="bank" id="bank" class="form-control">
+                    <select name="bank" id="bank" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
                         <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
@@ -250,9 +250,9 @@ if ($is_admin) {
                     <?php if ($is_admin): ?><input type="text" name="bank_other" id="bank_other" class="form-control" placeholder="其他银行" style="display:none; margin-top:6px;"><?php endif; ?>
                 </div>
                 <div class="form-group">
-                    <label>产品/平台</label>
+                    <label>产品/平台 *</label>
                     <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="product" id="product" class="form-control">
+                    <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
                         <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>

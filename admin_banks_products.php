@@ -126,37 +126,56 @@ $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
 $total_out_product = [];
+$diag_bank_rows = [];
+$diag_product_rows = [];
+$diag_error = '';
 try {
     $stmt = $pdo->query("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
         FROM transactions WHERE status = 'approved' GROUP BY bank");
-    foreach ($stmt->fetchAll() as $r) {
-        $k = strtolower(trim((string)$r['bank']));
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) {
+        $bankVal = $r['bank'] ?? $r['Bank'] ?? '';
+        $k = strtolower(trim((string)$bankVal));
         if ($k === '') continue;
-        $total_in_bank[$k] = (float)$r['ti'];
-        $total_out_bank[$k] = (float)$r['to'];
+        $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
+        $to = (float)($r['to'] ?? $r['TO'] ?? 0);
+        $total_in_bank[$k] = $ti;
+        $total_out_bank[$k] = $to;
+        $diag_bank_rows[$k] = ['in' => $ti, 'out' => $to];
     }
-} catch (Throwable $e) {}
+} catch (Throwable $e) {
+    $diag_error = $e->getMessage();
+}
 try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
         FROM transactions WHERE status = 'approved' GROUP BY product");
-    foreach ($stmt->fetchAll() as $r) {
-        $k = strtolower(trim((string)$r['product']));
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) {
+        $prodVal = $r['product'] ?? $r['Product'] ?? '';
+        $k = strtolower(trim((string)$prodVal));
         if ($k === '') continue;
-        $total_in_product[$k] = (float)$r['ti'];
-        $total_out_product[$k] = (float)$r['to'];
+        $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
+        $to = (float)($r['to'] ?? $r['TO'] ?? 0);
+        $total_in_product[$k] = $ti;
+        $total_out_product[$k] = $to;
+        $diag_product_rows[$k] = ['in' => $ti, 'out' => $to];
     }
-} catch (Throwable $e) {}
+} catch (Throwable $e) {
+    if (empty($diag_error)) $diag_error = $e->getMessage();
+}
 
-// 用于提示：是否有已审核且填写了银行/产品的流水
+// 诊断：已审核流水数、其中填写了银行/产品的笔数
+$cnt_approved = 0;
 $cnt_bank = 0;
 $cnt_product = 0;
 try {
-    $cnt_bank = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''")->fetchColumn();
-    $cnt_product = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND TRIM(product) != ''")->fetchColumn();
+    $cnt_approved = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved'")->fetchColumn();
+    $cnt_bank = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND bank IS NOT NULL AND bank != '' AND TRIM(bank) != ''")->fetchColumn();
+    $cnt_product = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'approved' AND product IS NOT NULL AND product != '' AND TRIM(product) != ''")->fetchColumn();
 } catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
@@ -178,9 +197,13 @@ try {
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
-                <?php if ($cnt_bank === 0 && $cnt_product === 0): ?>
-                <div class="alert" style="background:#f0f4f8;color:#555;">当前没有任何「已审核」且填写了 bank / game 的流水，因此 Balance Now 会与 Starting Balance 相同。记流水时请选择银行和产品，并确保流水已批准。</div>
+                <?php if (!empty($diag_error)): ?>
+                <div class="alert alert-error">汇总流水时出错：<?= htmlspecialchars($diag_error) ?></div>
                 <?php endif; ?>
+                <div class="alert" style="background:#f0f4f8;color:#555;font-size:13px;">
+                    <strong>In/Out 说明：</strong>已审核流水共 <strong><?= (int)$cnt_approved ?></strong> 笔，其中填写了<strong>银行</strong>的有 <strong><?= (int)$cnt_bank ?></strong> 笔、<strong>产品</strong>的有 <strong><?= (int)$cnt_product ?></strong> 笔。
+                    <?php if ($cnt_bank === 0 && $cnt_product === 0): ?>若 In/Out 一直为 0，请到「<a href="transaction_create.php">记一笔流水</a>」保存时<strong>务必选择 bank 和 产品/平台</strong>，并到「<a href="admin_approvals.php">待批准</a>」或流水记录里确保状态为<strong>已批准</strong>。<?php endif; ?>
+                </div>
 
                 <div class="card">
                     <h3>银行/渠道</h3>
