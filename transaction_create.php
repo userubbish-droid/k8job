@@ -10,9 +10,9 @@ $submitted_status = '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
-    $can_edit_dt = $is_admin && !empty($_POST['edit_dt']);
-    $day     = $can_edit_dt ? trim($_POST['day'] ?? '') : date('Y-m-d');
-    $timeRaw = $can_edit_dt ? trim($_POST['time'] ?? '00:00') : date('H:i');
+    $can_edit_dt = $is_admin ? !empty($_POST['edit_dt']) : ($_SERVER['REQUEST_METHOD'] === 'POST');
+    $day     = $can_edit_dt && isset($_POST['day']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', trim($_POST['day'] ?? '')) ? trim($_POST['day']) : date('Y-m-d');
+    $timeRaw = $can_edit_dt && isset($_POST['time']) ? trim($_POST['time'] ?? '00:00') : date('H:i');
     $time    = (strlen($timeRaw) === 5 && preg_match('/^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/', $timeRaw)) ? $timeRaw . ':00' : ($timeRaw ?: '00:00:00');
     $mode    = trim($_POST['mode'] ?? '');
     $code    = trim($_POST['code'] ?? '');
@@ -191,6 +191,15 @@ if ($is_admin) {
                 </div>
             </div>
             <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。可输入数字如 1513 自动变为 15:13。</p>
+        </div>
+        <?php else: ?>
+        <div class="form-section">
+            <div class="form-section-title">日期 / 时间</div>
+            <div class="form-row-2">
+                <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>" required></div>
+                <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13" required></div>
+            </div>
+            <p class="form-hint" style="margin-top:4px;">可输入数字如 1513 自动变为 15:13。</p>
         </div>
         <?php endif; ?>
 
