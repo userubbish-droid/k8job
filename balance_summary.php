@@ -25,7 +25,7 @@ $by_product = [];
 $initial_bank = [];
 $initial_product = [];
 
-// Statement 的 Starting Balance = 区间前一天收盘的 Balance Now
+// Starting Balance = 区间开始日的前一日 23:59:59 时「银行与产品」的 Balance（即当日收盘余额），本页从 00:00:01 起以该数为基础
 $cum_in_bank = [];
 $cum_out_bank = [];
 $cum_in_product = [];
@@ -118,7 +118,7 @@ foreach ($by_product as $r) {
                     <h2>statement</h2>
                     <p class="breadcrumb">
                         <a href="dashboard.php">首页</a><span>·</span>
-                        Starting Balance = 前一天的 Balance Now；本页 <strong>Balance</strong> = 当日收盘余额，与「银行与产品」页当日的 Balance Now 一致
+                        Starting Balance = 区间开始日前一日 <strong>23:59:59</strong> 时「银行与产品」的 Balance；本页从 <strong>00:00:01</strong> 起以该数为基础，再累加区间内 In/Out 得 Balance
                     </p>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -211,7 +211,7 @@ foreach ($by_product as $r) {
                             </table>
                         </div>
                     </div>
-                    <p class="form-hint" style="margin-top:12px;">Starting Balance = 前一天收盘的 Balance Now。本页 <strong>Balance</strong> = 当日收盘余额，即「银行与产品」里该日的 Balance Now（Starting Balance + 累计入 − 累计出）。产品 In=－、Out=＋。</p>
+                    <p class="form-hint" style="margin-top:12px;">Starting Balance = 区间开始日前一日 <strong>23:59:59</strong> 时「银行与产品」的 Balance，本页从 <strong>00:00:01</strong> 起以该数为基础；Bank：Balance = Starting + In − Out；产品 In=－、Out=＋。</p>
                 </div>
             </div>
         </main>
