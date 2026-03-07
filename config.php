@@ -1,4 +1,7 @@
 <?php
+// 使用马来西亚时间 (UTC+8)
+date_default_timezone_set('Asia/Kuala_Lumpur');
+
 // Hostinger MySQL 配置
 $host = 'localhost';
 $db   = 'u870568714_K8win96';
