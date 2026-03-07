@@ -111,8 +111,9 @@ try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
     $balance_adjust_ok = true;
     foreach ($rows as $r) {
-        if ($r['adjust_type'] === 'bank') $balance_bank[$r['name']] = (float)$r['initial_balance'];
-        else $balance_product[$r['name']] = (float)$r['initial_balance'];
+        $k = trim((string)$r['name']);
+        if ($r['adjust_type'] === 'bank') $balance_bank[$k] = (float)$r['initial_balance'];
+        else $balance_product[$k] = (float)$r['initial_balance'];
     }
 } catch (Throwable $e) {
     $balance_bank = [];
@@ -125,23 +126,29 @@ $total_out_bank = [];
 $total_in_product = [];
 $total_out_product = [];
 try {
-    $stmt = $pdo->query("SELECT COALESCE(bank, '—') AS bank,
+    $stmt = $pdo->query("SELECT COALESCE(TRIM(bank), '—') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved' GROUP BY bank");
+        FROM transactions WHERE status = 'approved'
+        GROUP BY COALESCE(TRIM(bank), '—')");
     foreach ($stmt->fetchAll() as $r) {
-        $total_in_bank[$r['bank']] = (float)$r['ti'];
-        $total_out_bank[$r['bank']] = (float)$r['to'];
+        $k = trim((string)$r['bank']);
+        if ($k === '') $k = '—';
+        $total_in_bank[$k] = (float)$r['ti'];
+        $total_out_bank[$k] = (float)$r['to'];
     }
 } catch (Throwable $e) {}
 try {
-    $stmt = $pdo->query("SELECT COALESCE(product, '—') AS product,
+    $stmt = $pdo->query("SELECT COALESCE(TRIM(product), '—') AS product,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE status = 'approved' GROUP BY product");
+        FROM transactions WHERE status = 'approved'
+        GROUP BY COALESCE(TRIM(product), '—')");
     foreach ($stmt->fetchAll() as $r) {
-        $total_in_product[$r['product']] = (float)$r['ti'];
-        $total_out_product[$r['product']] = (float)$r['to'];
+        $k = trim((string)$r['product']);
+        if ($k === '') $k = '—';
+        $total_in_product[$k] = (float)$r['ti'];
+        $total_out_product[$k] = (float)$r['to'];
     }
 } catch (Throwable $e) {}
 ?>
@@ -195,7 +202,7 @@ try {
                         <tbody>
                             <?php
                             foreach ($banks as $b):
-                                $bname = $b['name'];
+                                $bname = trim((string)$b['name']);
                                 $cur = $balance_bank[$bname] ?? null;
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_bank[$bname] ?? 0;
@@ -233,7 +240,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="8">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 累计 deposit − 累计 withdraw，由系统按流水自动计算，不可手动修改。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 累计 deposit − 累计 withdraw（仅统计<strong>已审核</strong>流水），由系统自动计算。若暂无已审核流水则与 Starting Balance 相同。</p>
                 </div>
 
                 <div class="card">
@@ -266,7 +273,7 @@ try {
                         <tbody>
                             <?php
                             foreach ($products as $p):
-                                $pname = $p['name'];
+                                $pname = trim((string)$p['name']);
                                 $cur = $balance_product[$pname] ?? null;
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pname] ?? 0;
@@ -304,7 +311,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="8">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 累计 deposit − 累计 withdraw，由系统按流水自动计算，不可手动修改。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。Balance Now = Starting Balance + 累计 deposit − 累计 withdraw（仅统计<strong>已审核</strong>流水），由系统自动计算。若暂无已审核流水则与 Starting Balance 相同。</p>
                 </div>
             </div>
         </main>
