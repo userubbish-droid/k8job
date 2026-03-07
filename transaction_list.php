@@ -4,7 +4,7 @@ require 'auth.php';
 require_permission('transaction_list');
 $sidebar_current = 'transaction_list';
 
-$day_from = $_GET['day_from'] ?? date('Y-m-01');
+$day_from = $_GET['day_from'] ?? date('Y-m-d');
 $day_to   = $_GET['day_to'] ?? date('Y-m-d');
 $mode     = $_GET['mode'] ?? '';
 $code     = trim($_GET['code'] ?? '');

@@ -33,10 +33,13 @@ if ($is_admin && $_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$yesterday = date('Y-m-d', strtotime($today . ' -1 day'));
 $by_bank = [];
 $by_product = [];
 $initial_bank = [];
 $initial_product = [];
+$yesterday_closing_bank = [];
+$yesterday_closing_product = [];
 
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
@@ -59,6 +62,24 @@ try {
 } catch (Throwable $e) { $by_product = []; }
 
 try {
+    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS closing
+        FROM transactions WHERE day = ? AND status = 'approved'
+        GROUP BY bank");
+    $stmt->execute([$yesterday]);
+    foreach ($stmt->fetchAll() as $r) { $yesterday_closing_bank[$r['bank']] = (float)$r['closing']; }
+} catch (Throwable $e) {}
+
+try {
+    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS closing
+        FROM transactions WHERE day = ? AND status = 'approved'
+        GROUP BY product");
+    $stmt->execute([$yesterday]);
+    foreach ($stmt->fetchAll() as $r) { $yesterday_closing_product[$r['product']] = (float)$r['closing']; }
+} catch (Throwable $e) {}
+
+try {
     $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
     foreach ($rows as $r) {
         if ($r['adjust_type'] === 'bank') $initial_bank[$r['name']] = (float)$r['initial_balance'];
@@ -74,7 +95,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>余额汇总 - 算账网</title>
+    <title>statement - 算账网</title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>
@@ -83,10 +104,10 @@ try {
         <main class="dashboard-main">
             <div class="page-wrap" style="max-width: 100%;">
                 <div class="page-header">
-                    <h2>余额汇总</h2>
+                    <h2>statement</h2>
                     <p class="breadcrumb">
                         <a href="dashboard.php">首页</a><span>·</span>
-                        银行与产品：余额 = 初始余额 + 入账 − 出账（仅今日流水）
+                        初始余额 = 昨日余额；今日余额 = 初始 + 入账 − 出账
                     </p>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -110,7 +131,7 @@ try {
                                         $name = $r['bank'] ?? '—';
                                         $in = (float)($r['total_in'] ?? 0);
                                         $out = (float)($r['total_out'] ?? 0);
-                                        $init = $initial_bank[$name] ?? 0;
+                                        $init = isset($initial_bank[$name]) ? $initial_bank[$name] : ($yesterday_closing_bank[$name] ?? 0);
                                         $balance = $init + $in - $out;
                                     ?>
                                     <tr>
@@ -180,7 +201,7 @@ try {
                             </table>
                         </div>
                     </div>
-                    <?php if ($is_admin): ?><p class="form-hint" style="margin-top:12px;">说明：初始余额由管理员在表中填写（例如银行目前 5000，顾客今日进 300、出 400，则余额 = 5000 + 300 − 400 = 4900）。入账/出账为今日已批准流水汇总。</p><?php endif; ?>
+                    <?php if ($is_admin): ?><p class="form-hint" style="margin-top:12px;">说明：初始余额默认取昨日余额；管理员可改。今日余额 = 初始 + 今日入账 − 今日出账。</p><?php endif; ?>
                 </div>
             </div>
         </main>

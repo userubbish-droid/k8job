@@ -18,12 +18,11 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     <?php if (has_permission('rebate')): ?><a href="rebate.php" class="nav-item <?= $sidebar_current === 'rebate' ? 'primary' : '' ?>"><span class="nav-icon"></span>返点 Rebate</a><?php endif; ?>
     <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item <?= $sidebar_current === 'customers' ? 'primary' : '' ?>"><span class="nav-icon"></span>顾客列表</a><?php endif; ?>
     <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item <?= $sidebar_current === 'product_library' ? 'primary' : '' ?>"><span class="nav-icon"></span>产品账号</a><?php endif; ?>
-    <a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>余额汇总</a>
+    <a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>statement</a>
     <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item <?= $sidebar_current === 'customer_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>新增顾客</a><?php endif; ?>
     <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>账号管理</a>
-        <a href="admin_banks.php" class="nav-item <?= $sidebar_current === 'admin_banks' ? 'primary' : '' ?>"><span class="nav-icon"></span>银行/渠道</a>
-        <a href="admin_products.php" class="nav-item <?= $sidebar_current === 'admin_products' ? 'primary' : '' ?>"><span class="nav-icon"></span>产品管理</a>
+        <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>银行与产品</a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span>员工权限</a>
     <?php endif; ?>
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>退出登录</a>
