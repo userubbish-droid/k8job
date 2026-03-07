@@ -68,12 +68,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $product_name = trim($_POST['product_name'] ?? '');
     $account = trim($_POST['account'] ?? '');
     $password = trim($_POST['password'] ?? '');
+    if ($password === '') $password = 'Aaaa8888';
     if ($product_name === '') {
         $err = '请选择产品。';
     } else {
         try {
             $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (customer_id, product_name, account, password) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$id, $product_name, $account ?: null, $password ?: null]);
+            $stmt->execute([$id, $product_name, $account ?: null, $password]);
             $msg = '已添加产品账号。';
             header("Location: customer_edit.php?id=$id&msg=1");
             exit;
@@ -230,7 +231,7 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                 <tr>
                     <td><?= htmlspecialchars($pa['product_name']) ?></td>
                     <td><?= htmlspecialchars($pa['account'] ?? '') ?></td>
-                    <td><?= $pa['password'] !== '' && $pa['password'] !== null ? '••••••' : '—' ?></td>
+                    <td><?= htmlspecialchars(($pa['password'] ?? '') !== '' ? $pa['password'] : '—') ?></td>
                     <td>
                         <form method="post" class="inline" onsubmit="return confirm('确定删除这条产品账号？');">
                             <input type="hidden" name="action" value="del_product">

@@ -30,12 +30,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $product_name = trim($_POST['product_name'] ?? '');
     $account = trim($_POST['account'] ?? '');
     $password = trim($_POST['password'] ?? '');
+    if ($password === '') $password = 'Aaaa8888';
     if ($customer_id <= 0 || $product_name === '') {
         $err = '请选择顾客和产品。';
     } else {
         try {
             $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (customer_id, product_name, account, password) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$customer_id, $product_name, $account ?: null, $password ?: null]);
+            $stmt->execute([$customer_id, $product_name, $account ?: null, $password]);
             $msg = '已添加。';
             header("Location: product_library.php?msg=1");
             exit;
@@ -143,7 +144,7 @@ try {
                         </div>
                         <div class="form-group" style="margin-bottom:0;">
                             <label>密码</label>
-                            <input name="password" type="password" class="form-control" placeholder="密码">
+                            <input name="password" type="text" class="form-control" placeholder="不填则 Aaaa8888">
                         </div>
                         <div class="form-group" style="margin-bottom:0;">
                             <button type="submit" class="btn btn-primary btn-sm">添加</button>
@@ -176,7 +177,7 @@ try {
                             $cell = $by_code[$code][$p] ?? null;
                             if ($cell && (($cell['account'] ?? '') !== '' || ($cell['password'] ?? '') !== '')):
                                 $acc = htmlspecialchars($cell['account'] ?? '');
-                                $pwd = ($cell['password'] ?? '') !== '' ? '••••••' : '—';
+                                $pwd = ($cell['password'] ?? '') !== '' ? htmlspecialchars($cell['password']) : '—';
                             ?>
                             <div class="id">id：<?= $acc ?: '—' ?></div>
                             <div class="ps">ps：<?= $pwd ?></div>
