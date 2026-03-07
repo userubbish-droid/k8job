@@ -99,10 +99,10 @@ $balance_bank = [];
 $balance_product = [];
 $balance_adjust_ok = false;
 try {
-    $banks = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM banks ORDER BY sort_order DESC, name ASC")->fetchAll();
+    $banks = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM banks ORDER BY sort_order ASC, name ASC")->fetchAll();
 } catch (Throwable $e) {}
 try {
-    $products = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM products ORDER BY sort_order DESC, name ASC")->fetchAll();
+    $products = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM products ORDER BY sort_order ASC, name ASC")->fetchAll();
 } catch (Throwable $e) {}
 try {
     _ensure_balance_adjust_table($pdo);

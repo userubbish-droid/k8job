@@ -85,10 +85,10 @@ try {
     $customers = [];
 }
 try {
-    $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $banks = []; }
 try {
-    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $products = []; }
 if ($is_admin) {
     if (!$banks) $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
@@ -153,7 +153,7 @@ if ($product_other !== '') $product = '其他';
             </label>
             <div id="dt_box" style="display:none;">
                 <input type="date" name="day" id="day" value="<?= htmlspecialchars($day) ?>" style="margin-top:6px;">
-                <input type="text" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" placeholder="如 14:30 (24小时)" style="margin-top:6px;">
+                <input type="text" name="time" id="time" value="<?= htmlspecialchars(substr($time,0,5)) ?>" placeholder="如 1513 或 14:30" maxlength="5" style="margin-top:6px;">
             </div>
         <?php else: ?>
             <input type="text" value="<?= htmlspecialchars($day . ' ' . $time) ?>" readonly>
@@ -218,6 +218,29 @@ if ($product_other !== '') $product = '其他';
     </p>
     <?php if ($is_admin): ?>
     <script>
+        (function(){
+            var timeEl = document.getElementById('time');
+            if (timeEl) {
+                function fmt() {
+                    var v = (timeEl.value || '').replace(/\D/g, '');
+                    if (v.length >= 2) {
+                        var h = v.substr(0, 2);
+                        if (parseInt(h, 10) > 23) h = '23';
+                        if (v.length === 2) timeEl.value = h + ':';
+                        else if (v.length === 3) timeEl.value = h + ':' + v.substr(2, 1);
+                        else timeEl.value = h + ':' + v.substr(2, 2);
+                    } else timeEl.value = v;
+                }
+                timeEl.addEventListener('input', fmt);
+                timeEl.addEventListener('blur', function(){
+                    var v = (timeEl.value || '').replace(/\D/g, '');
+                    if (v.length >= 2) {
+                        var h = Math.min(23, parseInt(v.substr(0, 2), 10) || 0), m = Math.min(59, parseInt(v.length >= 4 ? v.substr(2, 2) : (v.substr(2, 2) || '0'), 10) || 0);
+                        timeEl.value = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+                    }
+                });
+            }
+        })();
         function toggleOther(selId, inputId) {
             var sel = document.getElementById(selId);
             var inp = document.getElementById(inputId);

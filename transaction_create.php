@@ -102,12 +102,12 @@ try {
     $customers = [];
 }
 try {
-    $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $banks = [];
 }
 try {
-    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order DESC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $products = [];
 }
@@ -187,10 +187,10 @@ if ($is_admin) {
             <div id="dt_box" style="display:none;">
                 <div class="form-row-2">
                     <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
-                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 14:30" pattern="^([0-1]?[0-9]|2[0-3]):[0-5][0-9](:[0-5][0-9])?$" title="24小时制，如 09:00 或 23:45"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
                 </div>
             </div>
-            <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。时间为24小时制（如 14:30）。</p>
+            <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。可输入数字如 1513 自动变为 15:13。</p>
         </div>
         <?php endif; ?>
 
@@ -307,6 +307,32 @@ if ($is_admin) {
             if (modeEl) modeEl.addEventListener('change', updateWithdrawCustomer);
             if (codeEl) codeEl.addEventListener('change', updateWithdrawCustomer);
             updateWithdrawCustomer();
+        })();
+        (function(){
+            var timeEl = document.getElementById('time');
+            if (!timeEl) return;
+            function formatTimeInput() {
+                var v = (timeEl.value || '').replace(/\D/g, '');
+                if (v.length >= 2) {
+                    var h = v.substr(0, 2);
+                    if (parseInt(h, 10) > 23) h = '23';
+                    if (v.length === 2) timeEl.value = h + ':';
+                    else if (v.length === 3) timeEl.value = h + ':' + v.substr(2, 1);
+                    else timeEl.value = h + ':' + v.substr(2, 2);
+                } else {
+                    timeEl.value = v;
+                }
+            }
+            timeEl.addEventListener('input', formatTimeInput);
+            timeEl.addEventListener('blur', function(){
+                var v = (timeEl.value || '').replace(/\D/g, '');
+                if (v.length === 3) v = v.substr(0, 2) + '0' + v.substr(2, 1);
+                if (v.length >= 2) {
+                    var h = Math.min(23, parseInt(v.substr(0, 2), 10) || 0);
+                    var m = Math.min(59, parseInt(v.length >= 4 ? v.substr(2, 2) : (v.substr(2, 2) || '0'), 10) || 0);
+                    timeEl.value = (h < 10 ? '0' : '') + h + ':' + (m < 10 ? '0' : '') + m;
+                }
+            });
         })();
         <?php if ($is_admin): ?>
         function toggleOther(selId, inputId) {
