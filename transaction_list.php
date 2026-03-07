@@ -244,11 +244,16 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             </tr>
         </thead>
         <tbody>
-            <?php foreach ($rows as $r): ?>
+            <?php foreach ($rows as $r):
+                $rmk = trim($r['remark'] ?? '');
+                $display_mode = $r['mode'];
+                if ($rmk === '产品加额') $display_mode = 'topup';
+                elseif ($rmk !== '' && (strpos($rmk, '转至 ') === 0 || strpos($rmk, '来自 ') === 0)) $display_mode = 'contra';
+            ?>
             <tr>
                 <td><?= htmlspecialchars($r['day']) ?></td>
                 <td><?= htmlspecialchars($r['time']) ?></td>
-                <td><?= htmlspecialchars($r['mode']) ?></td>
+                <td><?= htmlspecialchars($display_mode) ?></td>
                 <td><?= htmlspecialchars($r['code'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['bank'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['product'] ?? '') ?></td>

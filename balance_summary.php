@@ -20,14 +20,17 @@ $cum_out_bank = [];
 $cum_in_product = [];
 $cum_out_product = [];
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
+    $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS to
-        FROM transactions WHERE day < ? AND status = 'approved' GROUP BY bank");
+        FROM transactions WHERE day < ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
     $stmt->execute([$day]);
     foreach ($stmt->fetchAll() as $r) {
-        $cum_in_bank[$r['bank']] = (float)$r['ti'];
-        $cum_out_bank[$r['bank']] = (float)$r['to'];
+        $b = trim((string)$r['bank']);
+        if ($b !== '') {
+            $cum_in_bank[$b] = (float)$r['ti'];
+            $cum_out_bank[$b] = (float)$r['to'];
+        }
     }
 } catch (Throwable $e) {}
 try {
@@ -43,10 +46,10 @@ try {
 } catch (Throwable $e) {}
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(bank, '—') AS bank,
+    $stmt = $pdo->prepare("SELECT bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE day = ? AND status = 'approved'
+        FROM transactions WHERE day = ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''
         GROUP BY bank ORDER BY 2 + 3 DESC");
     $stmt->execute([$day]);
     $by_bank = $stmt->fetchAll();
@@ -70,7 +73,7 @@ try {
         if ($r['adjust_type'] === 'bank') {
             $initial_bank[$name] = $base + ($cum_in_bank[$name] ?? 0) - ($cum_out_bank[$name] ?? 0);
         } else {
-            $initial_product[$name] = $base + ($cum_in_product[$name] ?? 0) - ($cum_out_product[$name] ?? 0);
+            $initial_product[$name] = $base - ($cum_in_product[$name] ?? 0) + ($cum_out_product[$name] ?? 0);
         }
     }
 } catch (Throwable $e) {
@@ -84,7 +87,7 @@ foreach ($by_bank as $r) {
 }
 foreach ($by_product as $r) {
     $name = $r['product'] ?? '—';
-    if (!isset($initial_product[$name])) $initial_product[$name] = ($cum_in_product[$name] ?? 0) - ($cum_out_product[$name] ?? 0);
+    if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$name] ?? 0) + ($cum_out_product[$name] ?? 0);
 }
 ?>
 <!DOCTYPE html>
@@ -171,7 +174,7 @@ foreach ($by_product as $r) {
                                         $in = (float)($r['total_in'] ?? 0);
                                         $out = (float)($r['total_out'] ?? 0);
                                         $init = $initial_product[$name] ?? 0;
-                                        $balance = $init + $in - $out;
+                                        $balance = $init - $in + $out;
                                     ?>
                                     <tr>
                                         <td><?= htmlspecialchars($name) ?></td>
