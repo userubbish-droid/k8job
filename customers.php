@@ -36,7 +36,11 @@ function customer_regular_tier($balance) {
 
 $summary = ['total' => 0, 'active' => 0];
 $rows = [];
-$balance_by_code = []; // code => balance (deposit - withdraw)
+$balance_by_code = [];
+$all_deposit_by_code = [];
+$all_withdraw_by_code = [];
+$month_deposit_by_code = [];
+$month_withdraw_by_code = [];
 try {
     $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
     $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
@@ -54,8 +58,35 @@ try {
     foreach ($stmt->fetchAll() as $r) {
         $balance_by_code[$r['code']] = (float) $r['balance'];
     }
+    $all_deposit_by_code = [];
+    $all_withdraw_by_code = [];
+    $month_deposit_by_code = [];
+    $month_withdraw_by_code = [];
+    $stmt = $pdo->query("SELECT code,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
+        FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+    foreach ($stmt->fetchAll() as $r) {
+        $all_deposit_by_code[$r['code']] = (float)$r['ad'];
+        $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
+    }
+    $month_start = date('Y-m-01');
+    $month_end = date('Y-m-t');
+    $stmt = $pdo->prepare("SELECT code,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
+        FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
+    $stmt->execute([$month_start, $month_end]);
+    foreach ($stmt->fetchAll() as $r) {
+        $month_deposit_by_code[$r['code']] = (float)$r['md'];
+        $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
+    }
     } catch (Throwable $e) {
     $rows = [];
+    $all_deposit_by_code = [];
+    $all_withdraw_by_code = [];
+    $month_deposit_by_code = [];
+    $month_withdraw_by_code = [];
     $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。') . ' (' . $e->getMessage() . ')';
 }
 ?>
@@ -95,7 +126,12 @@ try {
         <div class="card" style="overflow-x: auto;">
             <h3>列表</h3>
             <?php if ($is_admin): ?>
-            <p style="margin-bottom:10px;"><button type="button" class="btn btn-sm btn-outline" id="toggle-created-by" aria-pressed="false">显示填写人</button></p>
+            <p style="margin-bottom:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <button type="button" class="btn btn-sm btn-outline" id="toggle-created-by" aria-pressed="false">显示填写人</button>
+                <button type="button" class="btn btn-sm btn-outline" id="toggle-contact" aria-pressed="false">隐藏 CONTACT</button>
+                <button type="button" class="btn btn-sm btn-outline" id="toggle-total-dp" aria-pressed="false">隐藏 Total DP</button>
+                <button type="button" class="btn btn-sm btn-outline" id="toggle-total-wd" aria-pressed="false">隐藏 Total WD</button>
+            </p>
             <?php endif; ?>
             <table class="data-table">
                 <thead>
@@ -103,8 +139,12 @@ try {
                         <th>CODE</th>
                         <th>REGISTER DATE</th>
                         <th>FULL NAME</th>
-                        <th>CONTACT</th>
+                        <th class="col-contact">CONTACT</th>
                         <th>BANK DETAILS</th>
+                        <th class="col-total-dp">Total DP</th>
+                        <th class="col-total-wd">Total WD</th>
+                        <th>deposit</th>
+                        <th>withdraw</th>
                         <th>REGULAR</th>
                         <th>REMARK</th>
                         <th>RECOMMEND</th>
@@ -113,14 +153,24 @@ try {
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($rows as $r): ?>
+                <?php foreach ($rows as $r):
+                    $code = $r['code'];
+                    $all_dp = $all_deposit_by_code[$code] ?? 0;
+                    $all_wd = $all_withdraw_by_code[$code] ?? 0;
+                    $mon_dp = $month_deposit_by_code[$code] ?? 0;
+                    $mon_wd = $month_withdraw_by_code[$code] ?? 0;
+                ?>
                     <tr>
-                        <td><a href="customer_edit.php?id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($r['code']) ?></a></td>
+                        <td><a href="customer_edit.php?id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($code) ?></a></td>
                         <td><?= htmlspecialchars($r['register_date'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['name'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($r['phone'] ?? '') ?></td>
+                        <td class="col-contact"><?= htmlspecialchars($r['phone'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
-                        <td><?= htmlspecialchars(customer_regular_tier($balance_by_code[$r['code']] ?? 0)) ?></td>
+                        <td class="col-total-dp num"><?= number_format($all_dp, 2) ?></td>
+                        <td class="col-total-wd num"><?= number_format($all_wd, 2) ?></td>
+                        <td class="num"><?= number_format($mon_dp, 2) ?></td>
+                        <td class="num"><?= number_format($mon_wd, 2) ?></td>
+                        <td><?= htmlspecialchars(customer_regular_tier($balance_by_code[$code] ?? 0)) ?></td>
                         <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['recommend'] ?? '') ?></td>
                         <?php if ($is_admin): ?><td class="col-created-by" style="display:none;"><?= htmlspecialchars($r['created_by_name'] ?? '—') ?></td><?php endif; ?>
@@ -137,7 +187,7 @@ try {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 10 : 9 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= $is_admin ? 14 : 12 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -147,16 +197,23 @@ try {
     </div>
     <script>
     (function(){
-        var btn = document.getElementById('toggle-created-by');
-        if (!btn) return;
-        var cells = document.querySelectorAll('.col-created-by');
-        btn.addEventListener('click', function(){
-            var show = btn.getAttribute('aria-pressed') === 'true';
-            show = !show;
-            btn.setAttribute('aria-pressed', show ? 'true' : 'false');
-            btn.textContent = show ? '隐藏填写人' : '显示填写人';
-            cells.forEach(function(el){ el.style.display = show ? '' : 'none'; });
-        });
+        function toggleCol(btnId, colClass, showText, hideText, columnStartsVisible) {
+            columnStartsVisible = columnStartsVisible !== false;
+            var btn = document.getElementById(btnId);
+            if (!btn) return;
+            var cells = document.querySelectorAll('th.' + colClass + ', td.' + colClass);
+            btn.addEventListener('click', function(){
+                var visible = columnStartsVisible ? (btn.getAttribute('aria-pressed') !== 'true') : (btn.getAttribute('aria-pressed') === 'true');
+                var newVisible = !visible;
+                btn.setAttribute('aria-pressed', newVisible ? (columnStartsVisible ? 'false' : 'true') : (columnStartsVisible ? 'true' : 'false'));
+                btn.textContent = newVisible ? (columnStartsVisible ? showText : hideText) : (columnStartsVisible ? hideText : showText);
+                cells.forEach(function(el){ el.style.display = newVisible ? '' : 'none'; });
+            });
+        }
+        toggleCol('toggle-created-by', 'col-created-by', '显示填写人', '隐藏填写人', false);
+        toggleCol('toggle-contact', 'col-contact', '显示 CONTACT', '隐藏 CONTACT', true);
+        toggleCol('toggle-total-dp', 'col-total-dp', '显示 Total DP', '隐藏 Total DP', true);
+        toggleCol('toggle-total-wd', 'col-total-wd', '显示 Total WD', '隐藏 Total WD', true);
     })();
     </script>
 </body>
