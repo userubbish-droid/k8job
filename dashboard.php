@@ -60,6 +60,38 @@ try {
 } catch (Throwable $e) {
     $db_error = $e->getMessage();
 }
+
+// 管理员：Telegram 通知测试（无需单独 test_telegram.php 页面）
+$telegram_test_result = '';
+if (($_SESSION['user_role'] ?? '') === 'admin' && isset($_GET['telegram_test'])) {
+    $token = $NOTIFY_TELEGRAM_BOT_TOKEN ?? '';
+    $chat_id = $NOTIFY_TELEGRAM_CHAT_ID ?? '';
+    if ($token !== '' && $chat_id !== '') {
+        $text = "🧪 测试消息。你的 K8 待审核通知已配置成功。";
+        $url = 'https://api.telegram.org/bot' . $token . '/sendMessage';
+        $payload = ['chat_id' => $chat_id, 'text' => $text, 'disable_web_page_preview' => true];
+        $post = http_build_query($payload);
+        if (function_exists('curl_init')) {
+            $ch = curl_init($url);
+            curl_setopt($ch, CURLOPT_POST, true);
+            curl_setopt($ch, CURLOPT_POSTFIELDS, $post);
+            curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/x-www-form-urlencoded']);
+            curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+            curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+            curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+            $raw = curl_exec($ch);
+            $err = curl_error($ch);
+            curl_close($ch);
+            $telegram_test_result = $err !== '' ? 'cURL 错误：' . $err : $raw;
+        } else {
+            $ctx = stream_context_create(['http' => ['method' => 'POST', 'header' => 'Content-Type: application/x-www-form-urlencoded', 'content' => $post, 'timeout' => 15]]);
+            $raw = @file_get_contents($url, false, $ctx);
+            $telegram_test_result = $raw !== false ? $raw : '请求失败（服务器可能无法访问 Telegram）';
+        }
+    } else {
+        $telegram_test_result = '未配置：请上传 notify_config.php 并填写 BOT TOKEN 与 CHAT ID。';
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -78,8 +110,25 @@ try {
                 <p class="welcome-role">
                     欢迎，<strong><?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></strong>
                     <span class="role-badge"><?= ($_SESSION['user_role'] ?? '') === 'admin' ? '管理员' : '员工' ?></span>
+                    <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
+                    <a href="dashboard.php?telegram_test=1" style="margin-left:12px; font-size:13px; color:var(--primary);">测试 Telegram 通知</a>
+                    <?php endif; ?>
                 </p>
             </div>
+
+            <?php if ($telegram_test_result !== ''): ?>
+            <div class="card" style="margin-bottom:16px;">
+                <h3 style="margin-top:0;">Telegram 测试结果</h3>
+                <?php if (strpos($telegram_test_result, '"ok":true') !== false): ?>
+                <p style="color:var(--success); margin:0 0 8px;">✓ 已发送测试消息，请查看 Telegram 是否收到。</p>
+                <?php elseif (strpos($telegram_test_result, '未配置') !== false): ?>
+                <p style="color:var(--danger); margin:0;"><?= htmlspecialchars($telegram_test_result) ?></p>
+                <?php else: ?>
+                <p style="color:#b45309; margin:0 0 8px;">API 返回：</p>
+                <pre style="background:#f8fafc; padding:10px; border-radius:8px; font-size:12px; overflow-x:auto; margin:0;"><?= htmlspecialchars($telegram_test_result) ?></pre>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
 
             <?php if ($db_error): ?>
                 <div class="card alert-error">
