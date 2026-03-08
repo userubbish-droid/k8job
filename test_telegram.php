@@ -60,6 +60,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' || isset($_GET['send'])) {
 }
 
 $has_config = !empty($NOTIFY_TELEGRAM_BOT_TOKEN) && !empty($NOTIFY_TELEGRAM_CHAT_ID);
+$config_file_loaded = defined('NOTIFY_CONFIG_LOADED') && NOTIFY_CONFIG_LOADED;
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -83,7 +84,12 @@ $has_config = !empty($NOTIFY_TELEGRAM_BOT_TOKEN) && !empty($NOTIFY_TELEGRAM_CHAT
     <div class="card">
         <h1>Telegram 通知测试</h1>
         <?php if (!$has_config): ?>
-            <p class="err">未检测到配置。请确认 <code>notify_config.php</code> 已创建，并填写了 BOT TOKEN 和 CHAT ID。</p>
+            <?php if (!$config_file_loaded): ?>
+                <p class="err">未检测到配置：<strong>未找到或无法加载 <code>notify_config.php</code></strong>。</p>
+                <p>请将本地的 <code>notify_config.php</code> 上传到<strong>服务器上与 <code>config.php</code>、<code>test_telegram.php</code> 相同的目录</strong>（例如 cPanel 里和 dashboard.php 同一层），该文件不在 Git 里，需手动上传。</p>
+            <?php else: ?>
+                <p class="err">未检测到配置：<code>notify_config.php</code> 已加载，但 <strong>BOT TOKEN 或 CHAT ID 为空</strong>。请在文件中填写正确的值并保存。</p>
+            <?php endif; ?>
         <?php else: ?>
             <p>点击下方按钮会向你的 Telegram 发送一条<strong>测试消息</strong>。请查看手机/电脑 Telegram 是否收到。</p>
             <form method="post" style="margin-top:16px;">
