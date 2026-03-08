@@ -104,6 +104,9 @@ $config_file_loaded = defined('NOTIFY_CONFIG_LOADED') && NOTIFY_CONFIG_LOADED;
             <p class="ok">✓ 若 Telegram 已收到消息，说明配置正确。收不到请检查是否找对了对话（和你的 Bot 的私聊）。</p>
         <?php else: ?>
             <p class="err">若下面 JSON 里 "ok":false，请根据 "description" 排查（例如 chat_id 错误、未先给 Bot 发过消息等）。</p>
+            <?php if (is_string($result) && (strpos($result, '"error_code":404') !== false || strpos($result, 'Not Found') !== false)): ?>
+                <p class="err"><strong>提示：</strong> 返回 404 Not Found 多半是 <strong>BOT TOKEN 错误或已失效</strong>。请到 Telegram @BotFather → 你的 Bot → API Token 重新复制完整 token 到 <code>notify_config.php</code>。</p>
+            <?php endif; ?>
         <?php endif; ?>
         <pre><?= htmlspecialchars(is_string($result) ? $result : json_encode($result, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE)) ?></pre>
     </div>
