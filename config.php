@@ -26,9 +26,10 @@ try {
 }
 
 // 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
-$NOTIFY_TELEGRAM_BOT_TOKEN = '';
-$NOTIFY_TELEGRAM_CHAT_ID  = '';
-$NOTIFY_BASE_URL = '';  // 如 https://你的域名.com，用于通知里的链接
+$NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAH...';
+$NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';
+$NOTIFY_BASE_URL = 'https://k8wincs96.com';
+if (!defined('NOTIFY_CONFIG_LOADED')) define('NOTIFY_CONFIG_LOADED', true);
 if (file_exists(__DIR__ . '/notify_config.php')) {
     include __DIR__ . '/notify_config.php';
 }
