@@ -26,7 +26,7 @@ try {
 }
 
 // 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
-$NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAH...';
+$NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAHWcn815xZ-L4It23rwqMTbcO7G24AYwV4';
 $NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';
 $NOTIFY_BASE_URL = 'https://k8wincs96.com';
 if (!defined('NOTIFY_CONFIG_LOADED')) define('NOTIFY_CONFIG_LOADED', true);
