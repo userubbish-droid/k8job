@@ -135,7 +135,7 @@ if ($is_admin) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>记一笔流水 - 算账网</title>
+    <title>记一笔流水 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .form-section { margin-bottom: 20px; }

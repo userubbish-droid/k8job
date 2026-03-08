@@ -2,6 +2,9 @@
 // 使用马来西亚时间 (UTC+8)
 date_default_timezone_set('Asia/Kuala_Lumpur');
 
+// 浏览器标签标题后缀（可改为你的品牌名）
+if (!defined('SITE_TITLE')) define('SITE_TITLE', 'K8');
+
 // Hostinger MySQL 配置
 $host = 'localhost';
 $db   = 'u870568714_K8win96';

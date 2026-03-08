@@ -119,7 +119,7 @@ if ($product_other !== '') $product = '其他';
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>编辑流水 - 算账网</title>
+    <title>编辑流水 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <style>
         body { font-family: sans-serif; max-width: 520px; margin: 20px auto; padding: 0 16px; }
         h2 { margin-bottom: 12px; }

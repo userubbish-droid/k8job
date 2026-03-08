@@ -149,7 +149,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>流水记录 - 算账网</title>
+    <title>流水记录 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
 </head>
 <body>

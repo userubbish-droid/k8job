@@ -119,7 +119,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>返点 Rebate - 算账网</title>
+    <title>返点 Rebate - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
     .rebate-table th.num, .rebate-table td.num { text-align: right; }

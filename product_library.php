@@ -87,7 +87,7 @@ try {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>产品账号 - 算账网</title>
+    <title>产品账号 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .product-cell { font-size: 13px; white-space: nowrap; }

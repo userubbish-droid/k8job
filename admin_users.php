@@ -65,7 +65,7 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>用户管理 - 算账网</title>
+    <title>用户管理 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <style>
         body { font-family: sans-serif; margin: 20px; }
         .wrap { max-width: 920px; margin: 0 auto; }

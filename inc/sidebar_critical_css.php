@@ -1,7 +1,10 @@
 <?php
 // 所有带侧栏的页面在 <head> 中引入，保证左侧竖排导航一致显示
 $__css_mtime = @filemtime(__DIR__ . '/../style.css') ?: 0;
+$__base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/');
+$__base_prefix = $__base !== '' ? $__base . '/' : '';
 ?>
+<link rel="icon" href="<?= $__base_prefix ?>favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="style.css?v=<?= $__css_mtime ?>">
 <style>
 .dashboard-layout { display: flex !important; flex-direction: row !important; min-height: 100vh; }

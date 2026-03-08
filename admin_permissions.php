@@ -66,7 +66,7 @@ if ($selected_id > 0) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>权限设置 - 算账网</title>
+    <title>权限设置 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .perm-list { list-style: none; padding: 0; margin: 0; }

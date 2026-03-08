@@ -135,7 +135,7 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>编辑顾客 - <?= htmlspecialchars($row['code']) ?></title>
+    <title>编辑顾客 - <?= htmlspecialchars($row['code']) ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .add-product-row { display: grid; grid-template-columns: 1fr 1fr 1fr auto; gap: 12px; align-items: end; margin-top: 12px; }

@@ -44,7 +44,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>初始化账号 - 算账网</title>
+    <title>初始化账号 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <style>
         body { font-family: sans-serif; max-width: 520px; margin: 40px auto; padding: 0 16px; }
         h2 { margin: 0 0 10px; }
