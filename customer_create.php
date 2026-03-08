@@ -7,6 +7,21 @@ $sidebar_current = 'customer_create';
 $msg = '';
 $err = '';
 
+// 建议下一个客户代码：按现有 C001、C009 等递增，下一个为 C010
+$suggested_code = 'C001';
+try {
+    $stmt = $pdo->query("SELECT code FROM customers");
+    $max_num = 0;
+    while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+        $c = trim($row['code'] ?? '');
+        if (preg_match('/^C(\d+)$/i', $c, $m)) {
+            $n = (int) $m[1];
+            if ($n > $max_num) $max_num = $n;
+        }
+    }
+    $suggested_code = 'C' . sprintf('%03d', $max_num + 1);
+} catch (Throwable $e) {}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code = trim($_POST['code'] ?? '');
     $name = trim($_POST['name'] ?? '');
@@ -90,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <form method="post">
                 <div class="form-group">
                     <label>客户代码 *</label>
-                    <input name="code" class="form-control" required placeholder="例如 C001" value="<?= htmlspecialchars($_POST['code'] ?? '') ?>">
+                    <input name="code" class="form-control" required placeholder="<?= htmlspecialchars($suggested_code) ?>" value="<?= htmlspecialchars($_POST['code'] ?? $suggested_code) ?>">
                 </div>
                 <div class="form-group">
                     <label>姓名</label>
