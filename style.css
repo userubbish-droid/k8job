@@ -407,11 +407,11 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     flex-wrap: nowrap !important;
     width: 228px !important;
     min-width: 228px !important;
-    background: linear-gradient(180deg, #1e3a5f 0%, #1a3352 50%, #152a47 100%);
-    border-right: 1px solid rgba(0, 0, 0, 0.2);
+    background: linear-gradient(180deg, #5c6d82 0%, #516275 50%, #465869 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.1);
     padding: 0 0 20px;
     flex-shrink: 0;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.08);
 }
 .sidebar-profile {
     padding: 24px 20px 20px;
@@ -424,7 +424,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     width: 52px;
     height: 52px;
     border-radius: 50%;
-    background: rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.22);
     color: #fff;
     font-size: 20px;
     font-weight: 700;
@@ -441,11 +441,11 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 }
 .sidebar-role {
     font-size: 12px;
-    color: rgba(255, 255, 255, 0.65);
+    color: rgba(255, 255, 255, 0.7);
 }
 .sidebar-sep {
     height: 1px;
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(255, 255, 255, 0.15);
     margin: 0 16px 12px;
 }
 .dashboard-sidebar .nav-item {
@@ -456,7 +456,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     box-sizing: border-box;
     padding: 12px 20px;
     margin: 0 12px 6px 12px;
-    color: rgba(255, 255, 255, 0.85);
+    color: rgba(255, 255, 255, 0.9);
     text-decoration: none;
     font-size: 14px;
     border-radius: 8px;
@@ -469,15 +469,15 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .dashboard-sidebar .nav-item .nav-icon {
     width: 18px; height: 18px; margin-right: 12px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(255, 255, 255, 0.28);
     flex-shrink: 0;
 }
-.dashboard-sidebar .nav-item.primary .nav-icon { background: #3b82f6; }
-.dashboard-sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.dashboard-sidebar .nav-item.primary { background: #2563eb; color: #fff; font-weight: 600; border-left-color: #60a5fa; }
-.dashboard-sidebar .nav-item.primary .nav-icon { background: rgba(255,255,255,0.9); }
+.dashboard-sidebar .nav-item.primary .nav-icon { background: rgba(255,255,255,0.95); }
+.dashboard-sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.dashboard-sidebar .nav-item.primary { background: #4a6a8f; color: #fff; font-weight: 600; border-left-color: #7ba3c7; }
+.dashboard-sidebar .nav-item.primary .nav-icon { background: rgba(255,255,255,0.95); }
 .sidebar-drawer-header { display: none; }
-.sidebar-close { width: 36px; height: 36px; padding: 0; font-size: 24px; line-height: 1; border: none; background: transparent; color: rgba(255,255,255,0.8); cursor: pointer; border-radius: 8px; align-items: center; justify-content: center; }
+.sidebar-close { width: 36px; height: 36px; padding: 0; font-size: 24px; line-height: 1; border: none; background: transparent; color: rgba(255,255,255,0.85); cursor: pointer; border-radius: 8px; align-items: center; justify-content: center; }
 .sidebar-close:hover { background: rgba(255,255,255,0.15); color: #fff; }
 .sidebar-bell {
     position: fixed;
