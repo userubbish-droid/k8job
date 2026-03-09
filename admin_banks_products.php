@@ -63,18 +63,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$id]);
             $msg = '已更新状态。';
         } elseif ($action === 'do_transfer') {
+            if (empty($_POST['confirm_submit'])) throw new RuntimeException('请勾选「确认提交」后再提交。');
             $from_bank = trim($_POST['from_bank'] ?? '');
             $to_bank   = trim($_POST['to_bank'] ?? '');
             $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
+            $remark    = trim($_POST['transfer_remark'] ?? '');
+            $day_raw   = trim($_POST['transfer_day'] ?? '');
             if ($from_bank === '' || $to_bank === '' || $from_bank === $to_bank) throw new RuntimeException('请选择不同的转出、转入银行。');
             if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException('请输入正确金额。');
             $amount = (float)$amount;
-            $day = date('Y-m-d');
+            $day = preg_match('/^\d{4}-\d{2}-\d{2}$/', $day_raw) ? $day_raw : date('Y-m-d');
             $time = date('H:i:s');
             $uid = (int)($_SESSION['user_id'] ?? 0);
             $staff = (string)($_SESSION['user_name'] ?? $uid);
-            $remark_out = '转至 ' . $to_bank;
-            $remark_in  = '来自 ' . $from_bank;
+            $remark_out = $remark !== '' ? '转至 ' . $to_bank . ' ' . $remark : '转至 ' . $to_bank;
+            $remark_in  = $remark !== '' ? '来自 ' . $from_bank . ' ' . $remark : '来自 ' . $from_bank;
             try {
                 $cols = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
                 $vals = "?, ?, 'WITHDRAW', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
@@ -258,29 +261,53 @@ try {
                         银行/渠道
                         <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="显示添加表单">+</button>
                     </h3>
-                    <div class="bank-transfer-box" style="margin-bottom:16px; padding:12px 14px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
-                        <div style="font-weight:600; margin-bottom:8px; font-size:13px;">银行互转（contra）</div>
-                        <form method="post" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                    <div class="bank-transfer-box" style="margin-bottom:16px; padding:16px 18px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
+                        <div style="font-weight:600; margin-bottom:12px; font-size:13px;">银行互转（contra）</div>
+                        <form method="post" id="bank-contra-form" class="bank-contra-form">
                             <input type="hidden" name="action" value="do_transfer">
-                            <span style="font-size:13px;">从</span>
-                            <select name="from_bank" class="form-control" required style="width:auto; min-width:100px;">
-                                <option value="">— 转出 —</option>
-                                <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?>
-                                <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <span style="font-size:13px;">转</span>
-                            <input type="text" name="amount" class="form-control" placeholder="金额" inputmode="decimal" required style="width:90px;">
-                            <span style="font-size:13px;">至</span>
-                            <select name="to_bank" class="form-control" required style="width:auto; min-width:100px;">
-                                <option value="">— 转入 —</option>
-                                <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?>
-                                <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                            <button type="submit" class="btn btn-primary">确定</button>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="block" style="font-size:12px; color:var(--muted); margin-bottom:4px;">Type</label>
+                                <input type="text" class="form-control" value="CONTRA" readonly style="width:120px; background:#eee;" tabindex="-1">
+                            </div>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="block" style="font-size:12px; color:var(--muted); margin-bottom:4px;">Date</label>
+                                <input type="date" name="transfer_day" class="form-control" value="<?= date('Y-m-d') ?>" style="width:160px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="block" style="font-size:12px; color:var(--muted); margin-bottom:4px;">Account</label>
+                                <div style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
+                                    <select name="to_bank" id="contra-to-bank" class="form-control" required style="width:auto; min-width:140px;">
+                                        <option value="">— Select To Account —</option>
+                                        <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?>
+                                        <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <select name="from_bank" id="contra-from-bank" class="form-control" required style="width:auto; min-width:140px;">
+                                        <option value="">— Select From Account —</option>
+                                        <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?>
+                                        <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
+                                        <?php endforeach; ?>
+                                    </select>
+                                    <button type="button" class="btn btn-outline" id="contra-reverse" style="padding:8px 14px;">Reverse</button>
+                                </div>
+                            </div>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="block" style="font-size:12px; color:var(--muted); margin-bottom:4px;">Amount</label>
+                                <input type="text" name="amount" class="form-control" placeholder="金额" inputmode="decimal" required style="width:140px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label class="block" style="font-size:12px; color:var(--muted); margin-bottom:4px;">Remark</label>
+                                <input type="text" name="transfer_remark" class="form-control" placeholder="选填" style="max-width:280px;">
+                            </div>
+                            <div class="form-group" style="margin-bottom:12px;">
+                                <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:13px;">
+                                    <input type="checkbox" name="confirm_submit" value="1" required>
+                                    <span>确认提交</span>
+                                </label>
+                            </div>
+                            <button type="submit" class="btn btn-primary">Submit</button>
                         </form>
-                        <p class="form-hint" style="margin:8px 0 0; font-size:12px;">转出银行 − 金额，转入银行 + 金额，会记入流水（member 不可见）。</p>
+                        <p class="form-hint" style="margin:12px 0 0; font-size:12px;">转出银行 − 金额，转入银行 + 金额，会记入流水（member 不可见）。</p>
                     </div>
                     <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
@@ -478,6 +505,16 @@ try {
 
     <script>
     (function(){
+        var toSel = document.getElementById('contra-to-bank');
+        var fromSel = document.getElementById('contra-from-bank');
+        var revBtn = document.getElementById('contra-reverse');
+        if (toSel && fromSel && revBtn) {
+            revBtn.addEventListener('click', function(){
+                var t = toSel.value;
+                toSel.value = fromSel.value;
+                fromSel.value = t;
+            });
+        }
         document.querySelectorAll('.balance-cell-inline').forEach(function(cell){
             var btn = cell.querySelector('.js-balance-change');
             var form = cell.querySelector('.balance-inline-form');
