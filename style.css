@@ -285,6 +285,50 @@ textarea.form-control {
     margin-top: 4px;
 }
 
+/* 银行互转表单：紧凑标准尺寸 */
+.bank-contra-compact {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    background: rgba(248, 250, 252, 0.9);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 13px;
+}
+.bank-contra-title {
+    font-weight: 600;
+    font-size: 12px;
+    margin-bottom: 8px;
+    color: var(--text);
+}
+.bank-contra-form .bank-contra-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px 10px;
+    margin-bottom: 6px;
+}
+.bank-contra-form .bank-contra-row-footer { margin-bottom: 0; margin-top: 4px; }
+.bank-contra-label {
+    font-size: 11px;
+    color: var(--muted);
+    margin-right: 2px;
+}
+.bank-contra-input,
+.bank-contra-select {
+    padding: 4px 8px;
+    font-size: 12px;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    height: 28px;
+    min-width: 0;
+}
+.bank-contra-input[readonly] { background: #eee; width: 72px; }
+.bank-contra-input[type="date"] { width: 118px; }
+.bank-contra-select { min-width: 90px; max-width: 120px; }
+.bank-contra-form .btn-sm { padding: 4px 10px; font-size: 12px; }
+.bank-contra-check { font-size: 12px; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; }
+.bank-contra-hint { margin: 6px 0 0; font-size: 11px; color: var(--muted); }
+
 /* 筛选栏 */
 .filters-bar {
     background: #fff;
