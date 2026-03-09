@@ -18,6 +18,7 @@ function _ensure_balance_adjust_table(PDO $pdo) {
 
 $msg = '';
 $err = '';
+$open_notify_form = false;
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -119,16 +120,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'save_balance_notify') {
             $data_dir = __DIR__ . '/data';
             $config_path = $data_dir . '/balance_notify.json';
-            $bank_above = trim($_POST['bank_above'] ?? '');
-            $product_below = trim($_POST['product_below'] ?? '');
-            $bank_above_val = $bank_above === '' ? null : (is_numeric($bank_above) ? (float)$bank_above : null);
-            $product_below_val = $product_below === '' ? null : (is_numeric($product_below) ? (float)$product_below : null);
-            if ($bank_above !== '' && ($bank_above_val === null || $bank_above_val < 0)) throw new RuntimeException('银行「超过」请填有效数字或留空。');
-            if ($product_below !== '' && ($product_below_val === null || $product_below_val < 0)) throw new RuntimeException('产品「低于」请填有效数字或留空。');
+            $bank_arr = isset($_POST['bank']) && is_array($_POST['bank']) ? $_POST['bank'] : [];
+            $product_arr = isset($_POST['product']) && is_array($_POST['product']) ? $_POST['product'] : [];
+            $bank_cfg = [];
+            foreach ($bank_arr as $k => $v) {
+                $key = strtolower(trim((string)$k));
+                if ($key === '') continue;
+                $v = trim((string)$v);
+                if ($v === '') continue;
+                if (is_numeric($v) && (float)$v > 0) $bank_cfg[$key] = (float)$v;
+            }
+            $product_cfg = [];
+            foreach ($product_arr as $k => $v) {
+                $key = strtolower(trim((string)$k));
+                if ($key === '') continue;
+                $v = trim((string)$v);
+                if ($v === '') continue;
+                if (is_numeric($v) && (float)$v > 0) $product_cfg[$key] = (float)$v;
+            }
             if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
-            $data = ['bank_above' => $bank_above_val, 'product_below' => $product_below_val];
+            $data = ['bank' => $bank_cfg, 'product' => $product_cfg];
             if (@file_put_contents($config_path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) === false) throw new RuntimeException('无法写入 data/balance_notify.json。');
-            $msg = '余额通知阈值已保存。';
+            $msg = '余额通知阈值已保存（按银行/产品分别设置）。';
+            $open_notify_form = true;
         } elseif ($action === 'save_balance') {
             $type = $_POST['adjust_type'] ?? '';
             $name = trim($_POST['name'] ?? '');
@@ -324,21 +338,42 @@ try {
                         </form>
                         <p class="form-hint bank-contra-hint">转出 − 金额，转入 + 金额，记入流水（member 不可见）。</p>
                     </div>
-                    <div class="bank-contra-compact bank-notify-settings" style="margin-top:10px;">
-                        <div class="bank-contra-title">Telegram 余额通知</div>
-                        <form method="post" class="bank-contra-form">
-                            <input type="hidden" name="action" value="save_balance_notify">
-                            <div class="bank-contra-row">
-                                <span class="bank-contra-label">银行超过</span>
-                                <input type="text" name="bank_above" class="form-control bank-contra-input" placeholder="不通知留空" inputmode="decimal" value="<?= $balance_notify_cfg['bank_above'] !== null && $balance_notify_cfg['bank_above'] > 0 ? htmlspecialchars((string)$balance_notify_cfg['bank_above']) : '' ?>" style="width:88px;">
-                                <span class="bank-contra-label">通知</span>
-                                <span class="bank-contra-label">产品低于</span>
-                                <input type="text" name="product_below" class="form-control bank-contra-input" placeholder="不通知留空" inputmode="decimal" value="<?= $balance_notify_cfg['product_below'] !== null && $balance_notify_cfg['product_below'] > 0 ? htmlspecialchars((string)$balance_notify_cfg['product_below']) : '' ?>" style="width:88px;">
-                                <span class="bank-contra-label">通知</span>
-                                <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                    <div style="margin-top:10px;">
+                        <div class="bank-contra-title" style="display:flex;align-items:center;gap:8px;">
+                            Telegram 余额通知
+                            <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="balance-notify-wrap" aria-label="展开设置"><?= $open_notify_form ? '−' : '+' ?></button>
+                        </div>
+                        <div id="balance-notify-wrap" style="display:<?= $open_notify_form ? 'block' : 'none' ?>; margin-top:8px;">
+                            <div class="bank-contra-compact bank-notify-settings">
+                                <p class="form-hint bank-contra-hint" style="margin-bottom:10px;">银行：余额超过设定值即通知；产品：余额低于设定值即通知。留空=不通知。同项 24 小时内不重复。</p>
+                                <form method="post" class="bank-contra-form">
+                                    <input type="hidden" name="action" value="save_balance_notify">
+                                    <div class="balance-notify-grid">
+                                        <div class="balance-notify-group">
+                                            <span class="bank-contra-label">银行（超过即通知）</span>
+                                            <?php foreach ($banks as $b): $bname = trim((string)$b['name']); $bkey = strtolower($bname); $val = $balance_notify_cfg['bank'][$bkey] ?? ''; ?>
+                                            <div class="balance-notify-row">
+                                                <label class="balance-notify-name"><?= htmlspecialchars($bname) ?></label>
+                                                <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                            </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                        <div class="balance-notify-group">
+                                            <span class="bank-contra-label">产品（低于即通知）</span>
+                                            <?php foreach ($products as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
+                                            <div class="balance-notify-row">
+                                                <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
+                                                <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                            </div>
+                                            <?php endforeach; ?>
+                                        </div>
+                                    </div>
+                                    <div class="bank-contra-row bank-contra-row-footer" style="margin-top:10px;">
+                                        <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                                    </div>
+                                </form>
                             </div>
-                        </form>
-                        <p class="form-hint bank-contra-hint">打开本页时检查，超过/低于即 Telegram 通知；同项 24 小时内不重复。</p>
+                        </div>
                     </div>
                     <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
@@ -602,6 +637,11 @@ try {
     .balance-cell-inline .balance-inline-input { width: 72px; padding: 4px 6px; font-size: 0.9rem; text-align: right; }
     .transfer-cell-inline .transfer-inline-form { align-items: center; gap: 6px; vertical-align: middle; }
     .transfer-cell-inline .transfer-label { font-size: 13px; margin-right: 4px; }
+    .balance-notify-grid { display: flex; flex-wrap: wrap; gap: 20px 24px; }
+    .balance-notify-group { min-width: 180px; }
+    .balance-notify-group .bank-contra-label { display: block; margin-bottom: 6px; font-size: 12px; }
+    .balance-notify-row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; }
+    .balance-notify-name { min-width: 4em; font-size: 12px; margin: 0; }
     </style>
 </body>
 </html>
