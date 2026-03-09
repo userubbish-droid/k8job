@@ -222,6 +222,30 @@ try {
     if (empty($diag_error)) $diag_error = $e->getMessage();
 }
 
+// 余额阈值 Telegram 通知：银行超过设定 / 产品低于设定（隐藏设置见 admin_balance_notify.php）
+$bank_balances_for_notify = [];
+$product_balances_for_notify = [];
+foreach ($banks as $b) {
+    if ((int)($b['is_active'] ?? 1) !== 1) continue;
+    $bname = trim((string)$b['name']);
+    $bkey = strtolower($bname);
+    $start = (float)($balance_bank[$bkey] ?? 0);
+    $tin = (float)($total_in_bank[$bkey] ?? 0);
+    $tout = (float)($total_out_bank[$bkey] ?? 0);
+    $bank_balances_for_notify[$bname] = $start + $tin - $tout;
+}
+foreach ($products as $p) {
+    if ((int)($p['is_active'] ?? 1) !== 1) continue;
+    $pname = trim((string)$p['name']);
+    $pkey = strtolower($pname);
+    $start = (float)($balance_product[$pkey] ?? 0);
+    $tin = (float)($total_in_product[$pkey] ?? 0);
+    $tout = (float)($total_out_product[$pkey] ?? 0);
+    $product_balances_for_notify[$pname] = $start - $tin + $tout;
+}
+require_once __DIR__ . '/inc/balance_notify.php';
+check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
+
 // 仅当有待审核流水时显示提示
 $cnt_pending = 0;
 try {
@@ -376,7 +400,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="10">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。<a href="admin_balance_notify.php" style="margin-left:12px;font-size:11px;color:var(--muted);">余额通知阈值</a></p>
                 </div>
 
                 <div class="card">
