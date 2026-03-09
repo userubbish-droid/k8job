@@ -116,6 +116,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 throw $e;
             }
+        } elseif ($action === 'save_balance_notify') {
+            $data_dir = __DIR__ . '/data';
+            $config_path = $data_dir . '/balance_notify.json';
+            $bank_above = trim($_POST['bank_above'] ?? '');
+            $product_below = trim($_POST['product_below'] ?? '');
+            $bank_above_val = $bank_above === '' ? null : (is_numeric($bank_above) ? (float)$bank_above : null);
+            $product_below_val = $product_below === '' ? null : (is_numeric($product_below) ? (float)$product_below : null);
+            if ($bank_above !== '' && ($bank_above_val === null || $bank_above_val < 0)) throw new RuntimeException('银行「超过」请填有效数字或留空。');
+            if ($product_below !== '' && ($product_below_val === null || $product_below_val < 0)) throw new RuntimeException('产品「低于」请填有效数字或留空。');
+            if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
+            $data = ['bank_above' => $bank_above_val, 'product_below' => $product_below_val];
+            if (@file_put_contents($config_path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) === false) throw new RuntimeException('无法写入 data/balance_notify.json。');
+            $msg = '余额通知阈值已保存。';
         } elseif ($action === 'save_balance') {
             $type = $_POST['adjust_type'] ?? '';
             $name = trim($_POST['name'] ?? '');
@@ -245,6 +258,7 @@ foreach ($products as $p) {
 }
 require_once __DIR__ . '/inc/balance_notify.php';
 check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
+$balance_notify_cfg = balance_notify_get_config();
 
 // 仅当有待审核流水时显示提示
 $cnt_pending = 0;
@@ -309,6 +323,22 @@ try {
                             </div>
                         </form>
                         <p class="form-hint bank-contra-hint">转出 − 金额，转入 + 金额，记入流水（member 不可见）。</p>
+                    </div>
+                    <div class="bank-contra-compact bank-notify-settings" style="margin-top:10px;">
+                        <div class="bank-contra-title">Telegram 余额通知</div>
+                        <form method="post" class="bank-contra-form">
+                            <input type="hidden" name="action" value="save_balance_notify">
+                            <div class="bank-contra-row">
+                                <span class="bank-contra-label">银行超过</span>
+                                <input type="text" name="bank_above" class="form-control bank-contra-input" placeholder="不通知留空" inputmode="decimal" value="<?= $balance_notify_cfg['bank_above'] !== null && $balance_notify_cfg['bank_above'] > 0 ? htmlspecialchars((string)$balance_notify_cfg['bank_above']) : '' ?>" style="width:88px;">
+                                <span class="bank-contra-label">通知</span>
+                                <span class="bank-contra-label">产品低于</span>
+                                <input type="text" name="product_below" class="form-control bank-contra-input" placeholder="不通知留空" inputmode="decimal" value="<?= $balance_notify_cfg['product_below'] !== null && $balance_notify_cfg['product_below'] > 0 ? htmlspecialchars((string)$balance_notify_cfg['product_below']) : '' ?>" style="width:88px;">
+                                <span class="bank-contra-label">通知</span>
+                                <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                            </div>
+                        </form>
+                        <p class="form-hint bank-contra-hint">打开本页时检查，超过/低于即 Telegram 通知；同项 24 小时内不重复。</p>
                     </div>
                     <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
@@ -400,7 +430,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="10">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。<a href="admin_balance_notify.php" style="margin-left:12px;font-size:11px;color:var(--muted);">余额通知阈值</a></p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。</p>
                 </div>
 
                 <div class="card">
