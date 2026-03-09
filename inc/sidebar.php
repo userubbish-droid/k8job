@@ -27,7 +27,7 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
     <?php if (has_permission('rebate')): ?><a href="rebate.php" class="nav-item <?= $sidebar_current === 'rebate' ? 'primary' : '' ?>"><span class="nav-icon"></span>返点 Rebate</a><?php endif; ?>
     <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item <?= $sidebar_current === 'customers' ? 'primary' : '' ?>"><span class="nav-icon"></span>顾客列表</a><?php endif; ?>
     <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item <?= $sidebar_current === 'product_library' ? 'primary' : '' ?>"><span class="nav-icon"></span>产品账号</a><?php endif; ?>
-    <a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>statement</a>
+    <?php if (has_permission('statement')): ?><a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>statement</a><?php endif; ?>
     <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item <?= $sidebar_current === 'customer_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>新增顾客</a><?php endif; ?>
     <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>账号管理</a>

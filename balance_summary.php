@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_login();
+require_permission('statement');
 
 $sidebar_current = 'balance_summary';
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
