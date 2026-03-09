@@ -11,6 +11,8 @@ $sidebar_current = 'dashboard';
 $db_error = '';
 $day_in = $day_out = $day_profit = 0;
 $month_in = $month_out = $month_expenses = $month_profit = 0;
+$day_free = $day_free_withdraw = $day_rebate = $day_bonus = 0;
+$month_free = $month_free_withdraw = $month_rebate = $month_bonus = 0;
 $day_customers_count = 0;
 $day_orders_count = 0;
 $day_new_customers = 0;
@@ -19,18 +21,30 @@ $day_new_customer_orders = 0;
 try {
     // 今日统计（只统计已批准）
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out,
+                                  COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
+                                  COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
+                                  COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
+                                  COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus
                            FROM transactions WHERE day = ? AND status = 'approved'");
     $stmt->execute([$today]);
     $day = $stmt->fetch();
     $day_in   = (float)($day['total_in'] ?? 0);
     $day_out  = (float)($day['total_out'] ?? 0);
     $day_profit = $day_in - $day_out;
+    $day_free = (float)($day['free'] ?? 0);
+    $day_free_withdraw = (float)($day['free_withdraw'] ?? 0);
+    $day_rebate = (float)($day['rebate'] ?? 0);
+    $day_bonus = (float)($day['bonus'] ?? 0);
 
-    // 本月统计（只统计已批准）：入账、出账、开销（EXPENSE）
+    // 本月统计（只统计已批准）：入账、出账、开销（EXPENSE）、FREE、FREE WITHDRAW、REBATE、BONUS
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                                   COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out,
-                                  COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses
+                                  COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
+                                  COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
+                                  COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
+                                  COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
+                                  COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus
                            FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'");
     $stmt->execute([$month_start, $month_end]);
     $month = $stmt->fetch();
@@ -38,6 +52,10 @@ try {
     $month_out      = (float)($month['total_out'] ?? 0);
     $month_expenses = (float)($month['total_expenses'] ?? 0);
     $month_profit   = $month_in - $month_out - $month_expenses;
+    $month_free = (float)($month['free'] ?? 0);
+    $month_free_withdraw = (float)($month['free_withdraw'] ?? 0);
+    $month_rebate = (float)($month['rebate'] ?? 0);
+    $month_bonus = (float)($month['bonus'] ?? 0);
 
     // 今日上线客户数（今日已批准流水中不重复的顾客 code 数）
     $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE day = ? AND status = 'approved' AND code IS NOT NULL AND code != ''");
@@ -110,6 +128,24 @@ try {
                         <div class="value"><?= number_format($day_profit, 2) ?></div>
                     </div>
                 </div>
+                <div class="stat-cards" style="margin-top: 12px;">
+                    <div class="stat-card" style="border-left-color: #0d9488;">
+                        <div class="label">FREE</div>
+                        <div class="value" style="color: #0d9488;"><?= number_format($day_free, 2) ?></div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #b45309;">
+                        <div class="label">FREE WITHDRAW</div>
+                        <div class="value" style="color: #b45309;"><?= number_format($day_free_withdraw, 2) ?></div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #7c3aed;">
+                        <div class="label">REBATE</div>
+                        <div class="value" style="color: #7c3aed;"><?= number_format($day_rebate, 2) ?></div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #0891b2;">
+                        <div class="label">BONUS</div>
+                        <div class="value" style="color: #0891b2;"><?= number_format($day_bonus, 2) ?></div>
+                    </div>
+                </div>
                 <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px;">
                 <?php if (($_SESSION['user_role'] ?? '') === 'member'): ?>
                 <p class="form-hint" style="margin-top:0; grid-column: 1 / -1;">以下为只读汇总，银行与产品的增删改仅管理员可操作。</p>
@@ -165,6 +201,24 @@ try {
                     <div class="stat-card profit">
                         <div class="label">本月利润</div>
                         <div class="value"><?= number_format($month_profit, 2) ?></div>
+                    </div>
+                </div>
+                <div class="stat-cards" style="margin-top: 12px;">
+                    <div class="stat-card" style="border-left-color: #0d9488;">
+                        <div class="label">FREE</div>
+                        <div class="value" style="color: #0d9488;"><?= number_format($month_free, 2) ?></div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #b45309;">
+                        <div class="label">FREE WITHDRAW</div>
+                        <div class="value" style="color: #b45309;"><?= number_format($month_free_withdraw, 2) ?></div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #7c3aed;">
+                        <div class="label">REBATE</div>
+                        <div class="value" style="color: #7c3aed;"><?= number_format($month_rebate, 2) ?></div>
+                    </div>
+                    <div class="stat-card" style="border-left-color: #0891b2;">
+                        <div class="label">BONUS</div>
+                        <div class="value" style="color: #0891b2;"><?= number_format($month_bonus, 2) ?></div>
                     </div>
                 </div>
                 <p class="form-hint" style="margin-top:8px; margin-bottom:0;">本月利润 = 入账 − 出账 − 开销</p>
