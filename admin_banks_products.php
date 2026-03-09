@@ -311,7 +311,7 @@ try {
                 <div class="card">
                     <h3 style="display:flex;align-items:center;gap:8px;">
                         银行/渠道
-                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="显示添加表单">+</button>
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="展开添加与通知设置"><?= $open_notify_form ? '−' : '+' ?></button>
                     </h3>
                     <div class="bank-transfer-box bank-contra-compact">
                         <div class="bank-contra-title">银行互转（contra）</div>
@@ -336,46 +336,8 @@ try {
                                 <button type="submit" class="btn btn-primary btn-sm">Submit</button>
                             </div>
                         </form>
-                        <p class="form-hint bank-contra-hint">转出 − 金额，转入 + 金额，记入流水（member 不可见）。</p>
                     </div>
-                    <div style="margin-top:10px;">
-                        <div class="bank-contra-title" style="display:flex;align-items:center;gap:8px;">
-                            Telegram 余额通知
-                            <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="balance-notify-wrap" aria-label="展开设置"><?= $open_notify_form ? '−' : '+' ?></button>
-                        </div>
-                        <div id="balance-notify-wrap" style="display:<?= $open_notify_form ? 'block' : 'none' ?>; margin-top:8px;">
-                            <div class="bank-contra-compact bank-notify-settings">
-                                <p class="form-hint bank-contra-hint" style="margin-bottom:10px;">银行：余额超过设定值即通知；产品：余额低于设定值即通知。留空=不通知。同项 24 小时内不重复。</p>
-                                <form method="post" class="bank-contra-form">
-                                    <input type="hidden" name="action" value="save_balance_notify">
-                                    <div class="balance-notify-grid">
-                                        <div class="balance-notify-group">
-                                            <span class="bank-contra-label">银行（超过即通知）</span>
-                                            <?php foreach ($banks as $b): $bname = trim((string)$b['name']); $bkey = strtolower($bname); $val = $balance_notify_cfg['bank'][$bkey] ?? ''; ?>
-                                            <div class="balance-notify-row">
-                                                <label class="balance-notify-name"><?= htmlspecialchars($bname) ?></label>
-                                                <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
-                                            </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                        <div class="balance-notify-group">
-                                            <span class="bank-contra-label">产品（低于即通知）</span>
-                                            <?php foreach ($products as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
-                                            <div class="balance-notify-row">
-                                                <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
-                                                <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
-                                            </div>
-                                            <?php endforeach; ?>
-                                        </div>
-                                    </div>
-                                    <div class="bank-contra-row bank-contra-row-footer" style="margin-top:10px;">
-                                        <button type="submit" class="btn btn-primary btn-sm">保存</button>
-                                    </div>
-                                </form>
-                            </div>
-                        </div>
-                    </div>
-                    <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
+                    <div id="bank-add-wrap" style="display:<?= $open_notify_form ? 'block' : 'none' ?>; margin-bottom:16px;">
                         <form method="post" style="margin-bottom:0;">
                             <input type="hidden" name="action" value="create_bank">
                             <div class="form-group">
@@ -388,6 +350,35 @@ try {
                             </div>
                             <button type="submit" class="btn btn-primary">添加</button>
                         </form>
+                        <div class="bank-contra-compact bank-notify-settings" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+                            <div class="bank-contra-title">Telegram 余额通知</div>
+                            <form method="post" class="bank-contra-form">
+                                <input type="hidden" name="action" value="save_balance_notify">
+                                <div class="balance-notify-grid">
+                                    <div class="balance-notify-group">
+                                        <span class="bank-contra-label">银行（超过即通知）</span>
+                                        <?php foreach ($banks as $b): $bname = trim((string)$b['name']); $bkey = strtolower($bname); $val = $balance_notify_cfg['bank'][$bkey] ?? ''; ?>
+                                        <div class="balance-notify-row">
+                                            <label class="balance-notify-name"><?= htmlspecialchars($bname) ?></label>
+                                            <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                    <div class="balance-notify-group">
+                                        <span class="bank-contra-label">产品（低于即通知）</span>
+                                        <?php foreach ($products as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
+                                        <div class="balance-notify-row">
+                                            <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
+                                            <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </div>
+                                <div class="bank-contra-row bank-contra-row-footer" style="margin-top:10px;">
+                                    <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                                </div>
+                            </form>
+                        </div>
                     </div>
                     <table class="data-table">
                         <thead>
