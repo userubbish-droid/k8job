@@ -311,34 +311,34 @@ try {
                 <div class="card">
                     <h3 style="display:flex;align-items:center;gap:8px;">
                         银行/渠道
-                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="展开添加与通知设置"><?= $open_notify_form ? '−' : '+' ?></button>
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="展开互转与添加">+</button>
                     </h3>
-                    <div class="bank-transfer-box bank-contra-compact">
-                        <div class="bank-contra-title">银行互转（contra）</div>
-                        <form method="post" id="bank-contra-form" class="bank-contra-form">
-                            <input type="hidden" name="action" value="do_transfer">
-                            <div class="bank-contra-row">
-                                <span class="bank-contra-label">Type</span>
-                                <input type="text" class="form-control bank-contra-input" value="CONTRA" readonly tabindex="-1">
-                                <span class="bank-contra-label">Date</span>
-                                <input type="date" name="transfer_day" class="form-control bank-contra-input" value="<?= date('Y-m-d') ?>">
-                                <span class="bank-contra-label">Account</span>
-                                <select name="to_bank" id="contra-to-bank" class="form-control bank-contra-select" required><option value="">— To —</option><?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?><option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option><?php endforeach; ?></select>
-                                <select name="from_bank" id="contra-from-bank" class="form-control bank-contra-select" required><option value="">— From —</option><?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?><option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option><?php endforeach; ?></select>
-                                <button type="button" class="btn btn-sm btn-outline" id="contra-reverse">Reverse</button>
-                                <span class="bank-contra-label">Amount</span>
-                                <input type="text" name="amount" class="form-control bank-contra-input" placeholder="金额" inputmode="decimal" required style="width:88px;">
-                                <span class="bank-contra-label">Remark</span>
-                                <input type="text" name="transfer_remark" class="form-control bank-contra-input" placeholder="选填" style="width:100px;">
-                            </div>
-                            <div class="bank-contra-row bank-contra-row-footer">
-                                <label class="bank-contra-check"><input type="checkbox" name="confirm_submit" value="1" required> 确认提交</label>
-                                <button type="submit" class="btn btn-primary btn-sm">Submit</button>
-                            </div>
-                        </form>
-                    </div>
-                    <div id="bank-add-wrap" style="display:<?= $open_notify_form ? 'block' : 'none' ?>; margin-bottom:16px;">
-                        <form method="post" style="margin-bottom:0;">
+                    <div id="bank-add-wrap" style="display:none; margin-bottom:16px;">
+                        <div class="bank-transfer-box bank-contra-compact">
+                            <div class="bank-contra-title">银行互转（contra）</div>
+                            <form method="post" id="bank-contra-form" class="bank-contra-form">
+                                <input type="hidden" name="action" value="do_transfer">
+                                <div class="bank-contra-row">
+                                    <span class="bank-contra-label">Type</span>
+                                    <input type="text" class="form-control bank-contra-input" value="CONTRA" readonly tabindex="-1">
+                                    <span class="bank-contra-label">Date</span>
+                                    <input type="date" name="transfer_day" class="form-control bank-contra-input" value="<?= date('Y-m-d') ?>">
+                                    <span class="bank-contra-label">Account</span>
+                                    <select name="to_bank" id="contra-to-bank" class="form-control bank-contra-select" required><option value="">— To —</option><?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?><option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option><?php endforeach; ?></select>
+                                    <select name="from_bank" id="contra-from-bank" class="form-control bank-contra-select" required><option value="">— From —</option><?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?><option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option><?php endforeach; ?></select>
+                                    <button type="button" class="btn btn-sm btn-outline" id="contra-reverse">Reverse</button>
+                                    <span class="bank-contra-label">Amount</span>
+                                    <input type="text" name="amount" class="form-control bank-contra-input" placeholder="金额" inputmode="decimal" required style="width:88px;">
+                                    <span class="bank-contra-label">Remark</span>
+                                    <input type="text" name="transfer_remark" class="form-control bank-contra-input" placeholder="选填" style="width:100px;">
+                                </div>
+                                <div class="bank-contra-row bank-contra-row-footer">
+                                    <label class="bank-contra-check"><input type="checkbox" name="confirm_submit" value="1" required> 确认提交</label>
+                                    <button type="submit" class="btn btn-primary btn-sm">Submit</button>
+                                </div>
+                            </form>
+                        </div>
+                        <form method="post" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
                             <input type="hidden" name="action" value="create_bank">
                             <div class="form-group">
                                 <label>名称 *</label>
@@ -350,34 +350,41 @@ try {
                             </div>
                             <button type="submit" class="btn btn-primary">添加</button>
                         </form>
-                        <div class="bank-contra-compact bank-notify-settings" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
-                            <div class="bank-contra-title">Telegram 余额通知</div>
-                            <form method="post" class="bank-contra-form">
-                                <input type="hidden" name="action" value="save_balance_notify">
-                                <div class="balance-notify-grid">
-                                    <div class="balance-notify-group">
-                                        <span class="bank-contra-label">银行（超过即通知）</span>
-                                        <?php foreach ($banks as $b): $bname = trim((string)$b['name']); $bkey = strtolower($bname); $val = $balance_notify_cfg['bank'][$bkey] ?? ''; ?>
-                                        <div class="balance-notify-row">
-                                            <label class="balance-notify-name"><?= htmlspecialchars($bname) ?></label>
-                                            <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                    </div>
+                    <div style="margin-top:10px;">
+                        <div class="bank-contra-title" style="display:flex;align-items:center;gap:8px;">
+                            Telegram 余额通知
+                            <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="balance-notify-wrap" aria-label="展开设置"><?= $open_notify_form ? '−' : '+' ?></button>
+                        </div>
+                        <div id="balance-notify-wrap" style="display:<?= $open_notify_form ? 'block' : 'none' ?>; margin-top:8px;">
+                            <div class="bank-contra-compact bank-notify-settings">
+                                <form method="post" class="bank-contra-form">
+                                    <input type="hidden" name="action" value="save_balance_notify">
+                                    <div class="balance-notify-grid">
+                                        <div class="balance-notify-group">
+                                            <span class="bank-contra-label">银行（超过即通知）</span>
+                                            <?php foreach ($banks as $b): $bname = trim((string)$b['name']); $bkey = strtolower($bname); $val = $balance_notify_cfg['bank'][$bkey] ?? ''; ?>
+                                            <div class="balance-notify-row">
+                                                <label class="balance-notify-name"><?= htmlspecialchars($bname) ?></label>
+                                                <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                            </div>
+                                            <?php endforeach; ?>
                                         </div>
-                                        <?php endforeach; ?>
-                                    </div>
-                                    <div class="balance-notify-group">
-                                        <span class="bank-contra-label">产品（低于即通知）</span>
-                                        <?php foreach ($products as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
-                                        <div class="balance-notify-row">
-                                            <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
-                                            <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                        <div class="balance-notify-group">
+                                            <span class="bank-contra-label">产品（低于即通知）</span>
+                                            <?php foreach ($products as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
+                                            <div class="balance-notify-row">
+                                                <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
+                                                <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                            </div>
+                                            <?php endforeach; ?>
                                         </div>
-                                        <?php endforeach; ?>
                                     </div>
-                                </div>
-                                <div class="bank-contra-row bank-contra-row-footer" style="margin-top:10px;">
-                                    <button type="submit" class="btn btn-primary btn-sm">保存</button>
-                                </div>
-                            </form>
+                                    <div class="bank-contra-row bank-contra-row-footer" style="margin-top:10px;">
+                                        <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                                    </div>
+                                </form>
+                            </div>
                         </div>
                     </div>
                     <table class="data-table">
