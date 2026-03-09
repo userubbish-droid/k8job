@@ -135,6 +135,16 @@ foreach ($all_products as $name) {
     $key = strtolower($name);
     if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
 }
+
+// Currency 与 Game Platform 筛选（图参考：All/MYR 按钮 + 平台多选）
+$currency = isset($_GET['currency']) && in_array($_GET['currency'], ['all', 'MYR'], true) ? $_GET['currency'] : 'all';
+$filter_products = isset($_GET['products']) && is_array($_GET['products']) ? array_map('trim', $_GET['products']) : [];
+$filter_products = array_filter($filter_products);
+$display_products = $all_products;
+if (!empty($filter_products)) {
+    $display_products = array_values(array_intersect($all_products, $filter_products));
+    if (empty($display_products)) $display_products = $all_products;
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -161,20 +171,46 @@ foreach ($all_products as $name) {
 
                 <div class="card">
                     <p class="form-hint" style="margin-bottom:12px;">显示日期：<?= $day_from ?><?= $is_range ? ' 至 ' . $day_to : '' ?><?= !$is_range && $day_from === date('Y-m-d') ? '（当天）' : '' ?></p>
-                    <div class="statement-filter-wrap" style="margin-bottom:16px;">
-                        <button type="button" class="btn btn-outline" id="stmt-date-toggle">筛选日期</button>
-                        <form method="get" class="stmt-date-form" id="stmt-date-form" style="display:none; margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
-                            <label style="font-size:13px;">从</label>
-                            <input type="date" name="day_from" id="stmt-day-from" value="<?= htmlspecialchars($day_from) ?>">
-                            <label style="font-size:13px;">至</label>
-                            <input type="date" name="day_to" id="stmt-day-to" value="<?= htmlspecialchars($day_to) ?>">
-                            <button type="submit" class="btn btn-primary">查询</button>
-                            <div style="flex-basis:100%; height:0;"></div>
-                            <span style="font-size:13px; color:var(--muted);">快捷：</span>
-                            <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="7">一个星期</button>
-                            <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="30">一个月</button>
-                        </form>
-                    </div>
+                    <form method="get" id="stmt-main-form">
+                        <input type="hidden" name="currency" id="stmt-currency" value="<?= htmlspecialchars($currency) ?>">
+                        <div class="statement-filter-wrap" style="margin-bottom:16px;">
+                            <button type="button" class="btn btn-outline" id="stmt-date-toggle">筛选日期</button>
+                            <div class="stmt-date-form" id="stmt-date-form" style="display:none; margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
+                                <label style="font-size:13px;">从</label>
+                                <input type="date" name="day_from" id="stmt-day-from" value="<?= htmlspecialchars($day_from) ?>">
+                                <label style="font-size:13px;">至</label>
+                                <input type="date" name="day_to" id="stmt-day-to" value="<?= htmlspecialchars($day_to) ?>">
+                                <button type="submit" class="btn btn-primary">查询</button>
+                                <div style="flex-basis:100%; height:0;"></div>
+                                <span style="font-size:13px; color:var(--muted);">快捷：</span>
+                                <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="7">一个星期</button>
+                                <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="30">一个月</button>
+                            </div>
+                        </div>
+                        <div class="stmt-currency-row" style="display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:12px;">
+                            <span style="font-size:13px; color:var(--muted);">Currency:</span>
+                            <span class="stmt-currency-btns" style="display:inline-flex; gap:6px;">
+                                <button type="button" class="btn btn-sm <?= $currency === 'all' ? 'btn-primary' : 'btn-outline' ?>" data-currency="all" aria-pressed="<?= $currency === 'all' ? 'true' : 'false' ?>">All</button>
+                                <button type="button" class="btn btn-sm <?= $currency === 'MYR' ? 'btn-primary' : 'btn-outline' ?>" data-currency="MYR" aria-pressed="<?= $currency === 'MYR' ? 'true' : 'false' ?>">MYR</button>
+                            </span>
+                            <span style="font-size:13px; color:var(--muted); margin-left:8px;">Game Platform:</span>
+                            <div class="stmt-platform-dropdown-wrap" style="position:relative; display:inline-block;">
+                                <button type="button" class="btn btn-outline btn-sm" id="stmt-platform-toggle" aria-expanded="false" aria-haspopup="true"><?= empty($filter_products) ? 'All' : count($filter_products) . ' 项' ?></button>
+                                <div class="stmt-platform-dropdown" id="stmt-platform-dropdown" style="display:none; position:absolute; left:0; top:100%; margin-top:4px; min-width:200px; max-height:280px; overflow-y:auto; background:#fff; border:1px solid var(--border); border-radius:8px; box-shadow:0 4px 16px rgba(0,0,0,0.12); z-index:100; padding:8px 0;">
+                                    <div style="padding:6px 12px; font-size:12px; color:var(--muted); border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
+                                        <span>选择平台</span>
+                                        <span><button type="button" class="stmt-platform-all" style="background:none;border:none;color:var(--primary);cursor:pointer;font-size:12px;">全选</button> <button type="button" class="stmt-platform-none" style="background:none;border:none;color:var(--muted);cursor:pointer;font-size:12px;">清空</button></span>
+                                    </div>
+                                    <?php foreach ($all_products as $pname): $pname = trim((string)$pname); if ($pname === '') continue; $checked = empty($filter_products) || in_array($pname, $filter_products, true); ?>
+                                    <label style="display:flex; align-items:center; gap:8px; padding:8px 12px; cursor:pointer; font-size:13px; margin:0;"><input type="checkbox" name="products[]" value="<?= htmlspecialchars($pname) ?>" <?= $checked ? 'checked' : '' ?> class="stmt-platform-cb"> <?= htmlspecialchars($pname) ?></label>
+                                    <?php endforeach; ?>
+                                    <div style="padding:8px 12px; border-top:1px solid var(--border);">
+                                        <button type="submit" class="btn btn-primary btn-sm">确定</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </form>
                     <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                         <div>
                             <h4>Bank</h4>
@@ -223,7 +259,7 @@ foreach ($all_products as $name) {
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    <?php foreach ($all_products as $name):
+                                    <?php foreach ($display_products as $name):
                                         $name = trim((string)$name);
                                         if ($name === '') continue;
                                         $key = strtolower($name);
@@ -242,7 +278,7 @@ foreach ($all_products as $name) {
                                         <td class="num profit"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
-                                    <?php if (empty($all_products)): ?>
+                                    <?php if (empty($display_products)): ?>
                                     <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                 </tbody>
@@ -255,11 +291,12 @@ foreach ($all_products as $name) {
     </div>
 <script>
 (function(){
+    var mainForm = document.getElementById('stmt-main-form');
     var btn = document.getElementById('stmt-date-toggle');
-    var form = document.getElementById('stmt-date-form');
-    if (btn && form) {
+    var dateForm = document.getElementById('stmt-date-form');
+    if (btn && dateForm) {
         btn.addEventListener('click', function(){
-            form.style.display = form.style.display === 'none' ? 'flex' : 'none';
+            dateForm.style.display = dateForm.style.display === 'none' ? 'flex' : 'none';
         });
     }
     var fromEl = document.getElementById('stmt-day-from');
@@ -276,9 +313,40 @@ foreach ($all_products as $name) {
             };
             if (fromEl) fromEl.value = fmt(start);
             if (toEl) toEl.value = fmt(end);
-            if (form) form.submit();
+            if (mainForm) mainForm.submit();
         });
     });
+    document.querySelectorAll('.stmt-currency-btns button').forEach(function(b){
+        b.addEventListener('click', function(){
+            var cur = b.getAttribute('data-currency');
+            var hid = document.getElementById('stmt-currency');
+            if (hid) hid.value = cur || 'all';
+            document.querySelectorAll('.stmt-currency-btns button').forEach(function(x){ x.classList.remove('btn-primary'); x.classList.add('btn-outline'); x.setAttribute('aria-pressed','false'); });
+            b.classList.remove('btn-outline'); b.classList.add('btn-primary'); b.setAttribute('aria-pressed','true');
+            if (mainForm) mainForm.submit();
+        });
+    });
+    var platformToggle = document.getElementById('stmt-platform-toggle');
+    var platformDropdown = document.getElementById('stmt-platform-dropdown');
+    if (platformToggle && platformDropdown) {
+        platformToggle.addEventListener('click', function(e){
+            e.stopPropagation();
+            var open = platformDropdown.style.display === 'block';
+            platformDropdown.style.display = open ? 'none' : 'block';
+            platformToggle.setAttribute('aria-expanded', open ? 'false' : 'true');
+        });
+        document.addEventListener('click', function(){
+            platformDropdown.style.display = 'none';
+            platformToggle.setAttribute('aria-expanded', 'false');
+        });
+        platformDropdown.addEventListener('click', function(e){ e.stopPropagation(); });
+        platformDropdown.querySelectorAll('.stmt-platform-all').forEach(function(btn){
+            btn.addEventListener('click', function(){ platformDropdown.querySelectorAll('.stmt-platform-cb').forEach(function(cb){ cb.checked = true; }); });
+        });
+        platformDropdown.querySelectorAll('.stmt-platform-none').forEach(function(btn){
+            btn.addEventListener('click', function(){ platformDropdown.querySelectorAll('.stmt-platform-cb').forEach(function(cb){ cb.checked = false; }); });
+        });
+    }
 })();
 </script>
 </body>
