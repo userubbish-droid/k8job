@@ -4,8 +4,10 @@ require 'auth.php';
 require_permission('transaction_list');
 $sidebar_current = 'transaction_list';
 
-$day_from = $_GET['day_from'] ?? date('Y-m-d');
-$day_to   = $_GET['day_to'] ?? date('Y-m-d');
+$day_from_raw = $_GET['day_from'] ?? date('Y-m-d');
+$day_to_raw   = $_GET['day_to'] ?? date('Y-m-d');
+$day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : date('Y-m-d');
+$day_to   = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw)   ? substr($day_to_raw, 0, 10)   : date('Y-m-d');
 $mode     = $_GET['mode'] ?? '';
 $code     = trim($_GET['code'] ?? '');
 $bank     = trim($_GET['bank'] ?? '');
@@ -162,57 +164,100 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_create.php">记一笔</a></p>
         </div>
 
-    <?php if ($is_admin): ?>
+    <?php if ($is_admin):
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
+        $this_week_start = date('Y-m-d', strtotime('monday this week'));
+        $this_week_end = date('Y-m-d', strtotime('sunday this week'));
+        $last_week_start = date('Y-m-d', strtotime('monday last week'));
+        $last_week_end = date('Y-m-d', strtotime('sunday last week'));
+        $this_month_start = date('Y-m-01');
+        $this_month_end = date('Y-m-t');
+        $last_month_start = date('Y-m-01', strtotime('first day of last month'));
+        $last_month_end = date('Y-m-t', strtotime('last day of last month'));
+        $base_q = array_filter(['status' => $status, 'mode' => $mode, 'code' => $code, 'bank' => $bank, 'product' => $product]);
+    ?>
     <div class="list-advanced-toggle-wrap" style="margin-bottom:12px;">
-        <button type="button" class="btn btn-outline" id="list-advanced-toggle" aria-expanded="false">展开筛选与汇总</button>
+        <button type="button" class="btn btn-outline" id="list-advanced-toggle" aria-expanded="true">收起筛选与汇总</button>
     </div>
-    <div class="list-advanced-wrap collapsed" id="list-advanced-wrap">
-    <form class="filters-bar" method="get">
-            <label>状态</label>
-            <select name="status">
-                <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
-                <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>待批准</option>
-                <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>已拒绝</option>
-                <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>全部</option>
-            </select>
-        <label>从</label>
-        <input type="date" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
-        <label>到</label>
-        <input type="date" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
-        <label>模式</label>
-        <select name="mode">
-            <option value="">全部</option>
-            <option value="DEPOSIT" <?= $mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT</option>
-            <option value="WITHDRAW" <?= $mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW</option>
-            <option value="FREE" <?= $mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
-            <option value="FREE WITHDRAW" <?= $mode === 'FREE WITHDRAW' ? 'selected' : '' ?>>FREE WITHDRAW</option>
-            <option value="BANK" <?= $mode === 'BANK' ? 'selected' : '' ?>>BANK</option>
-            <option value="REBATE" <?= $mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
-        </select>
-        <label>代码</label>
-        <select name="code">
-            <option value="">全部</option>
-            <?php foreach ($codes as $c): ?>
-                <option value="<?= htmlspecialchars($c) ?>" <?= $code === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <label>银行</label>
-        <select name="bank">
-            <option value="">全部</option>
-            <?php foreach ($banks as $b): ?>
-                <option value="<?= htmlspecialchars($b) ?>" <?= $bank === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <label>产品</label>
-        <select name="product">
-            <option value="">全部</option>
-            <?php foreach ($products as $p): ?>
-                <option value="<?= htmlspecialchars($p) ?>" <?= $product === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
-            <?php endforeach; ?>
-        </select>
-        <input type="hidden" name="page" value="1">
-        <button type="submit" class="btn btn-primary">筛选</button>
-        <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" class="btn btn-outline">导出 CSV</a>
+    <div class="list-advanced-wrap" id="list-advanced-wrap">
+    <form class="filters-bar filters-bar-flow" method="get" id="flow-filter-form">
+        <div class="filters-row filters-row-main">
+            <div class="filter-group">
+                <label>From:</label>
+                <input type="datetime-local" name="day_from" id="flow-day-from" value="<?= htmlspecialchars($day_from) ?>T00:00" step="60">
+            </div>
+            <div class="filter-group">
+                <label>To:</label>
+                <input type="datetime-local" name="day_to" id="flow-day-to" value="<?= htmlspecialchars($day_to) ?>T23:59" step="60">
+            </div>
+            <div class="filter-group">
+                <label>All Currency</label>
+                <select aria-label="Currency" title="保留项">
+                    <option>All Currency</option>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>All Game</label>
+                <select name="product">
+                    <option value="">All Game</option>
+                    <?php foreach ($products as $p): ?>
+                        <option value="<?= htmlspecialchars($p) ?>" <?= $product === $p ? 'selected' : '' ?>><?= htmlspecialchars($p) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="filter-group">
+                <label>All Status</label>
+                <select name="status">
+                    <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
+                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>待批准</option>
+                    <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>已拒绝</option>
+                    <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>全部</option>
+                </select>
+            </div>
+            <input type="hidden" name="page" value="1">
+            <button type="submit" class="btn btn-search">Search</button>
+            <a href="dashboard.php" class="btn btn-back">Back</a>
+        </div>
+        <div class="filters-row filters-row-presets">
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $today, 'day_to' => $today])) ?>" class="btn btn-preset">Today</a>
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $yesterday, 'day_to' => $yesterday])) ?>" class="btn btn-preset">Yesterday</a>
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $this_week_start, 'day_to' => $this_week_end])) ?>" class="btn btn-preset">This Week</a>
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $last_week_start, 'day_to' => $last_week_end])) ?>" class="btn btn-preset">Last Week</a>
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $this_month_start, 'day_to' => $this_month_end])) ?>" class="btn btn-preset">This Month</a>
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $last_month_start, 'day_to' => $last_month_end])) ?>" class="btn btn-preset">Last Month</a>
+            <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" class="btn btn-preset">导出</a>
+        </div>
+        <div class="filters-row filters-row-more collapsed" id="flow-more-wrap">
+            <div class="filter-group"><label>模式</label>
+                <select name="mode">
+                    <option value="">全部</option>
+                    <option value="DEPOSIT" <?= $mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT</option>
+                    <option value="WITHDRAW" <?= $mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW</option>
+                    <option value="FREE" <?= $mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
+                    <option value="FREE WITHDRAW" <?= $mode === 'FREE WITHDRAW' ? 'selected' : '' ?>>FREE WITHDRAW</option>
+                    <option value="BANK" <?= $mode === 'BANK' ? 'selected' : '' ?>>BANK</option>
+                    <option value="REBATE" <?= $mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
+                </select>
+            </div>
+            <div class="filter-group"><label>代码</label>
+                <select name="code">
+                    <option value="">全部</option>
+                    <?php foreach ($codes as $c): ?>
+                        <option value="<?= htmlspecialchars($c) ?>" <?= $code === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="filter-group"><label>银行</label>
+                <select name="bank">
+                    <option value="">全部</option>
+                    <?php foreach ($banks as $b): ?>
+                        <option value="<?= htmlspecialchars($b) ?>" <?= $bank === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+        </div>
+        <button type="button" class="btn btn-outline btn-more-toggle" id="flow-more-toggle" style="margin-top:8px;">更多筛选</button>
     </form>
 
     <div class="summary">
@@ -303,17 +348,32 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
 (function(){
     var btn = document.getElementById('list-advanced-toggle');
     var wrap = document.getElementById('list-advanced-wrap');
-    if (!btn || !wrap) return;
-    function updateBtn() {
-        var open = !wrap.classList.contains('collapsed');
-        btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-        btn.textContent = open ? '收起筛选与汇总' : '展开筛选与汇总';
-    }
-    btn.addEventListener('click', function(){
-        wrap.classList.toggle('collapsed');
+    if (btn && wrap) {
+        function updateBtn() {
+            var open = !wrap.classList.contains('collapsed');
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            btn.textContent = open ? '收起筛选与汇总' : '展开筛选与汇总';
+        }
+        btn.addEventListener('click', function(){ wrap.classList.toggle('collapsed'); updateBtn(); });
         updateBtn();
-    });
-    updateBtn();
+    }
+    var moreBtn = document.getElementById('flow-more-toggle');
+    var moreWrap = document.getElementById('flow-more-wrap');
+    if (moreBtn && moreWrap) {
+        moreBtn.addEventListener('click', function(){
+            moreWrap.classList.toggle('collapsed');
+            moreBtn.textContent = moreWrap.classList.contains('collapsed') ? '更多筛选' : '收起更多';
+        });
+    }
+    var form = document.getElementById('flow-filter-form');
+    if (form) {
+        form.addEventListener('submit', function(){
+            var from = document.getElementById('flow-day-from');
+            var to = document.getElementById('flow-day-to');
+            if (from && from.value) from.value = from.value.slice(0, 10) + 'T00:00';
+            if (to && to.value) to.value = to.value.slice(0, 10) + 'T23:59';
+        });
+    }
 })();
 </script>
 <?php endif; ?>

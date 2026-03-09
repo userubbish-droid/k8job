@@ -301,6 +301,7 @@ textarea.form-control {
 .filters-bar label { font-size: 13px; color: var(--muted); margin-right: 4px; font-weight: 500; }
 .filters-bar select,
 .filters-bar input[type="date"],
+.filters-bar input[type="datetime-local"],
 .filters-bar input[type="text"] {
     padding: 9px 12px;
     border: 1px solid var(--border);
@@ -308,6 +309,53 @@ textarea.form-control {
     font-size: 14px;
 }
 .filters-bar .btn { margin-left: 4px; }
+
+/* 流水记录：两行筛选（From/To + 下拉 + Search/Back，第二行快捷日期） */
+.filters-bar-flow { flex-direction: column; align-items: stretch; gap: 12px; }
+.filters-bar-flow .filters-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; }
+.filters-bar-flow .filters-row-main { flex-wrap: wrap; }
+.filters-bar-flow .filter-group { display: flex; flex-direction: column; gap: 4px; }
+.filters-bar-flow .filter-group label { margin: 0; font-size: 12px; color: var(--muted); }
+.filters-bar-flow .filter-group select,
+.filters-bar-flow .filter-group input { min-width: 140px; }
+.filters-bar-flow .btn-search {
+    background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    cursor: pointer;
+    box-shadow: 0 1px 3px rgba(34, 197, 94, 0.3);
+}
+.filters-bar-flow .btn-search:hover { background: linear-gradient(180deg, #16a34a 0%, #15803d 100%); }
+.filters-bar-flow .btn-back {
+    background: linear-gradient(180deg, #84cc16 0%, #65a30d 100%);
+    color: #fff;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    font-weight: 600;
+    text-decoration: none;
+    display: inline-block;
+    box-shadow: 0 1px 3px rgba(132, 204, 22, 0.3);
+}
+.filters-bar-flow .btn-back:hover { background: linear-gradient(180deg, #65a30d 0%, #4d7c0f 100%); color: #fff; }
+.filters-bar-flow .filters-row-presets { margin-top: 4px; }
+.filters-bar-flow .btn-preset {
+    background: linear-gradient(180deg, #a3e635 0%, #84cc16 100%);
+    color: #1a1a1a;
+    border: none;
+    padding: 8px 16px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 500;
+    text-decoration: none;
+    display: inline-block;
+}
+.filters-bar-flow .btn-preset:hover { background: linear-gradient(180deg, #84cc16 0%, #65a30d 100%); color: #fff; }
+.filters-bar-flow .filters-row-more.collapsed { display: none; }
+.filters-bar-flow .btn-more-toggle { font-size: 13px; }
 
 /* 流水记录：筛选与汇总可折叠，默认收起 */
 .list-advanced-wrap { margin-bottom: 16px; }
