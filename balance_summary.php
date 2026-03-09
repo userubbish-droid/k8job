@@ -46,7 +46,7 @@ try {
 } catch (Throwable $e) {}
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN amount ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE day < ? AND status = 'approved' GROUP BY product");
     $stmt->execute([$day_from]);
@@ -79,7 +79,7 @@ try {
 
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN amount ELSE 0 END), 0) AS total_in,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'
         GROUP BY product");
