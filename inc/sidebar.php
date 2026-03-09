@@ -7,11 +7,20 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
         $sidebar_pending = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
     } catch (Throwable $e) {}
 }
+$sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? '用户';
+$sidebar_user_role = ($_SESSION['user_role'] ?? '') === 'admin' ? '管理员' : '员工';
+$sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
 ?>
 <aside class="dashboard-sidebar">
     <div class="sidebar-drawer-header">
         <button type="button" class="sidebar-close" id="sidebar-close" aria-label="关闭导航">×</button>
     </div>
+    <div class="sidebar-profile">
+        <div class="sidebar-avatar" aria-hidden="true"><?= htmlspecialchars($sidebar_user_initial) ?></div>
+        <div class="sidebar-name"><?= htmlspecialchars($sidebar_user_name) ?></div>
+        <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
+    </div>
+    <div class="sidebar-sep" aria-hidden="true"></div>
     <a href="dashboard.php" class="nav-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>首页</a>
     <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item <?= $sidebar_current === 'transaction_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>记一笔</a><?php endif; ?>
     <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span>流水记录</a><?php endif; ?>

@@ -407,13 +407,46 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     flex-wrap: nowrap !important;
     width: 228px !important;
     min-width: 228px !important;
-    background: linear-gradient(180deg, rgba(238,241,246,0.98) 0%, rgba(232,236,242,0.96) 50%, rgba(228,232,239,0.98) 100%);
-    backdrop-filter: blur(14px);
-    -webkit-backdrop-filter: blur(14px);
-    border-right: 1px solid rgba(220, 226, 236, 0.6);
-    padding: 20px 0;
+    background: linear-gradient(180deg, #1e3a5f 0%, #1a3352 50%, #152a47 100%);
+    border-right: 1px solid rgba(0, 0, 0, 0.2);
+    padding: 0 0 20px;
     flex-shrink: 0;
-    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.04);
+    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.15);
+}
+.sidebar-profile {
+    padding: 24px 20px 20px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 8px;
+}
+.sidebar-avatar {
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    color: #fff;
+    font-size: 20px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+.sidebar-name {
+    font-size: 16px;
+    font-weight: 600;
+    color: #fff;
+    letter-spacing: 0.02em;
+}
+.sidebar-role {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.65);
+}
+.sidebar-sep {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.12);
+    margin: 0 16px 12px;
 }
 .dashboard-sidebar .nav-item {
     display: flex;
@@ -423,7 +456,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     box-sizing: border-box;
     padding: 12px 20px;
     margin: 0 12px 6px 12px;
-    color: #475569;
+    color: rgba(255, 255, 255, 0.85);
     text-decoration: none;
     font-size: 14px;
     border-radius: 8px;
@@ -436,15 +469,16 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .dashboard-sidebar .nav-item .nav-icon {
     width: 18px; height: 18px; margin-right: 12px;
     border-radius: 4px;
-    background: #e2e8f0;
+    background: rgba(255, 255, 255, 0.25);
     flex-shrink: 0;
 }
-.dashboard-sidebar .nav-item.primary .nav-icon { background: var(--primary); opacity: 0.95; }
-.dashboard-sidebar .nav-item:hover { background: var(--primary-soft); color: var(--primary); }
-.dashboard-sidebar .nav-item.primary { background: var(--primary-soft); color: var(--primary); font-weight: 600; border-left-color: var(--primary); }
+.dashboard-sidebar .nav-item.primary .nav-icon { background: #3b82f6; }
+.dashboard-sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
+.dashboard-sidebar .nav-item.primary { background: #2563eb; color: #fff; font-weight: 600; border-left-color: #60a5fa; }
+.dashboard-sidebar .nav-item.primary .nav-icon { background: rgba(255,255,255,0.9); }
 .sidebar-drawer-header { display: none; }
-.sidebar-close { width: 36px; height: 36px; padding: 0; font-size: 24px; line-height: 1; border: none; background: transparent; color: #64748b; cursor: pointer; border-radius: 8px; align-items: center; justify-content: center; }
-.sidebar-close:hover { background: var(--border-light); color: #0f172a; }
+.sidebar-close { width: 36px; height: 36px; padding: 0; font-size: 24px; line-height: 1; border: none; background: transparent; color: rgba(255,255,255,0.8); cursor: pointer; border-radius: 8px; align-items: center; justify-content: center; }
+.sidebar-close:hover { background: rgba(255,255,255,0.15); color: #fff; }
 .sidebar-bell {
     position: fixed;
     top: 12px;
@@ -558,10 +592,10 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
         align-items: center;
         justify-content: flex-end;
         padding: 14px 18px;
-        border-bottom: 1px solid var(--border-light);
-        background: #fafbfc;
+        border-bottom: 1px solid rgba(255,255,255,0.1);
+        background: rgba(0,0,0,0.15);
     }
-    .sidebar-close { display: flex; }
+    .sidebar-close { display: flex; color: rgba(255,255,255,0.9); }
     .sidebar-close {
         width: 36px;
         height: 36px;
