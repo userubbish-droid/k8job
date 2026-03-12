@@ -291,8 +291,9 @@ if ($is_admin) {
                 </div>
                 <div class="form-group">
                     <label>奖励/返点 %</label>
-                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="选填，如 5" inputmode="decimal" title="按金额的百分比计算奖励">
+                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="选填，如 5" inputmode="decimal" title="按金额百分比计算 bonus，顾客列表 Bonus 列即此项合计">
                     <input type="hidden" name="bonus" id="bonus_hidden" value="0">
+                    <p class="form-hint" style="margin-top:4px;">Bonus 按此奖励/返点 % 计算（金额 × %），顾客列表中 Bonus 列为该顾客流水 bonus 合计。</p>
                 </div>
             </div>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
