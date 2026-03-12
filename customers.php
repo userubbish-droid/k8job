@@ -39,6 +39,9 @@ $rows = [];
 $balance_by_code = [];
 $all_deposit_by_code = [];
 $all_withdraw_by_code = [];
+$all_rebate_by_code = [];
+$all_free_by_code = [];
+$all_free_withdraw_by_code = [];
 $month_deposit_by_code = [];
 $month_withdraw_by_code = [];
 try {
@@ -70,6 +73,18 @@ try {
         $all_deposit_by_code[$r['code']] = (float)$r['ad'];
         $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
     }
+    $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
+    foreach ($stmt->fetchAll() as $r) {
+        $all_rebate_by_code[$r['code']] = (float)$r['total'];
+    }
+    $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE' GROUP BY code");
+    foreach ($stmt->fetchAll() as $r) {
+        $all_free_by_code[$r['code']] = (float)$r['total'];
+    }
+    $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+    foreach ($stmt->fetchAll() as $r) {
+        $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
+    }
     $month_start = date('Y-m-01');
     $month_end = date('Y-m-t');
     $stmt = $pdo->prepare("SELECT code,
@@ -85,6 +100,9 @@ try {
     $rows = [];
     $all_deposit_by_code = [];
     $all_withdraw_by_code = [];
+    $all_rebate_by_code = [];
+    $all_free_by_code = [];
+    $all_free_withdraw_by_code = [];
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
     $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。') . ' (' . $e->getMessage() . ')';
@@ -143,6 +161,9 @@ try {
                         <th>BANK DETAILS</th>
                         <th class="col-total-dp">Total DP</th>
                         <th class="col-total-wd">Total WD</th>
+                        <th>Rebate</th>
+                        <th>Free</th>
+                        <th>Free Withdraw</th>
                         <th>deposit</th>
                         <th>withdraw</th>
                         <th>REGULAR</th>
@@ -157,6 +178,9 @@ try {
                     $code = $r['code'];
                     $all_dp = $all_deposit_by_code[$code] ?? 0;
                     $all_wd = $all_withdraw_by_code[$code] ?? 0;
+                    $all_rebate = $all_rebate_by_code[$code] ?? 0;
+                    $all_free = $all_free_by_code[$code] ?? 0;
+                    $all_fw = $all_free_withdraw_by_code[$code] ?? 0;
                     $mon_dp = $month_deposit_by_code[$code] ?? 0;
                     $mon_wd = $month_withdraw_by_code[$code] ?? 0;
                 ?>
@@ -168,6 +192,9 @@ try {
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
                         <td class="col-total-dp num"><?= number_format($all_dp, 2) ?></td>
                         <td class="col-total-wd num"><?= number_format($all_wd, 2) ?></td>
+                        <td class="num"><?= number_format($all_rebate, 2) ?></td>
+                        <td class="num"><?= number_format($all_free, 2) ?></td>
+                        <td class="num"><?= number_format($all_fw, 2) ?></td>
                         <td class="num"><?= number_format($mon_dp, 2) ?></td>
                         <td class="num"><?= number_format($mon_wd, 2) ?></td>
                         <td><?= htmlspecialchars(customer_regular_tier($balance_by_code[$code] ?? 0)) ?></td>
@@ -187,7 +214,7 @@ try {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 14 : 12 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= $is_admin ? 17 : 15 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
