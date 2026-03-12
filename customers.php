@@ -42,6 +42,7 @@ $all_withdraw_by_code = [];
 $all_rebate_by_code = [];
 $all_free_by_code = [];
 $all_free_withdraw_by_code = [];
+$all_bonus_by_code = [];
 $month_deposit_by_code = [];
 $month_withdraw_by_code = [];
 try {
@@ -84,6 +85,10 @@ try {
     $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
     foreach ($stmt->fetchAll() as $r) {
         $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
+    }
+    $stmt = $pdo->query("SELECT code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+    foreach ($stmt->fetchAll() as $r) {
+        $all_bonus_by_code[$r['code']] = (float)$r['total'];
     }
     $month_start = date('Y-m-01');
     $month_end = date('Y-m-t');
@@ -164,6 +169,7 @@ try {
                         <th>Rebate</th>
                         <th>Free</th>
                         <th>Free Withdraw</th>
+                        <th>Bonus</th>
                         <th>deposit</th>
                         <th>withdraw</th>
                         <th>REGULAR</th>
@@ -195,6 +201,7 @@ try {
                         <td class="num"><?= number_format($all_rebate, 2) ?></td>
                         <td class="num"><?= number_format($all_free, 2) ?></td>
                         <td class="num"><?= number_format($all_fw, 2) ?></td>
+                        <td class="num"><?= number_format($all_bonus, 2) ?></td>
                         <td class="num"><?= number_format($mon_dp, 2) ?></td>
                         <td class="num"><?= number_format($mon_wd, 2) ?></td>
                         <td><?= htmlspecialchars(customer_regular_tier($balance_by_code[$code] ?? 0)) ?></td>
@@ -214,7 +221,7 @@ try {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 17 : 15 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= $is_admin ? 18 : 16 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
