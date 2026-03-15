@@ -231,7 +231,7 @@ try {
 }
 try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW','TOPUP') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -538,8 +538,8 @@ try {
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
-                                <td class="num in"><?= $tout != 0 ? number_format($tout, 2) : '—' ?></td>
                                 <td class="num out"><?= $tin != 0 ? number_format($tin, 2) : '—' ?></td>
+                                <td class="num in"><?= $tout != 0 ? '−' . number_format($tout, 2) : '—' ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
