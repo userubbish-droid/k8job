@@ -187,6 +187,7 @@ try {
                     $all_rebate = $all_rebate_by_code[$code] ?? 0;
                     $all_free = $all_free_by_code[$code] ?? 0;
                     $all_fw = $all_free_withdraw_by_code[$code] ?? 0;
+                    $all_bonus = $all_bonus_by_code[$code] ?? 0;
                     $mon_dp = $month_deposit_by_code[$code] ?? 0;
                     $mon_wd = $month_withdraw_by_code[$code] ?? 0;
                 ?>

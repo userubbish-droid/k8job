@@ -187,19 +187,21 @@ if ($is_admin) {
             <div class="alert alert-success" style="margin-bottom: 0;">
                 <?php if ($submitted_status === 'pending'): ?>已提交，等待管理员批准。<strong>批准后</strong>才会在「银行与产品」页的 In/Out 中显示。<?php elseif (!$is_admin): ?>✔ Done<?php else: ?>已保存并生效，已计入「银行与产品」In/Out。<?php endif; ?>
             </div>
-            <?php if (!empty($saved_code) || !empty($saved_product) || $saved_mode === 'WITHDRAW'): ?>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px;">
-                <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code) ?> <?= htmlspecialchars($saved_product) ?> · 金额 <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?> · Bonus <?= number_format($saved_bonus, 2) ?> · 总数 <strong><?= number_format($saved_total, 2) ?></strong></div>
+                <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code ?: '—') ?> <?= htmlspecialchars($saved_product ?: '—') ?> · 金额 <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?> · <strong>本笔 Bonus：<?= number_format($saved_bonus, 2) ?></strong> · 总数 <?= number_format($saved_total, 2) ?></div>
+                <?php if ($saved_bonus > 0 && !empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:var(--success);">此笔 Bonus 将计入顾客 <?= htmlspecialchars($saved_code) ?> 的汇总<?= $submitted_status === 'pending' ? '（需管理员批准后生效）' : '。' ?></p><?php endif; ?>
                 <?php if ($saved_bonus > 0 && empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:#b45309;">未选客户时，Bonus 不会计入顾客列表；请记一笔时选择客户。</p><?php endif; ?>
+                <?php if ($saved_bonus <= 0 && $saved_amount > 0): ?><p class="form-hint" style="margin-top:4px;">本笔未填「奖励/返点 %」，故 Bonus 为 0；要计入顾客 Bonus 请填写奖励% 并选择客户。</p><?php endif; ?>
+                <?php if (!empty($saved_code) || !empty($saved_product) || $saved_mode === 'WITHDRAW'): ?>
                 <?php if ($saved_mode === 'WITHDRAW' && !empty($saved_code)): ?>
                 <div class="form-hint" style="margin-bottom:4px;">顾客姓名：<?= htmlspecialchars($saved_customer_name ?: '—') ?></div>
                 <div class="form-hint">银行资料：<?= htmlspecialchars($saved_customer_bank ?: '—') ?></div>
                 <?php endif; ?>
-                <?php if (!empty($saved_product)): ?>
+                <?php if (!empty($saved_product) && !empty($saved_code)): ?>
                 <div class="form-hint" style="margin-top:4px;"><?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?></div>
                 <?php endif; ?>
+                <?php endif; ?>
             </div>
-            <?php endif; ?>
             <div class="success-actions">
                 <a href="transaction_create.php">再记一笔</a>
                 <a href="transaction_list.php">看流水</a>
