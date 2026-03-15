@@ -538,8 +538,8 @@ try {
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
-                                <td class="num out"><?= $tin != 0 ? number_format($tin, 2) : '—' ?></td>
-                                <td class="num in"><?= $tout != 0 ? '−' . number_format($tout, 2) : '—' ?></td>
+                                <td class="num in"><?= $tin != 0 ? number_format($tin, 2) : '—' ?></td>
+                                <td class="num out"><?= $tout != 0 ? '−' . number_format($tout, 2) : '—' ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
