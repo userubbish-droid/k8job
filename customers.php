@@ -1,16 +1,25 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_permission('customers');
+require_login();
+$filter_recommend = isset($_GET['recommend']) ? trim((string)$_GET['recommend']) : '';
+// 从 Agent 页带 recommend 进入：有 agent 权限即可，只显示代号+输赢；否则需 customers 权限
+if ($filter_recommend !== '') {
+    if (!has_permission('agent')) { require_permission('customers'); }
+} else {
+    require_permission('customers');
+}
 $sidebar_current = 'customers';
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
 $msg = '';
 $err = '';
-$filter_recommend = isset($_GET['recommend']) ? trim((string)$_GET['recommend']) : '';
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+// 从 Agent 页进入（带 recommend 筛选）时不允许 POST 操作，且只显示代号+输赢，不显示客户资料
+$agent_view = $filter_recommend !== '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$agent_view) {
     $action = $_POST['action'] ?? '';
     try {
         if ($action === 'toggle' && $is_admin) {
@@ -178,6 +187,42 @@ try {
 
         <div class="card" style="overflow-x: auto;">
             <h3>列表</h3>
+            <?php if ($agent_view): ?>
+            <p style="color:var(--muted); margin-bottom:10px;">仅显示代号与本公司输赢，不显示客户资料。</p>
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>CODE</th>
+                        <th class="num">Win(Loss)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php
+                    $agent_total_win_loss = 0;
+                    foreach ($rows as $r):
+                    $code = $r['code'];
+                    $all_dp = $all_deposit_by_code[$code] ?? 0;
+                    $all_wd = $all_withdraw_by_code[$code] ?? 0;
+                    $win_loss = $all_wd - $all_dp;
+                    $agent_total_win_loss += $win_loss;
+                ?>
+                    <tr>
+                        <td><?= htmlspecialchars($code) ?></td>
+                        <td class="num <?= $win_loss >= 0 ? 'stmt-out' : 'stmt-in' ?>"><?= number_format($win_loss, 2) ?></td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if ($rows): ?>
+                    <tr style="font-weight:bold; background:var(--bg);">
+                        <td>Total</td>
+                        <td class="num <?= $agent_total_win_loss >= 0 ? 'stmt-out' : 'stmt-in' ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
+                    </tr>
+                <?php endif; ?>
+                <?php if (!$rows): ?>
+                    <tr><td colspan="2" style="color:var(--muted); padding:24px;">No customers under this agent.</td></tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+            <?php else: ?>
             <?php if ($is_admin): ?>
             <p style="margin-bottom:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
                 <button type="button" class="btn btn-sm btn-outline" id="toggle-created-by" aria-pressed="false">显示填写人</button>
@@ -256,6 +301,7 @@ try {
                 <?php endif; ?>
                 </tbody>
             </table>
+            <?php endif; ?>
         </div>
     </div>
         </main>
