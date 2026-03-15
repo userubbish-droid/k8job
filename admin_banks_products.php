@@ -268,7 +268,7 @@ foreach ($products as $p) {
     $start = (float)($balance_product[$pkey] ?? 0);
     $tin = (float)($total_in_product[$pkey] ?? 0);
     $tout = (float)($total_out_product[$pkey] ?? 0);
-    $product_balances_for_notify[$pname] = $start + $tin - $tout;
+    $product_balances_for_notify[$pname] = $start - $tin + $tout;
 }
 require_once __DIR__ . '/inc/balance_notify.php';
 check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
@@ -529,7 +529,7 @@ try {
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
-                                $balance_now = $start + $tin - $tout;
+                                $balance_now = $start - $tin + $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
@@ -538,8 +538,8 @@ try {
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
-                                <td class="num in"><?= $tin != 0 ? number_format($tin, 2) : '—' ?></td>
-                                <td class="num out"><?= $tout != 0 ? '−' . number_format($tout, 2) : '—' ?></td>
+                                <td class="num in"><?= $tin != 0 ? '−' . number_format($tin, 2) : '—' ?></td>
+                                <td class="num out"><?= $tout != 0 ? number_format($tout, 2) : '—' ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
