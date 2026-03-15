@@ -93,8 +93,6 @@ if ($selected_id > 0) {
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <p class="form-hint" style="margin-bottom: 16px;">先选择要设置的 Member，再勾选该成员可以「看到并操作」的功能。Admin 不受限制。</p>
-
             <form method="get" class="member-select">
                 <div class="form-group">
                     <label>选择 Member</label>
@@ -124,7 +122,6 @@ if ($selected_id > 0) {
                 <button type="submit" class="btn btn-primary" style="margin-top: 16px;">保存权限</button>
             </form>
             <?php else: ?>
-            <p class="form-hint">请先从上方下拉选择一名 Member（如 member1、member2），再为其勾选权限。</p>
             <?php endif; ?>
         </div>
     </div>
