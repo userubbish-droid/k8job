@@ -30,6 +30,9 @@ function has_permission(string $key): bool
     if ($role === 'admin') {
         return true;
     }
+    if ($role === 'agent') {
+        return $key === 'agent'; // agent 角色只能看 agent 页
+    }
     if ($role !== 'member') {
         return false;
     }
@@ -68,6 +71,18 @@ function require_login(): void
     if (empty($_SESSION['user_id'])) {
         header('Location: login.php');
         exit;
+    }
+    $role = $_SESSION['user_role'] ?? '';
+    if ($role === 'agent') {
+        $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
+        $allow = ['agents.php', 'logout.php'];
+        if ($script === 'customers.php' && isset($_GET['recommend']) && trim((string)$_GET['recommend']) !== '') {
+            $allow[] = 'customers.php';
+        }
+        if (!in_array($script, $allow, true)) {
+            header('Location: agents.php');
+            exit;
+        }
     }
 }
 

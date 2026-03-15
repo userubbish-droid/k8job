@@ -2,7 +2,7 @@
 require 'config.php';
 session_start();
 if (isset($_SESSION['user_id'])) {
-    header('Location: dashboard.php');
+    header('Location: ' . (($_SESSION['user_role'] ?? '') === 'agent' ? 'agents.php' : 'dashboard.php'));
     exit;
 }
 
@@ -10,7 +10,7 @@ $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
     $pass = (string) ($_POST['pass'] ?? '');
-    $login_as = trim($_POST['login_as'] ?? 'admin'); // admin | member
+    $login_as = trim($_POST['login_as'] ?? 'admin'); // admin | member | agent
     $company_id = trim($_POST['company_id'] ?? '');
     $remember = !empty($_POST['remember']);
 
@@ -27,6 +27,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '请使用 Admin 登录入口，或该账号不是管理员';
         } elseif ($login_as === 'member' && $u['role'] !== 'member') {
             $error = '请使用 Member 登录入口，或该账号不是员工';
+        } elseif ($login_as === 'agent' && $u['role'] !== 'agent') {
+            $error = '请使用 Agent 登录入口，或该账号不是代理';
         } else {
             $_SESSION['user_id'] = (int)$u['id'];
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
@@ -36,7 +38,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $params = session_get_cookie_params();
                 setcookie(session_name(), session_id(), time() + 86400 * 14, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
             }
-            header('Location: dashboard.php');
+            if ($u['role'] === 'agent') {
+                $_SESSION['agent_code'] = $u['username']; // 与 customers.recommend 对应
+                header('Location: agents.php');
+            } else {
+                header('Location: dashboard.php');
+            }
             exit;
         }
     }
@@ -186,6 +193,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
         <div class="tabs">
             <a href="#" class="tab <?= $login_as === 'admin' ? 'active' : '' ?>" data-tab="admin">Admin</a>
             <a href="#" class="tab <?= $login_as === 'member' ? 'active' : '' ?>" data-tab="member">Member</a>
+            <a href="#" class="tab <?= $login_as === 'agent' ? 'active' : '' ?>" data-tab="agent">Agent Login</a>
         </div>
 
         <?php if ($error): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -193,10 +201,12 @@ $login_as = $_POST['login_as'] ?? 'admin';
         <form method="post" id="loginForm">
             <input type="hidden" name="login_as" id="login_as" value="<?= htmlspecialchars($login_as) ?>">
 
+            <?php if ($login_as !== 'agent'): ?>
             <div class="input-wrap">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
                 <input type="text" name="company_id" placeholder="Company Id" value="<?= htmlspecialchars($_POST['company_id'] ?? '') ?>">
             </div>
+            <?php endif; ?>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 <input type="text" name="user" placeholder="Username" required value="<?= htmlspecialchars($_POST['user'] ?? '') ?>">

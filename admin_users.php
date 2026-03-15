@@ -25,7 +25,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($username === '' || $password === '') {
                 throw new RuntimeException('请填写用户名和密码。');
             }
-            if (!in_array($role, ['admin', 'member'], true)) {
+            if (!in_array($role, ['admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
             }
 
@@ -120,6 +120,7 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
                         <select name="role" required>
                             <option value="member" selected>member</option>
                             <option value="admin">admin</option>
+                            <option value="agent">agent</option>
                         </select>
                     </div>
                     <div>
@@ -127,6 +128,7 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
                         <input name="display_name" placeholder="例如 小明">
                     </div>
                 </div>
+                <p class="muted" style="margin-top:8px;">Agent 账号：用户名须与顾客的 Recommend（推荐人/推荐码）一致，登录后只能看自己的下线。</p>
                 <div style="margin-top:12px;">
                     <button type="submit">创建</button>
                     <a href="dashboard.php" style="margin-left:10px;">返回首页</a>

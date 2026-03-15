@@ -2,6 +2,10 @@
 require 'config.php';
 require 'auth.php';
 require_login();
+if (($_SESSION['user_role'] ?? '') === 'agent') {
+    header('Location: agents.php');
+    exit;
+}
 
 $today = date('Y-m-d');
 $month_start = date('Y-m-01');

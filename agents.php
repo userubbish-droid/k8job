@@ -6,10 +6,12 @@ $sidebar_current = 'agents';
 
 $err = '';
 $agents = [];
+$is_agent_user = ($_SESSION['user_role'] ?? '') === 'agent';
+$agent_code = $is_agent_user ? trim((string)($_SESSION['agent_code'] ?? '')) : '';
 
 try {
     // 本公司输赢 = 该 Agent 下所有顾客的 (withdraw - deposit)；正=公司赢，负=公司输
-    $stmt = $pdo->query("
+    $sql = "
         SELECT TRIM(c.recommend) AS agent, COUNT(*) AS cnt,
                COALESCE(SUM(sub.pnl), 0) AS win_loss
         FROM customers c
@@ -20,10 +22,23 @@ try {
             GROUP BY TRIM(code)
         ) sub ON TRIM(c.code) = sub.code
         WHERE c.recommend IS NOT NULL AND TRIM(c.recommend) != ''
-        GROUP BY TRIM(c.recommend)
-        ORDER BY agent ASC
-    ");
-    $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    ";
+    $params = [];
+    if ($is_agent_user && $agent_code !== '') {
+        $sql .= " AND TRIM(c.recommend) = ?";
+        $params[] = $agent_code;
+    }
+    $sql .= " GROUP BY TRIM(c.recommend) ORDER BY agent ASC";
+    if ($params) {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $agents = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
+    }
+    if ($is_agent_user && $agent_code !== '' && empty($agents)) {
+        $agents = [['agent' => $agent_code, 'cnt' => 0, 'win_loss' => 0]];
+    }
 } catch (Throwable $e) {
     if (strpos($e->getMessage(), 'recommend') !== false) {
         $err = '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。';
@@ -56,7 +71,6 @@ try {
                 <div class="summary">
                     <div class="summary-item"><strong>Agent</strong><span class="num"><?= count($agents) ?></span></div>
                 </div>
-                <p style="color:var(--muted); margin-bottom:12px;">Win(Loss)：本公司对该 Agent 下所有顾客的输赢合计。正数=公司赢，负数=公司输（例：player1 赢 1k、player2 输 500 → 公司输 500，显示 -500.00）。</p>
                 <div class="card" style="overflow-x: auto;">
                     <h3>列表</h3>
                     <table class="data-table">

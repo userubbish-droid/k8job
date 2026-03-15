@@ -8,7 +8,7 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     } catch (Throwable $e) {}
 }
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
-$sidebar_user_role = ($_SESSION['user_role'] ?? '') === 'admin' ? 'Admin' : 'Staff';
+$sidebar_user_role = ($_SESSION['user_role'] ?? '') === 'admin' ? 'Admin' : (($_SESSION['user_role'] ?? '') === 'agent' ? 'Agent' : 'Staff');
 $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
 ?>
 <aside class="dashboard-sidebar">
@@ -21,6 +21,9 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
         <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
     </div>
     <div class="sidebar-sep" aria-hidden="true"></div>
+    <?php if (($_SESSION['user_role'] ?? '') === 'agent'): ?>
+    <a href="agents.php" class="nav-item <?= $sidebar_current === 'agents' ? 'primary' : '' ?>"><span class="nav-icon"></span>Agent</a>
+    <?php else: ?>
     <a href="dashboard.php" class="nav-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>Home</a>
     <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item <?= $sidebar_current === 'transaction_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>Add Transaction</a><?php endif; ?>
     <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span>Transactions</a><?php endif; ?>
@@ -41,6 +44,7 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
     <?php endif; ?>
     <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item <?= $sidebar_current === 'customer_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>New Customer</a><?php endif; ?>
     <?php if (has_permission('statement')): ?><a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>Statement</a><?php endif; ?>
+    <?php endif; ?>
     <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>User Management</a>
         <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>Banks & Products</a>

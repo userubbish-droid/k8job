@@ -3,6 +3,10 @@ require 'config.php';
 require 'auth.php';
 require_login();
 $filter_recommend = isset($_GET['recommend']) ? trim((string)$_GET['recommend']) : '';
+// 代理账号只能看自己的下线：强制 recommend = 自己的 agent_code
+if (($_SESSION['user_role'] ?? '') === 'agent') {
+    $filter_recommend = trim((string)($_SESSION['agent_code'] ?? ''));
+}
 // 从 Agent 页带 recommend 进入：有 agent 权限即可，只显示代号+输赢；否则需 customers 权限
 if ($filter_recommend !== '') {
     if (!has_permission('agent')) { require_permission('customers'); }
