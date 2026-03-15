@@ -218,6 +218,7 @@ try {
 $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
+$total_topup_product = [];
 $total_out_product = [];
 $diag_bank_rows = [];
 $diag_product_rows = [];
@@ -243,7 +244,8 @@ try {
 }
 try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW','TOPUP') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -252,10 +254,12 @@ try {
         $k = strtolower(trim((string)$prodVal));
         if ($k === '') continue;
         $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
+        $topup = (float)($r['topup'] ?? 0);
         $to = (float)($r['tout'] ?? $r['TO'] ?? 0);
         $total_in_product[$k] = $ti;
+        $total_topup_product[$k] = $topup;
         $total_out_product[$k] = $to;
-        $diag_product_rows[$k] = ['in' => $ti, 'out' => $to];
+        $diag_product_rows[$k] = ['in' => $ti, 'topup' => $topup, 'out' => $to];
     }
 } catch (Throwable $e) {
     if (empty($diag_error)) $diag_error = $e->getMessage();
@@ -279,8 +283,9 @@ foreach ($products as $p) {
     $pkey = strtolower($pname);
     $start = (float)($balance_product[$pkey] ?? 0);
     $tin = (float)($total_in_product[$pkey] ?? 0);
+    $topup = (float)($total_topup_product[$pkey] ?? 0);
     $tout = (float)($total_out_product[$pkey] ?? 0);
-    $product_balances_for_notify[$pname] = $start - $tin + $tout;
+    $product_balances_for_notify[$pname] = $start - $tin + $topup + $tout;
 }
 require_once __DIR__ . '/inc/balance_notify.php';
 check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
@@ -527,6 +532,7 @@ try {
                                 <th>创建时间</th>
                                 <th class="num">Starting Balance</th>
                                 <th class="num">In</th>
+                                <th class="num">Topup</th>
                                 <th class="num">Out</th>
                                 <th class="num">Balance</th>
                                 <th>操作</th>
@@ -540,8 +546,9 @@ try {
                                 $cur = $balance_product[$pkey] ?? null;
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pkey] ?? 0;
+                                $topup = $total_topup_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
-                                $balance_now = $start - $tin + $tout;
+                                $balance_now = $start - $tin + $topup + $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
@@ -551,6 +558,7 @@ try {
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
                                 <td class="num in"><?= $tin != 0 ? '−' . number_format($tin, 2) : '—' ?></td>
+                                <td class="num topup"><?= $topup != 0 ? number_format($topup, 2) : '—' ?></td>
                                 <td class="num out"><?= $tout != 0 ? number_format($tout, 2) : '—' ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
@@ -573,7 +581,7 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$products): ?><tr><td colspan="10">暂无产品</td></tr><?php endif; ?>
+                            <?php if (!$products): ?><tr><td colspan="11">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                 </div>
