@@ -107,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $staff = (string)($_SESSION['user_name'] ?? $uid);
             try {
                 $cols = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
-                $vals = "?, ?, 'DEPOSIT', NULL, NULL, ?, ?, 0, ?, ?, '产品加额', 'approved', ?, ?, NOW(), 1";
+                $vals = "?, ?, 'TOPUP', NULL, NULL, ?, ?, 0, ?, ?, '产品加额', 'approved', ?, ?, NOW(), 1";
                 $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
                 $stmt->execute([$day, $time, $product, $amount, $amount, $staff, $uid, $uid]);
                 $msg = $product . ' 已加额 ' . number_format($amount, 2) . '，Balance 已更新。';
@@ -231,7 +231,7 @@ try {
 }
 try {
     $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW','TOPUP') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -268,7 +268,7 @@ foreach ($products as $p) {
     $start = (float)($balance_product[$pkey] ?? 0);
     $tin = (float)($total_in_product[$pkey] ?? 0);
     $tout = (float)($total_out_product[$pkey] ?? 0);
-    $product_balances_for_notify[$pname] = $start - $tin + $tout;
+    $product_balances_for_notify[$pname] = $start + $tin - $tout;
 }
 require_once __DIR__ . '/inc/balance_notify.php';
 check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
@@ -529,7 +529,7 @@ try {
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
-                                $balance_now = $start - $tin + $tout;
+                                $balance_now = $start + $tin - $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$p['id'] ?></td>
@@ -538,8 +538,8 @@ try {
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
-                                <td class="num out"><?= $tin != 0 ? '−' . number_format($tin, 2) : '—' ?></td>
-                                <td class="num in"><?= $tout != 0 ? '+' . number_format($tout, 2) : '—' ?></td>
+                                <td class="num in"><?= $tout != 0 ? number_format($tout, 2) : '—' ?></td>
+                                <td class="num out"><?= $tin != 0 ? number_format($tin, 2) : '—' ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">

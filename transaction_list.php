@@ -302,7 +302,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <td><?= htmlspecialchars($r['code'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['bank'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['product'] ?? '') ?></td>
-                <td class="num <?= $r['mode'] === 'DEPOSIT' ? 'value-in' : 'value-out' ?>"><?= number_format((float)$r['amount'], 2) ?></td>
+                <td class="num <?= ($r['mode'] === 'DEPOSIT' || $r['mode'] === 'TOPUP') ? 'value-in' : 'value-out' ?>"><?= number_format((float)$r['amount'], 2) ?></td>
                 <td><?= number_format((float)($r['bonus'] ?? 0), 2) ?></td>
                 <td><?= number_format((float)($r['total'] ?? 0), 2) ?></td>
                 <td><?= htmlspecialchars($r['staff'] ?? '') ?></td>
