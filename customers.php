@@ -86,7 +86,7 @@ try {
     foreach ($stmt->fetchAll() as $r) {
         $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->query("SELECT code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+    $stmt = $pdo->query("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
     foreach ($stmt->fetchAll() as $r) {
         $all_bonus_by_code[$r['code']] = (float)$r['total'];
     }
