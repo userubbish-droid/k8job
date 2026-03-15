@@ -23,9 +23,9 @@ $day_new_customers = 0;
 $day_new_customer_orders = 0;
 
 try {
-    // 今日统计（只统计已批准）；入账/出账仅统计银行渠道（有 bank 的流水），与 Statement 一致
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' THEN amount ELSE 0 END), 0) AS total_in,
-                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' THEN amount ELSE 0 END), 0) AS total_out,
+    // 今日统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
                                   COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
@@ -41,9 +41,9 @@ try {
     $day_rebate = (float)($day['rebate'] ?? 0);
     $day_bonus = (float)($day['bonus'] ?? 0);
 
-    // 本月统计（只统计已批准）；入账/出账仅统计银行渠道，与 Statement 一致
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' THEN amount ELSE 0 END), 0) AS total_in,
-                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' THEN amount ELSE 0 END), 0) AS total_out,
+    // 本月统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
+    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
                                   COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
