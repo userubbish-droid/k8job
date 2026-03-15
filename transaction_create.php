@@ -37,12 +37,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = '金额请填数字。';
     } else {
         $amount = (float) $amount;
+        // Bonus 由「奖励/返点 %」计算：金额 × 百分比 / 100；若无百分比则用表单传来的 bonus 隐藏域
         if ($reward_pct !== '' && is_numeric($reward_pct)) {
             $bonus = round($amount * (float)$reward_pct / 100, 2);
+        } elseif (is_numeric($bonus_fix)) {
+            $bonus = (float) $bonus_fix;
         } else {
-            $bonus = is_numeric($bonus_fix) ? (float) $bonus_fix : 0;
+            $bonus = 0;
         }
-        $total  = $amount + $bonus;
+        $total  = round($amount + $bonus, 2);
 
         // member 使用当前时间提交则无需审核，否则待审核
         $status = $is_admin ? 'approved' : ($member_use_current ? 'approved' : 'pending');
@@ -50,23 +53,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $approved_at = ($status === 'approved') ? date('Y-m-d H:i:s') : null;
         $staff = (string) ($_SESSION['user_name'] ?? ($_SESSION['user_id'] ?? ''));
 
-        $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute([
-            $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null,
-            $amount, $bonus, $total, $staff ?: null, $remark ?: null,
-            $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at
-        ]);
-        $saved = true;
-        $submitted_status = $status;
-        if ($status === 'pending') {
-            if (file_exists(__DIR__ . '/inc/notify.php')) {
-                require_once __DIR__ . '/inc/notify.php';
-                send_pending_approval_notify($pdo);
+        try {
+            $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute([
+                $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null,
+                $amount, $bonus, $total, $staff ?: null, $remark ?: null,
+                $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at
+            ]);
+            $saved = true;
+        } catch (Throwable $e) {
+            if (strpos($e->getMessage(), 'bonus') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
+                $error = '数据库缺少 bonus/total 列。请在 phpMyAdmin 中执行 migrate_bonus.sql 里的 SQL。';
+            } else {
+                throw $e;
             }
         }
-        $saved_mode = $mode;
+        if ($saved) {
+        $submitted_status = $status;
+            if ($status === 'pending') {
+                if (file_exists(__DIR__ . '/inc/notify.php')) {
+                    require_once __DIR__ . '/inc/notify.php';
+                    send_pending_approval_notify($pdo);
+                }
+            }
+            $saved_mode = $mode;
         $saved_code = $code;
         $saved_product = $product;
         $saved_amount = $amount;
@@ -96,6 +108,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $saved_customer_name = $crow ? trim($crow['name'] ?? '') : '';
                 $saved_customer_bank = $crow ? trim($crow['bank_details'] ?? '') : '';
             } catch (Throwable $e) {}
+        }
         }
     }
 }
@@ -427,6 +440,8 @@ if ($is_admin) {
             if (amountEl) amountEl.addEventListener('blur', updateReward);
             if (pctEl) pctEl.addEventListener('input', updateReward);
             if (pctEl) pctEl.addEventListener('blur', updateReward);
+            var form = amountEl && amountEl.closest('form');
+            if (form) form.addEventListener('submit', function(){ updateReward(); });
         })();
         <?php if ($is_admin): ?>
         function toggleOther(selId, inputId) {
