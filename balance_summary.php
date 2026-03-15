@@ -30,6 +30,7 @@ $initial_product = [];
 $cum_in_bank = [];
 $cum_out_bank = [];
 $cum_in_product = [];
+$cum_topup_product = [];
 $cum_out_product = [];
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
@@ -47,7 +48,8 @@ try {
 } catch (Throwable $e) {}
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW','TOPUP') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE day < ? AND status = 'approved' GROUP BY product");
     $stmt->execute([$day_from]);
@@ -55,6 +57,7 @@ try {
         $p = strtolower(trim((string)($r['product'] ?? '')));
         if ($p !== '' && $p !== '—') {
             $cum_in_product[$p] = ($cum_in_product[$p] ?? 0) + (float)$r['ti'];
+            $cum_topup_product[$p] = ($cum_topup_product[$p] ?? 0) + (float)($r['topup'] ?? 0);
             $cum_out_product[$p] = ($cum_out_product[$p] ?? 0) + (float)($r['tout'] ?? $r['to'] ?? 0);
         }
     }
@@ -80,21 +83,24 @@ try {
 
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW','TOPUP') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS total_in,
+        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS total_in,
+        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'
         GROUP BY product");
     $stmt->execute([$day_from, $day_to]);
     $range_in_product = [];
+    $range_topup_product = [];
     $range_out_product = [];
     foreach ($stmt->fetchAll() as $r) {
         $p = strtolower(trim((string)($r['product'] ?? '')));
         if ($p !== '' && $p !== '—') {
             $range_in_product[$p] = ($range_in_product[$p] ?? 0) + (float)$r['total_in'];
+            $range_topup_product[$p] = ($range_topup_product[$p] ?? 0) + (float)($r['topup'] ?? 0);
             $range_out_product[$p] = ($range_out_product[$p] ?? 0) + (float)$r['total_out'];
         }
     }
-} catch (Throwable $e) { $range_in_product = []; $range_out_product = []; }
+} catch (Throwable $e) { $range_in_product = []; $range_topup_product = []; $range_out_product = []; }
 
 // 所有银行、产品（先取名单，便于用统一 key 做汇总）
 $all_banks = [];
@@ -115,7 +121,7 @@ try {
         if ($r['adjust_type'] === 'bank') {
             $initial_bank[$name] = $base + ($cum_in_bank[$key] ?? 0) - ($cum_out_bank[$key] ?? 0);
         } else {
-            $initial_product[$name] = $base - ($cum_in_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
+            $initial_product[$name] = $base - ($cum_in_product[$key] ?? 0) + ($cum_topup_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
         }
     }
 } catch (Throwable $e) {
@@ -134,7 +140,7 @@ foreach ($all_products as $name) {
     $name = trim((string)$name);
     if ($name === '') continue;
     $key = strtolower($name);
-    if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
+    if (!isset($initial_product[$name])) $initial_product[$name] = -($cum_in_product[$key] ?? 0) + ($cum_topup_product[$key] ?? 0) + ($cum_out_product[$key] ?? 0);
 }
 ?>
 <!DOCTYPE html>
@@ -217,9 +223,9 @@ foreach ($all_products as $name) {
                             <h4>Game Platform</h4>
                             <table class="total-table">
                                 <thead>
-                                    <tr>
+                                        <tr>
                                         <th>Game Platform</th>
-                                        <?php if ($is_admin): ?><th class="num">Starting</th><th class="num">In</th><th class="num">Out</th><?php endif; ?>
+                                        <?php if ($is_admin): ?><th class="num">Starting</th><th class="num">In</th><th class="num">Topup</th><th class="num">Out</th><?php endif; ?>
                                         <th class="num">Balance</th>
                                     </tr>
                                 </thead>
@@ -229,22 +235,24 @@ foreach ($all_products as $name) {
                                         if ($name === '') continue;
                                         $key = strtolower($name);
                                         $in = (float)($range_in_product[$key] ?? 0);
+                                        $topup = (float)($range_topup_product[$key] ?? 0);
                                         $out = (float)($range_out_product[$key] ?? 0);
                                         $init = $initial_product[$name] ?? 0;
-                                        $balance = $init - $in + $out;
+                                        $balance = $init - $in + $topup + $out;
                                     ?>
                                     <tr>
                                         <td><?= htmlspecialchars($name) ?></td>
                                         <?php if ($is_admin): ?>
                                         <td class="num"><?= number_format($init, 2) ?></td>
-                                        <td class="num out"><?= $in != 0 ? '−' . number_format($in, 2) : '—' ?></td>
-                                        <td class="num in"><?= $out != 0 ? '+' . number_format($out, 2) : '—' ?></td>
+                                        <td class="num stmt-in"><?= $in != 0 ? '−' . number_format($in, 2) : '—' ?></td>
+                                        <td class="num stmt-topup"><?= $topup != 0 ? number_format($topup, 2) : '—' ?></td>
+                                        <td class="num stmt-out"><?= $out != 0 ? number_format($out, 2) : '—' ?></td>
                                         <?php endif; ?>
-                                        <td class="num profit"><?= number_format($balance, 2) ?></td>
+                                        <td class="num <?= $balance < 0 ? 'stmt-negative' : 'profit' ?>"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($all_products)): ?>
-                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
+                                    <tr><td colspan="<?= $is_admin ? 6 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                 </tbody>
                             </table>

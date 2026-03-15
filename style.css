@@ -638,6 +638,10 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .total-table .num.in { color: var(--success); font-weight: 600; }
 .total-table .num.out { color: var(--danger); font-weight: 600; }
 .total-table .num.profit { color: var(--primary); font-weight: 600; }
+.total-table .num.stmt-in { color: var(--danger); font-weight: 600; }
+.total-table .num.stmt-topup { color: var(--success); font-weight: 600; }
+.total-table .num.stmt-out { color: var(--success); font-weight: 600; }
+.total-table .num.stmt-negative { color: var(--danger); font-weight: 600; }
 .welcome-role { font-size: 14px; color: var(--muted); }
 .welcome-role .role-badge { display: inline-block; padding: 3px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: var(--primary-light); color: var(--primary); margin-left: 6px; }
 #month-card { display: none; }
