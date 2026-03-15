@@ -24,8 +24,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
-    if ($is_admin && $bank === '其他') $bank = trim($_POST['bank_other'] ?? '');
-    if ($is_admin && $product === '其他') $product = trim($_POST['product_other'] ?? '');
     $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $reward_pct = str_replace(',', '', trim((string)($_POST['reward_pct'] ?? '')));
     $bonus_fix  = str_replace(',', '', trim((string)($_POST['bonus'] ?? '0')));
@@ -227,7 +225,6 @@ if ($is_admin) {
                     <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
                 </div>
             </div>
-            <p class="form-hint" style="margin-top:4px;">不勾选则使用当前时间。可输入数字如 1513 自动变为 15:13。</p>
         </div>
         <?php else: ?>
         <div class="form-section member-dt-section">
@@ -253,11 +250,11 @@ if ($is_admin) {
                     <label>模式 *</label>
                     <select name="mode" id="mode" class="form-control" required>
                         <option value="">-- 请选 --</option>
-                        <option value="DEPOSIT">DEPOSIT（入）</option>
-                        <option value="WITHDRAW">WITHDRAW（出）</option>
+                        <option value="DEPOSIT">DEPOSIT</option>
+                        <option value="WITHDRAW">WITHDRAW</option>
                         <option value="FREE">FREE</option>
                         <option value="FREE WITHDRAW">FREE WITHDRAW</option>
-                        <option value="EXPENSE">EXPENSE（开销）</option>
+                        <option value="EXPENSE">EXPENSE</option>
                         <option value="BANK">BANK</option>
                         <option value="REBATE">REBATE</option>
                         <option value="OTHER">OTHER</option>
@@ -289,9 +286,7 @@ if ($is_admin) {
                     <select name="bank" id="bank" class="form-control" title="REBATE/FREE 不必选；其他模式必选则银行与产品页会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
-                        <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
                     </select>
-                    <?php if ($is_admin): ?><input type="text" name="bank_other" id="bank_other" class="form-control" placeholder="其他银行" style="display:none; margin-top:6px;"><?php endif; ?>
                 </div>
                 <div class="form-group">
                     <label>产品/平台 *</label>
@@ -299,9 +294,7 @@ if ($is_admin) {
                     <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
-                        <?php if ($is_admin): ?><option value="其他">其他</option><?php endif; ?>
                     </select>
-                    <?php if ($is_admin): ?><input type="text" name="product_other" id="product_other" class="form-control" placeholder="其他产品" style="display:none; margin-top:6px;"><?php endif; ?>
                 </div>
             </div>
         </div>
@@ -315,9 +308,8 @@ if ($is_admin) {
                 </div>
                 <div class="form-group">
                     <label>奖励/返点 %</label>
-                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="选填，如 5" inputmode="decimal" title="按金额百分比计算 bonus，顾客列表 Bonus 列即此项合计">
+                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="" inputmode="decimal" title="按金额百分比计算 bonus，顾客列表 Bonus 列即此项合计">
                     <input type="hidden" name="bonus" id="bonus_hidden" value="0">
-                    <p class="form-hint" style="margin-top:4px;">Bonus 按此奖励/返点 % 计算（金额 × %），顾客列表中 Bonus 列为该顾客流水 bonus 合计。</p>
                 </div>
             </div>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
@@ -455,14 +447,6 @@ if ($is_admin) {
             if (form) form.addEventListener('submit', function(){ updateReward(); });
         })();
         <?php if ($is_admin): ?>
-        function toggleOther(selId, inputId) {
-            var sel = document.getElementById(selId);
-            var inp = document.getElementById(inputId);
-            if (inp && sel.value === '其他') { inp.style.display = 'block'; inp.focus(); } else if (inp) { inp.style.display = 'none'; inp.value = ''; }
-        }
-        document.getElementById('bank').onchange = function() { toggleOther('bank', 'bank_other'); };
-        document.getElementById('product').onchange = function() { toggleOther('product', 'product_other'); };
-
         var cb = document.getElementById('edit_dt');
         if (cb) {
             cb.onchange = function() {
