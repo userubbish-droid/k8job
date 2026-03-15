@@ -17,6 +17,7 @@ function get_permission_options(): array
         'customer_edit'      => '编辑顾客（含产品账号）',
         'product_library'    => '产品账号',
         'statement'          => 'statement',
+        'agent'              => 'Agent',
     ];
 }
 

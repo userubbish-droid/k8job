@@ -8,6 +8,7 @@ $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
 $msg = '';
 $err = '';
+$filter_recommend = isset($_GET['recommend']) ? trim((string)$_GET['recommend']) : '';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -46,15 +47,38 @@ $all_bonus_by_code = [];
 $month_deposit_by_code = [];
 $month_withdraw_by_code = [];
 try {
-    $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
-    $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
+    $where = [];
+    $params = [];
+    if ($filter_recommend !== '') {
+        $where[] = "TRIM(c.recommend) = ?";
+        $params[] = $filter_recommend;
+    }
+    $where_sql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
+    if ($filter_recommend !== '') {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE TRIM(recommend) = ?");
+        $stmt->execute([$filter_recommend]);
+        $summary['total'] = (int) $stmt->fetchColumn();
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE is_active = 1 AND TRIM(recommend) = ?");
+        $stmt->execute([$filter_recommend]);
+        $summary['active'] = (int) $stmt->fetchColumn();
+    } else {
+        $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
+        $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
+    }
     $sql = "SELECT c.id, c.code, c.name, c.phone, c.remark, c.is_active, c.created_at,
                    c.register_date, c.bank_details, c.regular_customer, c.recommend, c.created_by,
                    u.username AS created_by_name
             FROM customers c
             LEFT JOIN users u ON c.created_by = u.id
+            $where_sql
             ORDER BY c.is_active DESC, c.code ASC";
-    $rows = $pdo->query($sql)->fetchAll();
+    if ($params) {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll();
+    } else {
+        $rows = $pdo->query($sql)->fetchAll();
+    }
     $stmt = $pdo->query("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
         FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != ''
@@ -139,6 +163,12 @@ try {
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+        <?php if ($filter_recommend !== ''): ?>
+        <div class="alert" style="background:var(--bg); border:1px solid var(--border);">
+            Filtered by Agent: <strong><?= htmlspecialchars($filter_recommend) ?></strong>
+            <a href="customers.php" style="margin-left:10px;">Clear filter</a>
+        </div>
+        <?php endif; ?>
 
         <div class="summary">
             <div class="summary-item"><strong>T1. Customer</strong><span class="num"><?= $summary['total'] ?></span></div>
