@@ -9,15 +9,29 @@ $msg = '';
 $agents = [];
 $is_agent_user = ($_SESSION['user_role'] ?? '') === 'agent';
 $agent_code = $is_agent_user ? trim((string)($_SESSION['agent_code'] ?? '')) : '';
-$agent_rebate_pct_map = [];
+$agent_rebate_settings_map = [];
 
 function ensure_agent_rebate_table(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS agent_rebate_settings (
         agent_code VARCHAR(80) NOT NULL PRIMARY KEY,
         rebate_pct DECIMAL(10,2) NOT NULL DEFAULT 0,
+        is_paid TINYINT(1) NOT NULL DEFAULT 0,
+        paid_at DATETIME NULL,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL
     )");
+    try {
+        $c1 = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_rebate_settings' AND COLUMN_NAME = 'is_paid'")->fetchColumn();
+        if ($c1 === 0) {
+            $pdo->exec("ALTER TABLE agent_rebate_settings ADD COLUMN is_paid TINYINT(1) NOT NULL DEFAULT 0");
+        }
+    } catch (Throwable $e) {}
+    try {
+        $c2 = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_rebate_settings' AND COLUMN_NAME = 'paid_at'")->fetchColumn();
+        if ($c2 === 0) {
+            $pdo->exec("ALTER TABLE agent_rebate_settings ADD COLUMN paid_at DATETIME NULL");
+        }
+    } catch (Throwable $e) {}
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -27,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $agent = trim((string)($_POST['agent'] ?? ''));
             $pct_raw = str_replace(',', '.', trim((string)($_POST['rebate_pct'] ?? '0')));
             $pct = is_numeric($pct_raw) ? (float)$pct_raw : -1;
+            $is_paid = !empty($_POST['is_paid']) ? 1 : 0;
             if ($agent === '') {
                 throw new RuntimeException('参数错误：Agent 不能为空。');
             }
@@ -37,10 +52,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('你只能修改自己的返水比例。');
             }
             ensure_agent_rebate_table($pdo);
-            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (agent_code, rebate_pct, updated_by) VALUES (?, ?, ?)
-                                   ON DUPLICATE KEY UPDATE rebate_pct = VALUES(rebate_pct), updated_by = VALUES(updated_by)");
-            $stmt->execute([$agent, $pct, (int)($_SESSION['user_id'] ?? 0)]);
-            $msg = '返水比例已保存。';
+            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (agent_code, rebate_pct, is_paid, paid_at, updated_by) VALUES (?, ?, ?, ?, ?)
+                                   ON DUPLICATE KEY UPDATE rebate_pct = VALUES(rebate_pct), is_paid = VALUES(is_paid), paid_at = VALUES(paid_at), updated_by = VALUES(updated_by)");
+            $paid_at = $is_paid ? date('Y-m-d H:i:s') : null;
+            $stmt->execute([$agent, $pct, $is_paid, $paid_at, (int)($_SESSION['user_id'] ?? 0)]);
+            $msg = '返水比例/状态已保存。';
         } catch (Throwable $e) {
             $err = $e->getMessage();
         }
@@ -79,11 +95,15 @@ try {
     }
     try {
         ensure_agent_rebate_table($pdo);
-        $rows = $pdo->query("SELECT agent_code, rebate_pct FROM agent_rebate_settings")->fetchAll(PDO::FETCH_ASSOC);
+        $rows = $pdo->query("SELECT agent_code, rebate_pct, is_paid, paid_at FROM agent_rebate_settings")->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $r) {
             $k = strtolower(trim((string)($r['agent_code'] ?? '')));
             if ($k === '') continue;
-            $agent_rebate_pct_map[$k] = (float)($r['rebate_pct'] ?? 0);
+            $agent_rebate_settings_map[$k] = [
+                'pct' => (float)($r['rebate_pct'] ?? 0),
+                'is_paid' => (int)($r['is_paid'] ?? 0) === 1,
+                'paid_at' => (string)($r['paid_at'] ?? ''),
+            ];
         }
     } catch (Throwable $e) {
         // 若无建表权限，不阻断主页面
@@ -104,6 +124,12 @@ try {
     <title>Agent - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        .agent-winloss-pos { color: var(--success); font-weight: 700; }
+        .agent-winloss-neg { color: var(--danger); font-weight: 700; }
+        .agent-paid-wrap { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px; color: #475569; }
+        .agent-paid-at { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -132,6 +158,7 @@ try {
                                 <th class="num">Win(Loss)</th>
                                 <th class="num">Rebate %</th>
                                 <th class="num">Rebate Amount</th>
+                                <th>Paid</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -140,29 +167,41 @@ try {
                                 $agent = $r['agent'] ?? '';
                                 $cnt = (int)($r['cnt'] ?? 0);
                                 $winLoss = (float)($r['win_loss'] ?? 0);
-                                $pct = (float)($agent_rebate_pct_map[strtolower(trim((string)$agent))] ?? 0);
+                                $setting = $agent_rebate_settings_map[strtolower(trim((string)$agent))] ?? ['pct' => 0, 'is_paid' => false, 'paid_at' => ''];
+                                $pct = (float)($setting['pct'] ?? 0);
                                 $rebate_base = $winLoss > 0 ? $winLoss : 0; // 仅公司赢时计算反水
                                 $rebate_amount = round($rebate_base * $pct / 100, 2);
+                                $is_paid = !empty($setting['is_paid']);
+                                $paid_at = trim((string)($setting['paid_at'] ?? ''));
                                 $recommend_param = htmlspecialchars(urlencode($agent));
                             ?>
                             <tr>
                                 <td><?= htmlspecialchars($agent) ?></td>
                                 <td class="num"><?= $cnt ?></td>
-                                <td class="num <?= $winLoss >= 0 ? 'stmt-out' : 'stmt-in' ?>"><?= number_format($winLoss, 2) ?></td>
+                                <td class="num <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>"><?= number_format($winLoss, 2) ?></td>
                                 <td class="num">
-                                    <form method="post" style="display:inline-flex; align-items:center; gap:6px;">
+                                    <form method="post" class="js-agent-rebate-form" style="display:inline-flex; align-items:center; gap:6px;">
                                         <input type="hidden" name="action" value="save_rebate_pct">
                                         <input type="hidden" name="agent" value="<?= htmlspecialchars($agent) ?>">
-                                        <input type="text" name="rebate_pct" class="form-control" inputmode="decimal" value="<?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>" style="width:86px; text-align:right;">
+                                        <input type="hidden" class="js-winloss" value="<?= htmlspecialchars((string)$winLoss) ?>">
+                                        <input type="text" name="rebate_pct" class="form-control js-rebate-pct" inputmode="decimal" value="<?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>" style="width:86px; text-align:right;">
                                         <button type="submit" class="btn btn-sm btn-outline">保存</button>
+                                        <label class="agent-paid-wrap">
+                                            <input type="checkbox" name="is_paid" value="1" <?= $is_paid ? 'checked' : '' ?>>
+                                            已给 Agent
+                                        </label>
                                     </form>
                                 </td>
-                                <td class="num <?= $rebate_amount > 0 ? 'stmt-in' : '' ?>"><?= $rebate_amount > 0 ? number_format($rebate_amount, 2) : '0.00' ?></td>
+                                <td class="num js-rebate-amount <?= $rebate_amount > 0 ? 'agent-winloss-pos' : '' ?>"><?= number_format($rebate_amount, 2) ?></td>
+                                <td>
+                                    <?= $is_paid ? '已给' : '未给' ?>
+                                    <?php if ($paid_at !== ''): ?><span class="agent-paid-at">（<?= htmlspecialchars($paid_at) ?>）</span><?php endif; ?>
+                                </td>
                                 <td><a href="customers.php?recommend=<?= $recommend_param ?>">View Customers</a></td>
                             </tr>
                             <?php endforeach; ?>
                             <?php if (empty($agents)): ?>
-                            <tr><td colspan="6" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
+                            <tr><td colspan="7" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
@@ -171,5 +210,30 @@ try {
             </div>
         </main>
     </div>
+    <script>
+    (function(){
+        function toNum(v) {
+            var n = parseFloat(String(v || '').replace(/[,%\s]/g, ''));
+            return isNaN(n) ? 0 : n;
+        }
+        document.querySelectorAll('.js-agent-rebate-form').forEach(function(form){
+            var pctInput = form.querySelector('.js-rebate-pct');
+            var winLossInput = form.querySelector('.js-winloss');
+            var amountCell = form.closest('tr') ? form.closest('tr').querySelector('.js-rebate-amount') : null;
+            if (!pctInput || !winLossInput || !amountCell) return;
+            function recalc(){
+                var winLoss = toNum(winLossInput.value);
+                var pct = toNum(pctInput.value);
+                if (pct < 0) pct = 0;
+                if (pct > 100) pct = 100;
+                var base = winLoss > 0 ? winLoss : 0;
+                var amount = base * pct / 100;
+                amountCell.textContent = amount.toFixed(2);
+            }
+            pctInput.addEventListener('input', recalc);
+            recalc();
+        });
+    })();
+    </script>
 </body>
 </html>
