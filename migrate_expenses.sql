@@ -1,0 +1,9 @@
+-- Expense 主数据表（和 bank/product 一样可启用/禁用）
+CREATE TABLE IF NOT EXISTS expenses (
+  id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(80) NOT NULL UNIQUE,
+  is_active TINYINT(1) NOT NULL DEFAULT 1,
+  sort_order INT NOT NULL DEFAULT 0,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+

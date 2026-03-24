@@ -6,6 +6,10 @@ $sidebar_current = 'admin_users';
 
 $msg = '';
 $err = '';
+$status_filter = trim((string)($_GET['status_filter'] ?? 'all'));
+if (!in_array($status_filter, ['all', 'active', 'inactive'], true)) {
+    $status_filter = 'all';
+}
 
 function redirect_self(): void {
     header('Location: admin_users.php');
@@ -90,7 +94,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$users = $pdo->query("SELECT id, username, role, display_name, is_active, created_at FROM users ORDER BY id DESC")->fetchAll();
+$users_sql = "SELECT id, username, role, display_name, is_active, created_at FROM users";
+if ($status_filter === 'active') {
+    $users_sql .= " WHERE is_active = 1";
+} elseif ($status_filter === 'inactive') {
+    $users_sql .= " WHERE is_active = 0";
+}
+$users_sql .= " ORDER BY id DESC";
+$users = $pdo->query($users_sql)->fetchAll();
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -164,6 +175,11 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
 
         <div class="card">
             <h3>账号列表</h3>
+            <div class="admin-users-actions" style="margin-bottom:10px;">
+                <a class="btn btn-sm <?= $status_filter === 'all' ? 'btn-primary' : 'btn-outline' ?>" href="admin_users.php?status_filter=all">显示全部</a>
+                <a class="btn btn-sm <?= $status_filter === 'active' ? 'btn-primary' : 'btn-outline' ?>" href="admin_users.php?status_filter=active">仅启用</a>
+                <a class="btn btn-sm <?= $status_filter === 'inactive' ? 'btn-primary' : 'btn-outline' ?>" href="admin_users.php?status_filter=inactive">仅禁用</a>
+            </div>
             <div style="overflow-x:auto;">
             <table class="data-table">
                 <thead>

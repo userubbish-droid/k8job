@@ -16,9 +16,25 @@ function _ensure_balance_adjust_table(PDO $pdo) {
     )");
 }
 
+function _ensure_expenses_table(PDO $pdo) {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS expenses (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(80) NOT NULL UNIQUE,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        sort_order INT NOT NULL DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+}
+
 $msg = '';
 $err = '';
 $open_notify_form = false;
+$bank_status_filter = trim((string)($_GET['bank_status_filter'] ?? 'all'));
+$product_status_filter = trim((string)($_GET['product_status_filter'] ?? 'all'));
+$expense_status_filter = trim((string)($_GET['expense_status_filter'] ?? 'all'));
+if (!in_array($bank_status_filter, ['all', 'active', 'inactive'], true)) $bank_status_filter = 'all';
+if (!in_array($product_status_filter, ['all', 'active', 'inactive'], true)) $product_status_filter = 'all';
+if (!in_array($expense_status_filter, ['all', 'active', 'inactive'], true)) $expense_status_filter = 'all';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -51,6 +67,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 throw $e;
             }
+        } elseif ($action === 'create_expense') {
+            $name = trim($_POST['name'] ?? '');
+            $sort = (int)($_POST['sort_order'] ?? 0);
+            if ($name === '') throw new RuntimeException('请输入 Expense 名称。');
+            try {
+                _ensure_expenses_table($pdo);
+                $stmt = $pdo->prepare("INSERT INTO expenses (name, sort_order) VALUES (?, ?)");
+                $stmt->execute([$name, $sort]);
+                $msg = '已添加 Expense。';
+            } catch (Throwable $e) {
+                if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
+                    throw new RuntimeException('Expense「' . htmlspecialchars($name) . '」已存在，请换一个名称。');
+                }
+                throw $e;
+            }
         } elseif ($action === 'toggle_bank') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
@@ -61,6 +92,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
             $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ?");
+            $stmt->execute([$id]);
+            $msg = '已更新状态。';
+        } elseif ($action === 'toggle_expense') {
+            $id = (int)($_POST['id'] ?? 0);
+            if ($id <= 0) throw new RuntimeException('参数错误。');
+            _ensure_expenses_table($pdo);
+            $stmt = $pdo->prepare("UPDATE expenses SET is_active = IF(is_active=1,0,1) WHERE id = ?");
             $stmt->execute([$id]);
             $msg = '已更新状态。';
         } elseif ($action === 'do_transfer') {
@@ -188,14 +226,31 @@ if (isset($_SESSION['admin_banks_flash'])) {
 
 $banks = [];
 $products = [];
+$expenses = [];
 $balance_bank = [];
 $balance_product = [];
 $balance_adjust_ok = false;
 try {
-    $banks = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM banks ORDER BY sort_order ASC, name ASC")->fetchAll();
+    $sql = "SELECT id, name, is_active, sort_order, created_at FROM banks";
+    if ($bank_status_filter === 'active') $sql .= " WHERE is_active = 1";
+    elseif ($bank_status_filter === 'inactive') $sql .= " WHERE is_active = 0";
+    $sql .= " ORDER BY sort_order ASC, name ASC";
+    $banks = $pdo->query($sql)->fetchAll();
 } catch (Throwable $e) {}
 try {
-    $products = $pdo->query("SELECT id, name, is_active, sort_order, created_at FROM products ORDER BY sort_order ASC, name ASC")->fetchAll();
+    $sql = "SELECT id, name, is_active, sort_order, created_at FROM products";
+    if ($product_status_filter === 'active') $sql .= " WHERE is_active = 1";
+    elseif ($product_status_filter === 'inactive') $sql .= " WHERE is_active = 0";
+    $sql .= " ORDER BY sort_order ASC, name ASC";
+    $products = $pdo->query($sql)->fetchAll();
+} catch (Throwable $e) {}
+try {
+    _ensure_expenses_table($pdo);
+    $sql = "SELECT id, name, is_active, sort_order, created_at FROM expenses";
+    if ($expense_status_filter === 'active') $sql .= " WHERE is_active = 1";
+    elseif ($expense_status_filter === 'inactive') $sql .= " WHERE is_active = 0";
+    $sql .= " ORDER BY sort_order ASC, name ASC";
+    $expenses = $pdo->query($sql)->fetchAll();
 } catch (Throwable $e) {}
 try {
     _ensure_balance_adjust_table($pdo);
@@ -586,6 +641,60 @@ try {
                             </tr>
                             <?php endforeach; ?>
                             <?php if (!$products): ?><tr><td colspan="11">暂无产品</td></tr><?php endif; ?>
+                        </tbody>
+                    </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="section-title-inline">
+                        Expense 管理
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="expense-add-wrap" aria-label="展开添加 Expense">+</button>
+                    </h3>
+                    <div id="expense-add-wrap" style="display:none; margin-bottom:16px;">
+                        <form method="post" style="padding-top:14px; border-top:1px solid var(--border);">
+                            <input type="hidden" name="action" value="create_expense">
+                            <div class="form-group">
+                                <label>名称 *</label>
+                                <input name="name" class="form-control" required placeholder="例如 Office / Salary / Ads">
+                            </div>
+                            <div class="form-group">
+                                <label>排序</label>
+                                <input name="sort_order" class="form-control" type="number" value="0">
+                            </div>
+                            <button type="submit" class="btn btn-primary">添加</button>
+                        </form>
+                    </div>
+                    <div style="overflow-x:auto;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>名称</th>
+                                <th>状态</th>
+                                <th>排序</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($expenses as $e): ?>
+                            <tr>
+                                <td><?= (int)$e['id'] ?></td>
+                                <td><?= htmlspecialchars((string)$e['name']) ?></td>
+                                <td><?= ((int)$e['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                                <td><?= (int)$e['sort_order'] ?></td>
+                                <td><?= htmlspecialchars((string)$e['created_at']) ?></td>
+                                <td>
+                                    <form method="post" class="inline" style="display:inline;">
+                                        <input type="hidden" name="action" value="toggle_expense">
+                                        <input type="hidden" name="id" value="<?= (int)$e['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$e['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                    </form>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php if (!$expenses): ?><tr><td colspan="6">暂无 Expense</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                     </div>

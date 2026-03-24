@@ -128,6 +128,7 @@ $selected_mode = trim((string)($_POST['mode'] ?? ($quick === 'expense' ? 'EXPENS
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $banks = [];
 $products = [];
+$expenses = [];
 // 客户代码下拉选项（含 name、bank_details 供 WITHDRAW 时显示）
 $customers = [];
 try {
@@ -145,10 +146,16 @@ try {
 } catch (Throwable $e) {
     $products = [];
 }
+try {
+    $expenses = $pdo->query("SELECT name FROM expenses WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {
+    $expenses = [];
+}
 // admin 无数据时用内置列表，并可选「其他」手填；员工只能用管理员设置的列表，不能改
 if ($is_admin) {
     if (!$banks) $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
     if (!$products) $products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
+    if (!$expenses) $expenses = ['Office', 'Salary', 'Ads', 'Transport'];
 }
 ?>
 <!DOCTYPE html>
@@ -368,7 +375,7 @@ if ($is_admin) {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>产品/平台 *</label>
+                    <label id="product_label">产品/平台 *</label>
                     <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
                     <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
                         <option value="">-- 请选 --</option>
@@ -433,6 +440,8 @@ if ($is_admin) {
     <script>
         (function() {
             var customerData = <?= json_encode(array_column($customers, null, 'code')) ?>;
+            var productOptionsDefault = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE) ?>;
+            var productOptionsExpense = <?= json_encode(array_values($expenses), JSON_UNESCAPED_UNICODE) ?>;
             function updateWithdrawCustomer() {
                 var modeEl = document.getElementById('mode');
                 var codeEl = document.getElementById('code');
@@ -460,6 +469,8 @@ if ($is_admin) {
                 var mode = (modeEl && modeEl.value) ? modeEl.value : '';
                 var bankSelect = document.getElementById('bank');
                 var bankMark = document.getElementById('bank_req_mark');
+                var productSelect = document.getElementById('product');
+                var productLabel = document.getElementById('product_label');
                 var noBankModes = ['REBATE', 'FREE', 'FREE WITHDRAW', 'EXPENSE'];
                 if (bankSelect && bankMark) {
                     if (noBankModes.indexOf(mode) >= 0) {
@@ -469,6 +480,20 @@ if ($is_admin) {
                         bankSelect.setAttribute('required', 'required');
                         bankMark.style.display = 'inline';
                     }
+                }
+                if (productSelect && productLabel) {
+                    var current = productSelect.value;
+                    var list = (mode === 'EXPENSE') ? productOptionsExpense : productOptionsDefault;
+                    var fallback = mode === 'EXPENSE' ? 'Expense' : '产品/平台';
+                    productLabel.textContent = fallback + ' *';
+                    productSelect.innerHTML = '<option value="">-- 请选 --</option>';
+                    (list || []).forEach(function(name){
+                        var op = document.createElement('option');
+                        op.value = name;
+                        op.textContent = name;
+                        productSelect.appendChild(op);
+                    });
+                    if (current && list.indexOf(current) >= 0) productSelect.value = current;
                 }
             }
             if (modeEl) modeEl.addEventListener('change', applyBankRequired);
