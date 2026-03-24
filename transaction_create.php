@@ -256,6 +256,19 @@ if ($quick === 'expense') {
     }
 }
 
+// Kiosk Expense：Game Platform In/Out（与 statement 同源；日期与下方 From/To 筛选一致）
+$kiosk_gp_products = [];
+$kiosk_gp_in = [];
+$kiosk_gp_out = [];
+if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
+    $day_from = $expense_day_from;
+    $day_to = $expense_day_to;
+    require_once __DIR__ . '/inc/game_platform_statement_compute.php';
+    $kiosk_gp_products = $all_products;
+    $kiosk_gp_in = $range_in_product;
+    $kiosk_gp_out = $range_out_product;
+}
+
 $expense_page_title = ($quick === 'expense')
     ? ($expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement')
     : '记一笔流水';
@@ -577,13 +590,34 @@ $ep = $expense_modal_should_open ? $_POST : [];
             .expense-modal-2col { flex-direction: column; }
             .expense-modal-col-right { border-left: none; border-top: 1px solid #e2e8f0; }
         }
+        .page-wrap.txn-wrap.kiosk-expense-page { max-width: 960px; }
+        .kiosk-io-summary {
+            margin-bottom: 16px;
+            padding: 16px 18px;
+            border-radius: 12px;
+            border: 1px solid rgba(59, 130, 246, 0.22);
+            background: linear-gradient(180deg, #f0f7ff 0%, #fff 100%);
+            box-shadow: 0 4px 14px rgba(30, 64, 175, 0.06);
+        }
+        .kiosk-io-summary-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .kiosk-io-summary .kiosk-io-title { font-size: 15px; font-weight: 800; color: #1e3a8a; }
+        .kiosk-io-summary .data-table { margin: 0; }
+        .kiosk-io-summary .data-table thead th { background: #2563eb; color: #fff; }
+        .kiosk-io-net { font-weight: 700; color: #1d4ed8; }
     </style>
 </head>
 <body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
-    <div class="page-wrap txn-wrap">
+    <div class="page-wrap txn-wrap<?= ($quick === 'expense' && $expense_kind_ui === 'kiosk') ? ' kiosk-expense-page' : '' ?>">
         <div class="page-header">
             <h2><?= htmlspecialchars($expense_page_title) ?></h2>
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水记录</a></p>
@@ -631,9 +665,55 @@ $ep = $expense_modal_should_open ? $_POST : [];
         $ep_product = isset($ep['product']) ? htmlspecialchars((string)$ep['product']) : '';
         $ep_remark = isset($ep['remark']) ? htmlspecialchars((string)$ep['remark']) : '';
         ?>
+        <?php if ($expense_kind_ui === 'kiosk'): ?>
+        <div class="kiosk-io-summary">
+            <div class="kiosk-io-summary-head">
+                <div>
+                    <span class="kiosk-io-title">Game Platform</span>
+                    <p class="form-hint" style="margin:6px 0 0; max-width:560px;">与 statement Game Platform 同源；日期与下方 From/To 一致。例：In 300、Out 150 → 净额 150。</p>
+                </div>
+                <button type="button" class="btn-expense-add" id="expense-modal-open">+ 新增开销</button>
+            </div>
+            <div style="overflow-x:auto;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Game Platform</th>
+                            <th class="num">In</th>
+                            <th class="num">Out</th>
+                            <th class="num">净额（In − Out）</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ($kiosk_gp_products as $gpname):
+                            $gpname = trim((string)$gpname);
+                            if ($gpname === '') {
+                                continue;
+                            }
+                            $gk = strtolower($gpname);
+                            $kin = (float)($kiosk_gp_in[$gk] ?? 0);
+                            $kout = (float)($kiosk_gp_out[$gk] ?? 0);
+                            $knet = $kin - $kout;
+                            ?>
+                        <tr>
+                            <td><?= htmlspecialchars($gpname) ?></td>
+                            <td class="num value-in"><?= number_format($kin, 2) ?></td>
+                            <td class="num value-out"><?= number_format($kout, 2) ?></td>
+                            <td class="num kiosk-io-net"><?= number_format($knet, 2) ?></td>
+                        </tr>
+                        <?php endforeach; ?>
+                        <?php if (empty($kiosk_gp_products)): ?>
+                        <tr><td colspan="4">暂无产品，请在后台维护 Products。</td></tr>
+                        <?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <?php else: ?>
         <div class="expense-userlist-toolbar">
             <button type="button" class="btn-expense-add" id="expense-modal-open">+ 新增开销</button>
         </div>
+        <?php endif; ?>
         <div class="expense-entry-modal-mask<?= $expense_modal_should_open ? ' show' : '' ?>" id="expense-entry-modal" aria-modal="true" role="dialog" aria-labelledby="expense-modal-title" aria-hidden="<?= $expense_modal_should_open ? 'false' : 'true' ?>">
             <div class="expense-entry-modal">
                 <div class="expense-entry-modal-head">
