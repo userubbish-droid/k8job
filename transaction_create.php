@@ -262,6 +262,8 @@ if ($quick === 'expense') {
         .expense-kpi-card { border: 1px solid rgba(115, 146, 230, 0.25); border-radius: 10px; background: rgba(255,255,255,0.82); padding: 10px 12px; }
         .expense-kpi-card strong { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
         .expense-kpi-card .num { font-size: 1.2rem; font-weight: 700; line-height: 1; }
+        .txn-expense-block .form-section-title { margin-bottom: 12px; }
+        .txn-expense-block .form-row-2 { align-items: flex-end; }
         @media (max-width: 640px) {
             .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
             .txn-form-card { padding: 16px; }
@@ -409,15 +411,41 @@ if ($quick === 'expense') {
         </div>
         <?php endif; ?>
 
+        <?php if ($quick === 'expense'): ?>
+        <input type="hidden" name="mode" id="mode" value="EXPENSE">
+        <div class="form-section txn-expense-block">
+            <div class="form-section-title">记账</div>
+            <div class="form-row-2">
+                <div class="form-group">
+                    <label>bank <span id="bank_req_mark">*</span></label>
+                    <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
+                    <select name="bank" id="bank" class="form-control" required title="关联 Statement 与银行 In/Out 统计">
+                        <option value="">-- 请选 --</option>
+                        <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label>金额 *</label>
+                    <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required inputmode="decimal">
+                </div>
+            </div>
+            <div class="form-group">
+                <label id="product_label">Expense 项目 *</label>
+                <input type="text" name="product" id="product" class="form-control" required placeholder="例如：rental / office / salary">
+                <p class="form-hint" style="margin-top:4px;">用于 Expense 分类汇总。</p>
+            </div>
+            <div class="form-group" style="margin-bottom:0;">
+                <label>备注</label>
+                <textarea name="remark" class="form-control" rows="3" placeholder="选填，可写明细说明"></textarea>
+            </div>
+            <input type="hidden" name="reward_pct" id="reward_pct" value="0">
+            <input type="hidden" name="bonus" id="bonus_hidden" value="0">
+        </div>
+        <?php else: ?>
         <div class="form-section">
             <div class="form-section-title">基本信息</div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <?php if ($quick === 'expense'): ?>
-                    <label>模式</label>
-                    <input type="hidden" name="mode" id="mode" value="EXPENSE">
-                    <input type="text" class="form-control" value="EXPENSE" readonly>
-                    <?php else: ?>
                     <label>模式 *</label>
                     <select name="mode" id="mode" class="form-control" required>
                         <option value="">-- 请选 --</option>
@@ -430,9 +458,7 @@ if ($quick === 'expense') {
                         <option value="REBATE" <?= $selected_mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
                         <option value="OTHER" <?= $selected_mode === 'OTHER' ? 'selected' : '' ?>>OTHER</option>
                     </select>
-                    <?php endif; ?>
                 </div>
-                <?php if ($quick !== 'expense'): ?>
                 <div class="form-group">
                     <label>customer</label>
                     <?php if (empty($customers)): ?>
@@ -447,7 +473,6 @@ if ($quick === 'expense') {
                     </select>
                     <?php endif; ?>
                 </div>
-                <?php endif; ?>
             </div>
             <div id="withdraw_customer_box" class="form-group" style="display:none; padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:14px; border:1px solid #fcd34d;">
                 <div style="margin-bottom:4px;"><strong>顾客姓名</strong>：<span id="withdraw_customer_name">—</span></div>
@@ -463,18 +488,12 @@ if ($quick === 'expense') {
                     </select>
                 </div>
                 <div class="form-group">
-                    <?php if ($quick === 'expense'): ?>
-                    <label id="product_label">Expense 项目 *</label>
-                    <input type="text" name="product" id="product" class="form-control" required placeholder="例如：rental / office / salary">
-                    <p class="form-hint" style="margin-top:4px;">用于 Expense 分类汇总。</p>
-                    <?php else: ?>
                     <label id="product_label">产品/平台 *</label>
                     <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
                     <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
                     </select>
-                    <?php endif; ?>
                 </div>
             </div>
         </div>
@@ -482,7 +501,7 @@ if ($quick === 'expense') {
         <div class="form-section">
             <div class="form-group">
                 <label>备注</label>
-                <textarea name="remark" class="form-control" rows="2" placeholder="<?= $quick === 'expense' ? '例如：rental' : '选填' ?>"></textarea>
+                <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
             </div>
         </div>
 
@@ -493,21 +512,15 @@ if ($quick === 'expense') {
                     <label>金额 *</label>
                     <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
                 </div>
-                <?php if ($quick !== 'expense'): ?>
                 <div class="form-group">
                     <label>奖励/返点 %</label>
                     <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="" inputmode="decimal" title="按金额百分比计算 bonus，顾客列表 Bonus 列即此项合计">
                     <input type="hidden" name="bonus" id="bonus_hidden" value="0">
                 </div>
-                <?php else: ?>
-                <input type="hidden" name="reward_pct" id="reward_pct" value="0">
-                <input type="hidden" name="bonus" id="bonus_hidden" value="0">
-                <?php endif; ?>
             </div>
-            <?php if ($quick !== 'expense'): ?>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
-            <?php endif; ?>
         </div>
+        <?php endif; ?>
 
         <button type="submit" class="btn btn-primary txn-submit">保存</button>
     </form>
