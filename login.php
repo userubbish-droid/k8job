@@ -185,6 +185,43 @@ $login_as = $_POST['login_as'] ?? 'admin';
             color: #64748b;
             text-align: center;
         }
+        .login-modal-mask {
+            position: fixed;
+            inset: 0;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            background: rgba(8, 16, 40, 0.45);
+            z-index: 1000;
+            padding: 20px;
+        }
+        .login-modal-mask.show { display: flex; }
+        .login-modal {
+            width: min(92vw, 420px);
+            background: #fff;
+            border-radius: 16px;
+            border: 1px solid #dbeafe;
+            box-shadow: 0 20px 55px rgba(37,99,235,0.28);
+            overflow: hidden;
+        }
+        .login-modal-head {
+            padding: 12px 16px;
+            font-weight: 700;
+            color: #1d4ed8;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+            border-bottom: 1px solid #bfdbfe;
+        }
+        .login-modal-body { padding: 18px 16px 10px; color: #0f172a; }
+        .login-modal-foot { padding: 0 16px 14px; text-align: right; }
+        .login-modal-ok {
+            border: none;
+            border-radius: 999px;
+            padding: 8px 16px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+        }
     </style>
 </head>
 <body>
@@ -224,8 +261,25 @@ $login_as = $_POST['login_as'] ?? 'admin';
         </form>
 
     </div>
+    <div class="login-modal-mask" id="login-modal-mask" aria-hidden="true">
+        <div class="login-modal" role="dialog" aria-modal="true" aria-label="系统提示">
+            <div class="login-modal-head">系统提示</div>
+            <div class="login-modal-body" id="login-modal-body"></div>
+            <div class="login-modal-foot">
+                <button type="button" class="login-modal-ok" id="login-modal-ok">OK</button>
+            </div>
+        </div>
+    </div>
 
     <script>
+        function showLoginModal(message) {
+            var mask = document.getElementById('login-modal-mask');
+            var body = document.getElementById('login-modal-body');
+            if (!mask || !body) return;
+            body.textContent = message || '';
+            mask.classList.add('show');
+            mask.setAttribute('aria-hidden', 'false');
+        }
         document.querySelectorAll('.tab').forEach(function(t) {
             t.addEventListener('click', function(e) {
                 e.preventDefault();
@@ -236,8 +290,19 @@ $login_as = $_POST['login_as'] ?? 'admin';
         });
         document.querySelector('.forget').addEventListener('click', function(e) {
             e.preventDefault();
-            alert('请联系管理员重置密码。');
+            showLoginModal('请联系管理员重置密码。');
         });
+        (function(){
+            var mask = document.getElementById('login-modal-mask');
+            var ok = document.getElementById('login-modal-ok');
+            if (!mask || !ok) return;
+            function close() {
+                mask.classList.remove('show');
+                mask.setAttribute('aria-hidden', 'true');
+            }
+            ok.addEventListener('click', close);
+            mask.addEventListener('click', function(e){ if (e.target === mask) close(); });
+        })();
     </script>
 </body>
 </html>

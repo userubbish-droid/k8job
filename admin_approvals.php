@@ -111,7 +111,7 @@ try {
                             <input type="hidden" name="action" value="approve">
                             <button class="btn approve" type="submit">通过</button>
                         </form>
-                        <form method="post" onsubmit="return confirm('确定拒绝这条流水？');">
+                        <form method="post" data-confirm="确定拒绝这条流水？">
                             <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
                             <input type="hidden" name="action" value="reject">
                             <button class="btn reject" type="submit">拒绝</button>

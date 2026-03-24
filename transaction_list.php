@@ -311,7 +311,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <td>
                     <?php $edit_return = 'transaction_list.php?' . ($query_string ? $query_string . '&' : '') . 'page=' . $page; ?>
                     <a href="transaction_edit.php?id=<?= (int)$r['id'] ?>&return_to=<?= urlencode($edit_return) ?>">编辑</a>
-                    <a href="transaction_delete.php?id=<?= (int)$r['id'] ?>&<?= $query_string ?>&page=<?= $page ?>" onclick="return confirm('确定删除这条流水？');">删除</a>
+                    <a href="transaction_delete.php?id=<?= (int)$r['id'] ?>&<?= $query_string ?>&page=<?= $page ?>" data-confirm="确定删除这条流水？">删除</a>
                 </td>
                 <?php endif; ?>
             </tr>

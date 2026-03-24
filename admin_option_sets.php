@@ -118,7 +118,7 @@ try {
                 <?php foreach ($options_by_type[$type] as $opt): ?>
                 <li>
                     <span><?= htmlspecialchars($opt['option_value']) ?></span>
-                    <form method="post" class="inline" onsubmit="return confirm('确定删除？');">
+                    <form method="post" class="inline" data-confirm="确定删除？">
                         <input type="hidden" name="action" value="delete">
                         <input type="hidden" name="option_type" value="<?= htmlspecialchars($type) ?>">
                         <input type="hidden" name="id" value="<?= (int)$opt['id'] ?>">

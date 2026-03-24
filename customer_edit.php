@@ -240,7 +240,7 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                     <td><?= $account_display ?></td>
                     <td><?= htmlspecialchars(($pa['password'] ?? '') !== '' ? $pa['password'] : '—') ?></td>
                     <td>
-                        <form method="post" class="inline" onsubmit="return confirm('确定删除这条产品账号？');">
+                        <form method="post" class="inline" data-confirm="确定删除这条产品账号？">
                             <input type="hidden" name="action" value="del_product">
                             <input type="hidden" name="account_id" value="<?= (int)$pa['id'] ?>">
                             <button type="submit" class="btn btn-sm btn-danger">删除</button>

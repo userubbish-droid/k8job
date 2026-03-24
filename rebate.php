@@ -249,13 +249,13 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             </td>
                             <?php if ($is_admin && $is_given): ?>
                             <td class="num">
-                                <form method="post" style="display:inline;">
+                                <form method="post" style="display:inline;" data-confirm="确定取消该客户「已给」？">
                                     <input type="hidden" name="day" value="<?= htmlspecialchars($day_to) ?>">
                                     <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
                                     <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                     <input type="hidden" name="action" value="cancel">
                                     <input type="hidden" name="code" value="<?= htmlspecialchars($code) ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline" onclick="return confirm('确定取消该客户「已给」？');">取消</button>
+                                    <button type="submit" class="btn btn-sm btn-outline">取消</button>
                                 </form>
                             </td>
                             <?php elseif ($is_admin): ?>

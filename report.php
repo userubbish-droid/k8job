@@ -130,37 +130,90 @@ try {
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
+        .report-wrap { max-width: 1160px; }
+        .report-filter-card {
+            background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(242,247,255,0.9));
+            border: 1px solid rgba(115, 146, 230, 0.28);
+        }
+        .report-kpi-grid {
+            display: grid;
+            grid-template-columns: repeat(5, minmax(140px, 1fr));
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+        .report-kpi-item {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(125, 152, 226, 0.24);
+            border-radius: 12px;
+            padding: 12px 14px;
+            box-shadow: 0 6px 14px rgba(43, 71, 146, 0.08);
+        }
+        .report-kpi-item strong {
+            display: block;
+            font-size: 11px;
+            letter-spacing: 0.04em;
+            color: var(--muted);
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+        .report-kpi-item .num {
+            font-size: 1.65rem;
+            font-weight: 700;
+            line-height: 1.1;
+            font-variant-numeric: tabular-nums;
+        }
+        .report-section-card {
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            border-radius: 14px;
+            border: 1px solid rgba(114, 146, 238, 0.24);
+            box-shadow: 0 8px 20px rgba(36, 56, 115, 0.08);
+        }
         .report-collapse-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 10px;
             margin: 0;
+            font-size: 17px;
+            color: #1e293b;
         }
         .report-collapse-btn {
-            border: 1px solid var(--border);
-            background: #fff;
-            color: #334155;
-            border-radius: 8px;
-            padding: 4px 10px;
+            border: 1px solid rgba(86, 118, 203, 0.34);
+            background: linear-gradient(180deg, #f8fbff, #ecf3ff);
+            color: #2747c7;
+            border-radius: 999px;
+            padding: 5px 12px;
             font-size: 12px;
+            font-weight: 700;
             cursor: pointer;
         }
         .report-collapse-body { margin-top: 12px; }
         .report-collapse-body.collapsed { display: none; }
+        .report-mini-summary { margin-bottom: 10px; gap: 10px; }
+        .report-mini-summary .summary-item { min-width: 130px; padding: 12px 14px; }
+        .report-mini-summary .summary-item .num { font-size: 1.2rem; }
+        @media (max-width: 980px) {
+            .report-kpi-grid { grid-template-columns: repeat(2, minmax(120px, 1fr)); }
+        }
+        @media (max-width: 640px) {
+            .report-kpi-grid { grid-template-columns: 1fr; }
+            .report-section-card { padding: 12px; }
+            .report-collapse-head { font-size: 16px; }
+        }
     </style>
 </head>
 <body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
-            <div class="page-wrap">
+            <div class="page-wrap report-wrap">
                 <div class="page-header">
                     <h2>Report</h2>
                     <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span>数据报表</p>
                 </div>
 
-                <form class="filters-bar filters-bar-flow" method="get" style="margin-bottom:16px;">
+                <form class="filters-bar filters-bar-flow report-filter-card" method="get" style="margin-bottom:16px;">
                     <div class="filters-row filters-row-main">
                         <div class="filter-group">
                             <label>From:</label>
@@ -180,15 +233,15 @@ try {
 
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-                <div class="summary">
-                    <div class="summary-item"><strong>总入</strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
-                    <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
-                    <div class="summary-item"><strong>开销</strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
-                    <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
-                    <div class="summary-item"><strong>已批准笔数</strong><span class="num"><?= (int)$approved_count ?></span></div>
+                <div class="report-kpi-grid">
+                    <div class="report-kpi-item"><strong>总入</strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong>开销</strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong>已批准笔数</strong><span class="num"><?= (int)$approved_count ?></span></div>
                 </div>
 
-                <div class="card">
+                <div class="card report-section-card">
                     <h3 class="report-collapse-head">
                         <span>模式汇总</span>
                         <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-mode-body" aria-expanded="false">展开</button>
@@ -216,7 +269,7 @@ try {
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card report-section-card">
                     <h3 class="report-collapse-head">
                         <span>客户净额 Top 10</span>
                         <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-top-body" aria-expanded="false">展开</button>
@@ -250,13 +303,13 @@ try {
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card report-section-card">
                     <h3 class="report-collapse-head">
                         <span>Bank Contra</span>
                         <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-contra-body" aria-expanded="false">展开</button>
                     </h3>
                     <div id="report-contra-body" class="report-collapse-body collapsed">
-                        <div class="summary" style="margin-bottom:14px;">
+                        <div class="summary report-mini-summary">
                             <div class="summary-item"><strong>Contra In</strong><span class="num" style="color:var(--success);"><?= number_format($contra_in, 2) ?></span></div>
                             <div class="summary-item"><strong>Contra Out</strong><span class="num" style="color:var(--danger);"><?= number_format($contra_out, 2) ?></span></div>
                             <div class="summary-item"><strong>Diff</strong><span class="num"><?= number_format($contra_in - $contra_out, 2) ?></span></div>
@@ -291,13 +344,13 @@ try {
                     </div>
                 </div>
 
-                <div class="card">
+                <div class="card report-section-card">
                     <h3 class="report-collapse-head">
                         <span>Expense</span>
                         <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-expense-body" aria-expanded="false">展开</button>
                     </h3>
                     <div id="report-expense-body" class="report-collapse-body collapsed">
-                        <div class="summary" style="margin-bottom:14px;">
+                        <div class="summary report-mini-summary">
                             <div class="summary-item"><strong>Expense Total</strong><span class="num" style="color:#b45309;"><?= number_format($expense_total, 2) ?></span></div>
                             <div class="summary-item"><strong>Count</strong><span class="num"><?= count($expense_rows) ?></span></div>
                         </div>
