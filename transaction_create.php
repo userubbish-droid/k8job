@@ -32,6 +32,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($day === '' || $mode === '') {
         $error = '请填写日期和模式。';
+    } elseif ($mode === 'EXPENSE' && ($bank === '' || $product === '')) {
+        $error = 'EXPENSE 必须选择 Bank 和 Product。';
     } elseif (!is_numeric($amount)) {
         $error = '金额请填数字。';
     } else {
@@ -471,7 +473,7 @@ if ($is_admin) {
                 var bankMark = document.getElementById('bank_req_mark');
                 var productSelect = document.getElementById('product');
                 var productLabel = document.getElementById('product_label');
-                var noBankModes = ['REBATE', 'FREE', 'FREE WITHDRAW', 'EXPENSE'];
+                var noBankModes = ['REBATE', 'FREE', 'FREE WITHDRAW'];
                 if (bankSelect && bankMark) {
                     if (noBankModes.indexOf(mode) >= 0) {
                         bankSelect.removeAttribute('required');
@@ -483,8 +485,8 @@ if ($is_admin) {
                 }
                 if (productSelect && productLabel) {
                     var current = productSelect.value;
-                    var list = (mode === 'EXPENSE') ? productOptionsExpense : productOptionsDefault;
-                    var fallback = mode === 'EXPENSE' ? 'Expense' : '产品/平台';
+                    var list = productOptionsDefault;
+                    var fallback = '产品/平台';
                     productLabel.textContent = fallback + ' *';
                     productSelect.innerHTML = '<option value="">-- 请选 --</option>';
                     (list || []).forEach(function(name){

@@ -26,6 +26,7 @@ $contra_out = 0.0;
 $contra_rows = [];
 $expense_total = 0.0;
 $expense_rows = [];
+$expense_product_rows = [];
 
 try {
     $stmt = $pdo->prepare("
@@ -117,6 +118,20 @@ try {
     ");
     $stmt->execute([$day_from, $day_to]);
     $expense_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    $stmt = $pdo->prepare("
+        SELECT
+            COALESCE(NULLIF(TRIM(product), ''), '未填写产品') AS product_name,
+            COUNT(*) AS cnt,
+            COALESCE(SUM(amount), 0) AS total_amount,
+            GROUP_CONCAT(DISTINCT NULLIF(TRIM(bank), '') ORDER BY bank SEPARATOR ', ') AS bank_list
+        FROM transactions
+        WHERE status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
+        GROUP BY COALESCE(NULLIF(TRIM(product), ''), '未填写产品')
+        ORDER BY total_amount DESC
+    ");
+    $stmt->execute([$day_from, $day_to]);
+    $expense_product_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $err = '报表加载失败：' . $e->getMessage();
 }
@@ -352,6 +367,30 @@ try {
                         <div class="summary report-mini-summary">
                             <div class="summary-item"><strong>Expense Total</strong><span class="num" style="color:#b45309;"><?= number_format($expense_total, 2) ?></span></div>
                             <div class="summary-item"><strong>Count</strong><span class="num"><?= count($expense_rows) ?></span></div>
+                            <div class="summary-item"><strong>Product Count</strong><span class="num"><?= count($expense_product_rows) ?></span></div>
+                        </div>
+                        <div style="overflow-x:auto; margin-bottom: 10px;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Product</th>
+                                        <th>Related Bank</th>
+                                        <th class="num">Count</th>
+                                        <th class="num">Total Expense</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($expense_product_rows as $r): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars((string)($r['product_name'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['bank_list'] ?? '-')) ?></td>
+                                        <td class="num"><?= (int)($r['cnt'] ?? 0) ?></td>
+                                        <td class="num"><?= number_format((float)($r['total_amount'] ?? 0), 2) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php if (empty($expense_product_rows)): ?><tr><td colspan="4">暂无 Product 开销汇总</td></tr><?php endif; ?>
+                                </tbody>
+                            </table>
                         </div>
                         <div style="overflow-x:auto;">
                             <table class="data-table">
