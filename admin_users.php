@@ -12,6 +12,11 @@ function redirect_self(): void {
     exit;
 }
 
+function ensure_users_role_supports_agent(PDO $pdo): void {
+    $sql = "ALTER TABLE users MODIFY role ENUM('admin','member','agent') NOT NULL DEFAULT 'member'";
+    $pdo->exec($sql);
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -27,6 +32,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!in_array($role, ['admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
+            }
+
+            if ($role === 'agent') {
+                // 兼容旧库：旧版本 users.role 仅支持 admin/member
+                ensure_users_role_supports_agent($pdo);
             }
 
             $hash = password_hash($password, PASSWORD_DEFAULT);

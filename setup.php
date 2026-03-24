@@ -1,5 +1,5 @@
 <?php
-// 一次性初始化页面：创建 users 表里的账号（admin/member）
+// 一次性初始化页面：创建 users 表里的账号（admin/member/agent）
 // 用完请删除此文件，避免被别人创建账号。
 require 'config.php';
 
@@ -14,7 +14,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
     if ($username === '' || $password === '') {
         $err = '请填写用户名和密码。';
-    } elseif (!in_array($role, ['admin', 'member'], true)) {
+    } elseif (!in_array($role, ['admin', 'member', 'agent'], true)) {
         $err = '角色不正确。';
     } else {
         try {
@@ -23,7 +23,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
                 username VARCHAR(50) NOT NULL UNIQUE,
                 password_hash VARCHAR(255) NOT NULL,
-                role ENUM('admin','member') NOT NULL DEFAULT 'member',
+                role ENUM('admin','member','agent') NOT NULL DEFAULT 'member',
                 display_name VARCHAR(80) NULL,
                 is_active TINYINT(1) NOT NULL DEFAULT 1,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -61,7 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <h2>初始化账号</h2>
     <div class="tip">
         这是一次性工具：用完请删除 <code>setup.php</code>。<br>
-        你可以先创建一个 <b>admin</b> 账号，再创建一个 <b>member</b> 账号。
+        你可以创建 <b>admin</b>、<b>member</b> 或 <b>agent</b> 账号。
     </div>
 
     <?php if ($msg): ?><div class="ok"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -78,6 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <select name="role" required>
             <option value="admin">admin</option>
             <option value="member" selected>member</option>
+            <option value="agent">agent</option>
         </select>
 
         <label>显示名称（可选）</label>
