@@ -273,7 +273,7 @@ $expense_page_title = ($quick === 'expense')
     ? ($expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement')
     : '记一笔流水';
 $expense_entry_url = ($expense_kind_ui === 'kiosk') ? 'kiosk_expense.php' : 'expense.php';
-$expense_modal_should_open = ($quick === 'expense' && $_SERVER['REQUEST_METHOD'] === 'POST' && $error !== '');
+$expense_modal_should_open = ($quick === 'expense' && $expense_kind_ui !== 'kiosk' && $_SERVER['REQUEST_METHOD'] === 'POST' && $error !== '');
 $ep = $expense_modal_should_open ? $_POST : [];
 ?>
 <!DOCTYPE html>
@@ -321,6 +321,18 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .expense-filter-bar { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 12px; }
         .expense-filter-item label { display: block; font-size: 12px; margin-bottom: 4px; color: var(--muted); }
         .expense-filter-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .expense-quick-ranges {
+            grid-column: 1 / -1;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 8px;
+            margin-top: 2px;
+            padding-top: 10px;
+            border-top: 1px dashed rgba(115, 146, 230, 0.35);
+        }
+        .expense-quick-ranges > span { font-size: 12px; color: var(--muted); margin-right: 4px; }
+        .expense-quick-hint { width: 100%; margin: 4px 0 0; font-size: 12px; color: var(--muted); }
         .expense-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 10px; margin-bottom: 10px; }
         .expense-kpi-card { border: 1px solid rgba(115, 146, 230, 0.25); border-radius: 10px; background: rgba(255,255,255,0.82); padding: 10px 12px; }
         .expense-kpi-card strong { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
@@ -599,18 +611,40 @@ $ep = $expense_modal_should_open ? $_POST : [];
             background: linear-gradient(180deg, #f0f7ff 0%, #fff 100%);
             box-shadow: 0 4px 14px rgba(30, 64, 175, 0.06);
         }
-        .kiosk-io-summary-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
         .kiosk-io-summary .kiosk-io-title { font-size: 15px; font-weight: 800; color: #1e3a8a; }
         .kiosk-io-summary .data-table { margin: 0; }
         .kiosk-io-summary .data-table thead th { background: #2563eb; color: #fff; }
-        .kiosk-io-net { font-weight: 700; color: #1d4ed8; }
+        .kiosk-io-summary .kiosk-gp-in { color: #16a34a; font-weight: 700; }
+        .kiosk-io-summary .kiosk-gp-out { color: #dc2626; font-weight: 700; }
+        .kiosk-io-summary .kiosk-io-net { font-weight: 700; color: #2563eb; }
+        .kiosk-gp-filters {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 12px 20px;
+            margin-bottom: 12px;
+            padding: 10px 12px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.85);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+        }
+        .kiosk-gp-filters label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 600;
+            color: #1e3a8a;
+            user-select: none;
+        }
+        .kiosk-gp-filters input[type="checkbox"] { width: 16px; height: 16px; accent-color: #2563eb; }
+        .kiosk-gp-table.is-inout-hidden th:nth-child(2),
+        .kiosk-gp-table.is-inout-hidden th:nth-child(3),
+        .kiosk-gp-table.is-inout-hidden td:nth-child(2),
+        .kiosk-gp-table.is-inout-hidden td:nth-child(3) { display: none; }
+        .kiosk-gp-filters input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.55; }
+        .kiosk-gp-filter-placeholder { cursor: not-allowed; color: #64748b; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -667,15 +701,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
         ?>
         <?php if ($expense_kind_ui === 'kiosk'): ?>
         <div class="kiosk-io-summary">
-            <div class="kiosk-io-summary-head">
-                <div>
-                    <span class="kiosk-io-title">Game Platform</span>
-                    <p class="form-hint" style="margin:6px 0 0; max-width:560px;">与 statement Game Platform 同源；日期与下方 From/To 一致。例：In 300、Out 150 → 净额 150。</p>
-                </div>
-                <button type="button" class="btn-expense-add" id="expense-modal-open">+ 新增开销</button>
+            <div class="kiosk-io-title" style="margin-bottom:10px;">Game Platform</div>
+            <?php if (!empty($kiosk_gp_products)): ?>
+            <div class="kiosk-gp-filters" role="group" aria-label="Game Platform filters">
+                <label><input type="checkbox" id="kiosk-gp-show-inout" checked> Show In / Out</label>
+                <label class="kiosk-gp-filter-placeholder"><input type="checkbox" id="kiosk-gp-reserved" disabled aria-disabled="true"> （待定）</label>
             </div>
+            <?php endif; ?>
             <div style="overflow-x:auto;">
-                <table class="data-table">
+                <table class="data-table kiosk-gp-table" id="kiosk-gp-table">
                     <thead>
                         <tr>
                             <th>Game Platform</th>
@@ -684,7 +718,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             <th class="num">净额（In − Out）</th>
                         </tr>
                     </thead>
-                    <tbody>
+                    <tbody id="kiosk-gp-tbody">
                         <?php foreach ($kiosk_gp_products as $gpname):
                             $gpname = trim((string)$gpname);
                             if ($gpname === '') {
@@ -695,15 +729,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             $kout = (float)($kiosk_gp_out[$gk] ?? 0);
                             $knet = $kin - $kout;
                             ?>
-                        <tr>
+                        <tr class="kiosk-gp-row" data-in="<?= htmlspecialchars((string)$kin) ?>" data-out="<?= htmlspecialchars((string)$kout) ?>" data-net="<?= htmlspecialchars((string)$knet) ?>">
                             <td><?= htmlspecialchars($gpname) ?></td>
-                            <td class="num value-in"><?= number_format($kin, 2) ?></td>
-                            <td class="num value-out"><?= number_format($kout, 2) ?></td>
+                            <td class="num kiosk-gp-in"><?= number_format($kin, 2) ?></td>
+                            <td class="num kiosk-gp-out"><?= number_format($kout, 2) ?></td>
                             <td class="num kiosk-io-net"><?= number_format($knet, 2) ?></td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($kiosk_gp_products)): ?>
-                        <tr><td colspan="4">暂无产品，请在后台维护 Products。</td></tr>
+                        <tr class="kiosk-gp-no-products"><td colspan="4">暂无产品，请在后台维护 Products。</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
@@ -714,6 +748,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
             <button type="button" class="btn-expense-add" id="expense-modal-open">+ 新增开销</button>
         </div>
         <?php endif; ?>
+        <?php if ($expense_kind_ui !== 'kiosk'): ?>
         <div class="expense-entry-modal-mask<?= $expense_modal_should_open ? ' show' : '' ?>" id="expense-entry-modal" aria-modal="true" role="dialog" aria-labelledby="expense-modal-title" aria-hidden="<?= $expense_modal_should_open ? 'false' : 'true' ?>">
             <div class="expense-entry-modal">
                 <div class="expense-entry-modal-head">
@@ -789,6 +824,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 </form>
             </div>
         </div>
+        <?php endif; ?>
     <?php else: ?>
     <div class="card txn-form-card">
     <form method="post" class="txn-form">
@@ -910,15 +946,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
     <?php if ($quick === 'expense'): ?>
     <div class="card expense-statement-wrap">
         <h4 class="expense-statement-title"><?= $expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement' ?> · 明细与汇总</h4>
-        <form method="get" class="expense-filter-bar" action="<?= htmlspecialchars($expense_entry_url) ?>">
+        <form method="get" class="expense-filter-bar" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
             <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
             <div class="expense-filter-item">
                 <label>From</label>
-                <input type="date" name="expense_day_from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
+                <input type="date" name="expense_day_from" id="expense-day-from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
             </div>
             <div class="expense-filter-item">
                 <label>To</label>
-                <input type="date" name="expense_day_to" class="form-control" value="<?= htmlspecialchars($expense_day_to) ?>">
+                <input type="date" name="expense_day_to" id="expense-day-to" class="form-control" value="<?= htmlspecialchars($expense_day_to) ?>">
             </div>
             <div class="expense-filter-item">
                 <label>Bank</label>
@@ -941,6 +977,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
             <div class="expense-filter-actions">
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
                 <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back btn-sm">Reset</a>
+            </div>
+            <div class="expense-quick-ranges" aria-label="日期快捷">
+                <span>快捷：</span>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="yesterday" title="昨天">昨日</button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_week" title="本周一至本周日">本周</button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">本月</button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">上月</button>
+                <span class="expense-quick-hint">「本周」「上周」为自然周：<strong>星期一</strong> 至 <strong>星期日</strong>。</span>
             </div>
         </form>
 
@@ -1191,7 +1236,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
             ok.addEventListener('click', closeModal);
             mask.addEventListener('click', function(e){ if (e.target === mask) closeModal(); });
         })();
-        <?php if ($quick === 'expense'): ?>
+        <?php if ($quick === 'expense' && $expense_kind_ui !== 'kiosk'): ?>
         (function(){
             var mask = document.getElementById('expense-entry-modal');
             var openBtn = document.getElementById('expense-modal-open');
@@ -1245,6 +1290,76 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     if (r) r.value = '';
                 });
             }
+        })();
+        <?php endif; ?>
+        <?php if ($quick === 'expense'): ?>
+        (function(){
+            var form = document.getElementById('expense-filter-form');
+            var fromEl = document.getElementById('expense-day-from');
+            var toEl = document.getElementById('expense-day-to');
+            if (!form || !fromEl || !toEl) return;
+            function fmt(d) {
+                return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+            }
+            function mondayOf(d) {
+                var x = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+                var day = x.getDay();
+                var diff = day === 0 ? -6 : 1 - day;
+                x.setDate(x.getDate() + diff);
+                return x;
+            }
+            document.querySelectorAll('.expense-quick-range').forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    var range = btn.getAttribute('data-range');
+                    var now = new Date();
+                    var from, to;
+                    if (range === 'yesterday') {
+                        var y = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
+                        from = to = fmt(y);
+                    } else if (range === 'this_week') {
+                        var mon = mondayOf(now);
+                        var sun = new Date(mon);
+                        sun.setDate(sun.getDate() + 6);
+                        from = fmt(mon);
+                        to = fmt(sun);
+                    } else if (range === 'last_week') {
+                        var mon = mondayOf(now);
+                        var lwStart = new Date(mon);
+                        lwStart.setDate(lwStart.getDate() - 7);
+                        var lwEnd = new Date(lwStart);
+                        lwEnd.setDate(lwEnd.getDate() + 6);
+                        from = fmt(lwStart);
+                        to = fmt(lwEnd);
+                    } else if (range === 'this_month') {
+                        var first = new Date(now.getFullYear(), now.getMonth(), 1);
+                        var last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+                        from = fmt(first);
+                        to = fmt(last);
+                    } else if (range === 'last_month') {
+                        var first = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+                        var last = new Date(now.getFullYear(), now.getMonth(), 0);
+                        from = fmt(first);
+                        to = fmt(last);
+                    } else {
+                        return;
+                    }
+                    fromEl.value = from;
+                    toEl.value = to;
+                    form.submit();
+                });
+            });
+        })();
+        <?php endif; ?>
+        <?php if ($quick === 'expense' && $expense_kind_ui === 'kiosk'): ?>
+        (function(){
+            var table = document.getElementById('kiosk-gp-table');
+            var inoutEl = document.getElementById('kiosk-gp-show-inout');
+            if (!table || !inoutEl) return;
+            function apply() {
+                table.classList.toggle('is-inout-hidden', !inoutEl.checked);
+            }
+            inoutEl.addEventListener('change', apply);
+            apply();
         })();
         <?php endif; ?>
     </script>
