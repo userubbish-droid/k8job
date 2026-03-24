@@ -43,6 +43,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)");
             $stmt->execute([$username, $hash, $role, $display_name !== '' ? $display_name : null]);
             $msg = "已创建账号：{$username}（{$role}）";
+        } elseif ($action === 'change_role') {
+            $id = (int)($_POST['id'] ?? 0);
+            $role = trim($_POST['role'] ?? 'member');
+            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if (!in_array($role, ['admin', 'member', 'agent'], true)) {
+                throw new RuntimeException('角色不正确。');
+            }
+            if ($role === 'agent') {
+                // 兼容旧库：旧版本 users.role 仅支持 admin/member
+                ensure_users_role_supports_agent($pdo);
+            }
+            if ($id === (int)($_SESSION['user_id'] ?? 0) && $role !== 'admin') {
+                throw new RuntimeException('不能把当前登录账号改为非 admin。');
+            }
+            $stmt = $pdo->prepare("UPDATE users SET role = ? WHERE id = ?");
+            $stmt->execute([$role, $id]);
+            $msg = '角色已更新。';
         } elseif ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
@@ -64,7 +81,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             throw new RuntimeException('未知操作。');
         }
     } catch (Throwable $e) {
-        $err = $e->getMessage();
+        $raw = (string)$e->getMessage();
+        if (strpos($raw, 'Duplicate entry') !== false && strpos($raw, "for key 'username'") !== false) {
+            $err = '创建失败：用户名已存在，请直接在下方账号列表修改角色或重置密码。';
+        } else {
+            $err = $raw;
+        }
     }
 }
 
@@ -166,7 +188,18 @@ $users = $pdo->query("SELECT id, username, role, display_name, is_active, create
                         <td><?= (int)$u['id'] ?></td>
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['display_name'] ?? '') ?></td>
-                        <td><?= htmlspecialchars($u['role']) ?></td>
+                        <td>
+                            <form method="post" class="inline">
+                                <input type="hidden" name="action" value="change_role">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <select name="role" style="width:120px; display:inline-block;">
+                                    <option value="member" <?= ($u['role'] ?? '') === 'member' ? 'selected' : '' ?>>member</option>
+                                    <option value="admin" <?= ($u['role'] ?? '') === 'admin' ? 'selected' : '' ?>>admin</option>
+                                    <option value="agent" <?= ($u['role'] ?? '') === 'agent' ? 'selected' : '' ?>>agent</option>
+                                </select>
+                                <button type="submit" class="btn2">改角色</button>
+                            </form>
+                        </td>
                         <td><?= ((int)$u['is_active'] === 1) ? '启用' : '禁用' ?></td>
                         <td><?= htmlspecialchars($u['created_at']) ?></td>
                         <td>
