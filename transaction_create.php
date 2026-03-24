@@ -499,13 +499,6 @@ if ($quick === 'expense') {
         </div>
 
         <div class="form-section">
-            <div class="form-group">
-                <label>备注</label>
-                <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
-            </div>
-        </div>
-
-        <div class="form-section">
             <div class="form-section-title">金额</div>
             <div class="form-row-2">
                 <div class="form-group">
@@ -519,6 +512,13 @@ if ($quick === 'expense') {
                 </div>
             </div>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
+        </div>
+
+        <div class="form-section">
+            <div class="form-group">
+                <label>备注</label>
+                <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
+            </div>
         </div>
         <?php endif; ?>
 
