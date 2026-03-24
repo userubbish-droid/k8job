@@ -13,6 +13,63 @@ function ensure_transactions_expense_kind(PDO $pdo) {
 
 ensure_transactions_expense_kind($pdo);
 
+function ensure_products_kiosk_columns(PDO $pdo) {
+    try {
+        $pdo->exec("ALTER TABLE products ADD COLUMN kiosk_fee_pct DECIMAL(12,4) NULL DEFAULT NULL COMMENT 'Kiosk %' AFTER sort_order");
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec("ALTER TABLE products ADD COLUMN kiosk_paid_amount DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Kiosk amount paid' AFTER kiosk_fee_pct");
+    } catch (Throwable $e) {
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']) && trim((string)($_POST['expense_kind'] ?? '')) === 'kiosk') {
+    if (($_SESSION['user_role'] ?? '') !== 'admin') {
+        header('Location: kiosk_expense.php');
+        exit;
+    }
+    ensure_products_kiosk_columns($pdo);
+    $pctArr = $_POST['kiosk_pct'] ?? [];
+    if (is_array($pctArr)) {
+        foreach ($pctArr as $name => $pctRaw) {
+            $name = trim((string)$name);
+            if ($name === '') {
+                continue;
+            }
+            $paidRaw = $_POST['kiosk_paid'][$name] ?? '';
+            $pct = str_replace(',', '', trim((string)$pctRaw));
+            $paid = str_replace(',', '', trim((string)$paidRaw));
+            $pctVal = ($pct === '' || !is_numeric($pct)) ? null : round((float)$pct, 4);
+            $paidVal = ($paid === '' || !is_numeric($paid)) ? null : round((float)$paid, 2);
+            try {
+                $stmt = $pdo->prepare('UPDATE products SET kiosk_fee_pct = ?, kiosk_paid_amount = ? WHERE name = ? AND is_active = 1');
+                $stmt->execute([$pctVal, $paidVal, $name]);
+            } catch (Throwable $e) {
+            }
+        }
+    }
+    $q = ['expense_kind' => 'kiosk'];
+    $df = trim((string)($_POST['redirect_expense_day_from'] ?? ''));
+    $dt = trim((string)($_POST['redirect_expense_day_to'] ?? ''));
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $df)) {
+        $q['expense_day_from'] = $df;
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dt)) {
+        $q['expense_day_to'] = $dt;
+    }
+    $eb = trim((string)($_POST['redirect_expense_bank'] ?? ''));
+    $epr = trim((string)($_POST['redirect_expense_product'] ?? ''));
+    if ($eb !== '') {
+        $q['expense_bank'] = $eb;
+    }
+    if ($epr !== '') {
+        $q['expense_product'] = $epr;
+    }
+    header('Location: kiosk_expense.php?' . http_build_query($q));
+    exit;
+}
+
 $quick = trim((string)($_GET['quick'] ?? ''));
 $expense_kind_ui = 'statement';
 if ($quick === 'expense') {
@@ -260,6 +317,7 @@ if ($quick === 'expense') {
 $kiosk_gp_products = [];
 $kiosk_gp_in = [];
 $kiosk_gp_out = [];
+$kiosk_product_meta = [];
 if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
     $day_from = $expense_day_from;
     $day_to = $expense_day_to;
@@ -267,6 +325,21 @@ if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
     $kiosk_gp_products = $all_products;
     $kiosk_gp_in = $range_in_product;
     $kiosk_gp_out = $range_out_product;
+    ensure_products_kiosk_columns($pdo);
+    try {
+        $km = $pdo->query('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE is_active = 1');
+        foreach ($km->fetchAll(PDO::FETCH_ASSOC) as $r) {
+            $k = strtolower(trim((string)$r['name']));
+            if ($k !== '') {
+                $kiosk_product_meta[$k] = [
+                    'pct' => $r['kiosk_fee_pct'],
+                    'paid' => $r['kiosk_paid_amount'],
+                ];
+            }
+        }
+    } catch (Throwable $e) {
+        $kiosk_product_meta = [];
+    }
 }
 
 $expense_page_title = ($quick === 'expense')
@@ -643,6 +716,10 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .kiosk-gp-table.is-inout-hidden th:nth-child(3),
         .kiosk-gp-table.is-inout-hidden td:nth-child(2),
         .kiosk-gp-table.is-inout-hidden td:nth-child(3) { display: none; }
+        .kiosk-expense-filter-in-gp { margin-bottom: 14px; }
+        .kiosk-gp-meta-form { margin: 0; }
+        .kiosk-gp-meta-form .form-control.kiosk-gp-input { min-height: 36px; padding: 6px 8px; font-size: 13px; max-width: 120px; margin-left: auto; }
+        .kiosk-gp-meta-actions { margin-top: 12px; }
         .kiosk-gp-filters input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.55; }
         .kiosk-gp-filter-placeholder { cursor: not-allowed; color: #64748b; font-weight: 500; }
     </style>
@@ -702,11 +779,62 @@ $ep = $expense_modal_should_open ? $_POST : [];
         <?php if ($expense_kind_ui === 'kiosk'): ?>
         <div class="kiosk-io-summary">
             <div class="kiosk-io-title" style="margin-bottom:10px;">Game Platform</div>
-            <?php if (!empty($kiosk_gp_products)): ?>
+            <form method="get" class="expense-filter-bar kiosk-expense-filter-in-gp" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
+                <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
+                <div class="expense-filter-item">
+                    <label>From</label>
+                    <input type="date" name="expense_day_from" id="expense-day-from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
+                </div>
+                <div class="expense-filter-item">
+                    <label>To</label>
+                    <input type="date" name="expense_day_to" id="expense-day-to" class="form-control" value="<?= htmlspecialchars($expense_day_to) ?>">
+                </div>
+                <div class="expense-filter-item">
+                    <label>Bank</label>
+                    <select name="expense_bank" class="form-control">
+                        <option value="">全部</option>
+                        <?php foreach ($expense_filter_banks as $bank_name): ?>
+                        <option value="<?= htmlspecialchars((string)$bank_name) ?>" <?= $expense_bank_filter === (string)$bank_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$bank_name) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="expense-filter-item">
+                    <label>Product</label>
+                    <select name="expense_product" class="form-control">
+                        <option value="">全部</option>
+                        <?php foreach ($expense_filter_products as $product_name): ?>
+                        <option value="<?= htmlspecialchars((string)$product_name) ?>" <?= $expense_product_filter === (string)$product_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$product_name) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <div class="expense-filter-actions">
+                    <button type="submit" class="btn btn-primary btn-sm">Search</button>
+                    <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back btn-sm">Reset</a>
+                </div>
+                <div class="expense-quick-ranges" aria-label="日期快捷">
+                    <span>快捷：</span>
+                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="yesterday" title="昨天">昨日</button>
+                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_week" title="本周一至本周日">本周</button>
+                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
+                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">本月</button>
+                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">上月</button>
+                    <span class="expense-quick-hint">「本周」「上周」为自然周：<strong>星期一</strong> 至 <strong>星期日</strong>。</span>
+                </div>
+            </form>
             <div class="kiosk-gp-filters" role="group" aria-label="Game Platform filters">
                 <label><input type="checkbox" id="kiosk-gp-show-inout" checked> Show In / Out</label>
                 <label class="kiosk-gp-filter-placeholder"><input type="checkbox" id="kiosk-gp-reserved" disabled aria-disabled="true"> （待定）</label>
             </div>
+            <?php if ($is_admin): ?>
+            <form method="post" action="kiosk_expense.php" class="kiosk-gp-meta-form" autocomplete="off">
+                <input type="hidden" name="save_kiosk_gp_meta" value="1">
+                <input type="hidden" name="expense_kind" value="kiosk">
+                <input type="hidden" name="redirect_expense_day_from" value="<?= htmlspecialchars($expense_day_from) ?>">
+                <input type="hidden" name="redirect_expense_day_to" value="<?= htmlspecialchars($expense_day_to) ?>">
+                <input type="hidden" name="redirect_expense_bank" value="<?= htmlspecialchars($expense_bank_filter) ?>">
+                <input type="hidden" name="redirect_expense_product" value="<?= htmlspecialchars($expense_product_filter) ?>">
+            <?php else: ?>
+            <div class="kiosk-gp-meta-form">
             <?php endif; ?>
             <div style="overflow-x:auto;">
                 <table class="data-table kiosk-gp-table" id="kiosk-gp-table">
@@ -716,6 +844,8 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             <th class="num">In</th>
                             <th class="num">Out</th>
                             <th class="num">净额（In − Out）</th>
+                            <th class="num">%</th>
+                            <th class="num">amount paid</th>
                         </tr>
                     </thead>
                     <tbody id="kiosk-gp-tbody">
@@ -728,20 +858,48 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             $kin = (float)($kiosk_gp_in[$gk] ?? 0);
                             $kout = (float)($kiosk_gp_out[$gk] ?? 0);
                             $knet = $kin - $kout;
+                            $meta = $kiosk_product_meta[$gk] ?? null;
+                            $mvPct = $meta && $meta['pct'] !== null && $meta['pct'] !== '' ? (string)$meta['pct'] : '';
+                            $mvPaid = $meta && $meta['paid'] !== null && $meta['paid'] !== '' ? (string)$meta['paid'] : '';
                             ?>
                         <tr class="kiosk-gp-row" data-in="<?= htmlspecialchars((string)$kin) ?>" data-out="<?= htmlspecialchars((string)$kout) ?>" data-net="<?= htmlspecialchars((string)$knet) ?>">
                             <td><?= htmlspecialchars($gpname) ?></td>
                             <td class="num kiosk-gp-in"><?= number_format($kin, 2) ?></td>
                             <td class="num kiosk-gp-out"><?= number_format($kout, 2) ?></td>
                             <td class="num kiosk-io-net"><?= number_format($knet, 2) ?></td>
+                            <td class="num">
+                                <?php if ($is_admin): ?>
+                                <input type="text" name="kiosk_pct[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input" inputmode="decimal" value="<?= htmlspecialchars($mvPct) ?>" placeholder="%" aria-label="%">
+                                <?php else: ?>
+                                <span class="kiosk-gp-readonly"><?= $mvPct !== '' ? htmlspecialchars($mvPct) : '—' ?></span>
+                                <?php endif; ?>
+                            </td>
+                            <td class="num">
+                                <?php if ($is_admin): ?>
+                                <input type="text" name="kiosk_paid[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input" inputmode="decimal" value="<?= htmlspecialchars($mvPaid) ?>" placeholder="0.00" aria-label="amount paid">
+                                <?php else: ?>
+                                <span class="kiosk-gp-readonly"><?= $mvPaid !== '' ? htmlspecialchars($mvPaid) : '—' ?></span>
+                                <?php endif; ?>
+                            </td>
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($kiosk_gp_products)): ?>
-                        <tr class="kiosk-gp-no-products"><td colspan="4">暂无产品，请在后台维护 Products。</td></tr>
+                        <tr class="kiosk-gp-no-products"><td colspan="6">暂无产品，请在后台维护 Products。</td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
+                <?php if ($is_admin && !empty($kiosk_gp_products)): ?>
+                <div class="kiosk-gp-meta-actions">
+                    <button type="submit" class="btn btn-primary btn-sm">保存 % / amount paid</button>
+                    <span class="form-hint" style="margin-left:10px;">写入各 Product 记录（kiosk_fee_pct、kiosk_paid_amount）。</span>
+                </div>
+                <?php endif; ?>
+            <?php if ($is_admin): ?>
+            </form>
+            <?php else: ?>
+            </div>
+            <?php endif; ?>
         </div>
         <?php else: ?>
         <div class="expense-userlist-toolbar">
@@ -946,6 +1104,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
     <?php if ($quick === 'expense'): ?>
     <div class="card expense-statement-wrap">
         <h4 class="expense-statement-title"><?= $expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement' ?> · 明细与汇总</h4>
+        <?php if ($expense_kind_ui !== 'kiosk'): ?>
         <form method="get" class="expense-filter-bar" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
             <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
             <div class="expense-filter-item">
@@ -988,6 +1147,9 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <span class="expense-quick-hint">「本周」「上周」为自然周：<strong>星期一</strong> 至 <strong>星期日</strong>。</span>
             </div>
         </form>
+        <?php else: ?>
+        <p class="form-hint" style="margin-bottom:12px;">筛选日期与 Bank/Product 已移至上方 <strong>Game Platform</strong> 区域。</p>
+        <?php endif; ?>
 
         <div class="expense-kpi-grid">
             <div class="expense-kpi-card">
