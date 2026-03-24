@@ -10,6 +10,12 @@ $agents = [];
 $is_agent_user = ($_SESSION['user_role'] ?? '') === 'agent';
 $agent_code = $is_agent_user ? trim((string)($_SESSION['agent_code'] ?? '')) : '';
 $agent_rebate_settings_map = [];
+$today = date('Y-m-d');
+$day_from_raw = $_REQUEST['day_from'] ?? $today;
+$day_to_raw = $_REQUEST['day_to'] ?? $today;
+$day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : $today;
+$day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw) ? substr($day_to_raw, 0, 10) : $today;
+if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 
 function ensure_agent_rebate_table(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS agent_rebate_settings (
@@ -41,7 +47,7 @@ function ensure_agent_rebate_table(PDO $pdo): void {
     } catch (Throwable $e) {}
 }
 
-function get_agent_win_loss(PDO $pdo, string $agent): float {
+function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $day_to): float {
     $agent = trim($agent);
     if ($agent === '') return 0.0;
     $sql = "SELECT COALESCE(SUM(sub.pnl), 0) AS win_loss
@@ -50,12 +56,12 @@ function get_agent_win_loss(PDO $pdo, string $agent): float {
                 SELECT TRIM(code) AS code,
                        SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
                 FROM transactions
-                WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != ''
+                WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
                 GROUP BY TRIM(code)
             ) sub ON TRIM(c.code) = sub.code
             WHERE c.recommend IS NOT NULL AND TRIM(c.recommend) != '' AND TRIM(c.recommend) = ?";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$agent]);
+    $stmt->execute([$day_from, $day_to, $agent]);
     return (float)$stmt->fetchColumn();
 }
 
@@ -76,7 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($is_agent_user && strcasecmp($agent, $agent_code) !== 0) {
                 throw new RuntimeException('你只能修改自己的返水比例。');
             }
-            $current_win_loss = get_agent_win_loss($pdo, $agent);
+            $post_day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_from'] ?? ''))) ? substr(trim((string)$_POST['day_from']), 0, 10) : $day_from;
+            $post_day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_to'] ?? ''))) ? substr(trim((string)$_POST['day_to']), 0, 10) : $day_to;
+            $current_win_loss = get_agent_win_loss($pdo, $agent, $post_day_from, $post_day_to);
             if ($current_win_loss >= 0) {
                 // 仅负数可给：正数或 0 一律不可标记已给
                 $is_paid = 0;
@@ -125,12 +133,12 @@ try {
         LEFT JOIN (
             SELECT TRIM(code) AS code,
                    SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
-            FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != ''
+            FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
             GROUP BY TRIM(code)
         ) sub ON TRIM(c.code) = sub.code
         WHERE c.recommend IS NOT NULL AND TRIM(c.recommend) != ''
     ";
-    $params = [];
+    $params = [$day_from, $day_to];
     if ($is_agent_user && $agent_code !== '') {
         $sql .= " AND TRIM(c.recommend) = ?";
         $params[] = $agent_code;
@@ -198,6 +206,35 @@ try {
                     <h2>Agent</h2>
                     <p class="breadcrumb"><a href="dashboard.php">Home</a><span>·</span>Agent (from Customer Recommend)</p>
                 </div>
+                <?php
+                    $this_week_start = date('Y-m-d', strtotime('monday this week'));
+                    $this_week_end = date('Y-m-d', strtotime('sunday this week'));
+                    $last_week_start = date('Y-m-d', strtotime('monday last week'));
+                    $last_week_end = date('Y-m-d', strtotime('sunday last week'));
+                    $this_month_start = date('Y-m-01');
+                    $this_month_end = date('Y-m-t');
+                    $last_month_start = date('Y-m-01', strtotime('first day of last month'));
+                    $last_month_end = date('Y-m-t', strtotime('last day of last month'));
+                ?>
+                <form class="filters-bar filters-bar-flow" method="get" style="margin-bottom:16px;">
+                    <div class="filters-row filters-row-main">
+                        <div class="filter-group">
+                            <label>From:</label>
+                            <input type="date" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
+                        </div>
+                        <div class="filter-group">
+                            <label>To:</label>
+                            <input type="date" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
+                        </div>
+                        <button type="submit" class="btn btn-search">Search</button>
+                    </div>
+                    <div class="filters-row filters-row-presets">
+                        <a href="agents.php?<?= http_build_query(['day_from' => $this_week_start, 'day_to' => $this_week_end]) ?>" class="btn btn-preset">This Week</a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $last_week_start, 'day_to' => $last_week_end]) ?>" class="btn btn-preset">Last Week</a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $this_month_start, 'day_to' => $this_month_end]) ?>" class="btn btn-preset">This Month</a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset">Last Month</a>
+                    </div>
+                </form>
                 <?php if ($err): ?>
                     <div class="alert alert-error"><?= htmlspecialchars($err) ?></div>
                 <?php elseif ($msg): ?>
@@ -246,6 +283,8 @@ try {
                                     <form method="post" class="js-agent-rebate-form" style="display:inline-flex; align-items:center; gap:6px;">
                                         <input type="hidden" name="action" value="save_rebate_pct">
                                         <input type="hidden" name="agent" value="<?= htmlspecialchars($agent) ?>">
+                                        <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
+                                        <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                         <input type="hidden" class="js-winloss" value="<?= htmlspecialchars((string)$winLoss) ?>">
                                         <div class="agent-pct-view js-pct-view">
                                             <span class="agent-pct-badge"><?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>%</span>
@@ -263,6 +302,8 @@ try {
                                     <form method="post" style="display:inline-flex; align-items:center; gap:8px;">
                                         <input type="hidden" name="action" value="toggle_rebate_enabled">
                                         <input type="hidden" name="agent" value="<?= htmlspecialchars($agent) ?>">
+                                        <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
+                                        <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                         <input type="hidden" name="rebate_enabled" value="<?= $rebate_enabled ? '0' : '1' ?>">
                                         <button type="submit" class="btn btn-sm <?= $rebate_enabled ? 'btn-danger' : 'btn-primary' ?>">
                                             <?= $rebate_enabled ? '暂停' : '启用' ?>
@@ -274,6 +315,8 @@ try {
                                     <form method="post" class="js-agent-paid-form" style="display:inline-flex; align-items:center; gap:8px;">
                                         <input type="hidden" name="action" value="save_rebate_pct">
                                         <input type="hidden" name="agent" value="<?= htmlspecialchars($agent) ?>">
+                                        <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
+                                        <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                         <input type="hidden" name="rebate_pct" value="<?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>">
                                         <label class="agent-paid-wrap" style="margin-left:0;">
                                             <input type="checkbox" name="is_paid" value="1" <?= $is_paid ? 'checked' : '' ?> <?= $can_pay ? '' : 'disabled' ?>>

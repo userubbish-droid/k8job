@@ -165,6 +165,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         </div>
 
     <?php if ($is_admin):
+        $today = date('Y-m-d');
+        $yesterday = date('Y-m-d', strtotime('-1 day'));
         $this_week_start = date('Y-m-d', strtotime('monday this week'));
         $this_week_end = date('Y-m-d', strtotime('sunday this week'));
         $last_week_start = date('Y-m-d', strtotime('monday last week'));
@@ -218,6 +220,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <a href="dashboard.php" class="btn btn-back">Back</a>
         </div>
         <div class="filters-row filters-row-presets">
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $today, 'day_to' => $today])) ?>" class="btn btn-preset">Today</a>
+            <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $yesterday, 'day_to' => $yesterday])) ?>" class="btn btn-preset">Yesterday</a>
             <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $this_week_start, 'day_to' => $this_week_end])) ?>" class="btn btn-preset">This Week</a>
             <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $last_week_start, 'day_to' => $last_week_end])) ?>" class="btn btn-preset">Last Week</a>
             <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $this_month_start, 'day_to' => $this_month_end])) ?>" class="btn btn-preset">This Month</a>
