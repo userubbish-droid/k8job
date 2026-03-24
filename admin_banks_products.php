@@ -290,7 +290,7 @@ $diag_error = '';
 try {
     $stmt = $pdo->query("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
+        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' GROUP BY COALESCE(bank, '')");
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
@@ -568,7 +568,7 @@ try {
                         </tbody>
                     </table>
                     </div>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。</p>
+                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（In=DEPOSIT；Out=WITHDRAW + <strong>EXPENSE</strong>（从该银行支出），均为已审核流水）。</p>
                 </div>
 
                 <div class="card">

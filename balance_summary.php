@@ -35,7 +35,7 @@ $cum_out_product = [];
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
+        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE day < ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
     $stmt->execute([$day_from]);
     foreach ($stmt->fetchAll() as $r) {
@@ -66,7 +66,7 @@ try {
 try {
     $stmt = $pdo->prepare("SELECT bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''
         GROUP BY bank");
     $stmt->execute([$day_from, $day_to]);
