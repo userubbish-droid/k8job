@@ -1,0 +1,8 @@
+-- Agent 返水比例设置表
+CREATE TABLE IF NOT EXISTS agent_rebate_settings (
+  agent_code VARCHAR(80) NOT NULL PRIMARY KEY,
+  rebate_pct DECIMAL(10,2) NOT NULL DEFAULT 0,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  updated_by INT UNSIGNED NULL
+);
+

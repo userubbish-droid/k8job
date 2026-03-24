@@ -23,6 +23,16 @@ $day_new_customers = 0;
 $day_new_customer_orders = 0;
 
 try {
+    $has_register_date = false;
+    try {
+        $stmt_col = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers' AND COLUMN_NAME = 'register_date'");
+        $has_register_date = ((int)$stmt_col->fetchColumn() > 0);
+    } catch (Throwable $e) {
+        $has_register_date = false;
+    }
+    $customer_day_filter = $has_register_date ? "DATE(register_date) = ?" : "DATE(created_at) = ?";
+    $customer_day_filter_alias = $has_register_date ? "DATE(c.register_date) = ?" : "DATE(c.created_at) = ?";
+
     // 今日统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
     $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
                                   COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
@@ -71,12 +81,12 @@ try {
     $day_orders_count = (int) $stmt->fetchColumn();
 
     // 几个新顾客（今日新增的顾客数，按 customers 表 created_at）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE DATE(created_at) = ?");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE {$customer_day_filter}");
     $stmt->execute([$today]);
     $day_new_customers = (int) $stmt->fetchColumn();
 
     // 新客户进多少单（今日已批准流水中，顾客代码属于「今日新增顾客」的条数）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND DATE(c.created_at) = ? WHERE t.day = ? AND t.status = 'approved'");
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND {$customer_day_filter_alias} WHERE t.day = ? AND t.status = 'approved'");
     $stmt->execute([$today, $today]);
     $day_new_customer_orders = (int) $stmt->fetchColumn();
 } catch (Throwable $e) {
