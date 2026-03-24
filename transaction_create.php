@@ -218,7 +218,7 @@ if ($quick === 'expense') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>记一笔流水 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= $quick === 'expense' ? 'Expense' : '记一笔流水' ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -334,7 +334,7 @@ if ($quick === 'expense') {
         <main class="dashboard-main">
     <div class="page-wrap txn-wrap">
         <div class="page-header">
-            <h2>记一笔流水</h2>
+            <h2><?= $quick === 'expense' ? 'Expense' : '记一笔流水' ?></h2>
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水记录</a></p>
         </div>
 
@@ -355,7 +355,7 @@ if ($quick === 'expense') {
                 <?php endif; ?>
             </div>
             <div class="success-actions">
-                <a href="transaction_create.php">再记一笔</a>
+                <a href="<?= $quick === 'expense' ? 'expense.php' : 'transaction_create.php' ?>">再记一笔</a>
                 <a href="transaction_list.php">看流水</a>
                 <a href="dashboard.php">回首页</a>
             </div>
@@ -559,7 +559,7 @@ if ($quick === 'expense') {
             </div>
             <div class="expense-filter-actions">
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
-                <a href="transaction_create.php?quick=expense" class="btn btn-back btn-sm">Reset</a>
+                <a href="expense.php" class="btn btn-back btn-sm">Reset</a>
             </div>
         </form>
 
