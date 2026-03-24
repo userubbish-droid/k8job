@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS transactions (
   code VARCHAR(20),
   bank VARCHAR(50),
   product VARCHAR(50),
+  expense_kind ENUM('statement','kiosk') NULL DEFAULT NULL,
   amount DECIMAL(12,2) NOT NULL,
   bonus DECIMAL(12,2) DEFAULT 0,
   total DECIMAL(12,2) DEFAULT 0,

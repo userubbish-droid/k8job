@@ -25,14 +25,15 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
     <a href="agents.php" class="nav-item <?= $sidebar_current === 'agents' ? 'primary' : '' ?>"><span class="nav-icon"></span>Agent</a>
     <?php else: ?>
     <div class="nav-group" data-group="home-menu">
-        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['dashboard', 'report'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-home-menu" id="nav-toggle-home-menu">
+        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['dashboard', 'report', 'kiosk_statement'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-home-menu" id="nav-toggle-home-menu">
             <span class="nav-icon"></span>
             <span class="nav-group-label">Home</span>
             <span class="nav-group-chevron" aria-hidden="true">▾</span>
         </button>
-        <div class="nav-group-sub" id="nav-sub-home-menu" role="region" aria-labelledby="nav-toggle-home-menu" style="display:<?= in_array($sidebar_current, ['dashboard', 'report'], true) ? 'block' : 'none' ?>">
+        <div class="nav-group-sub" id="nav-sub-home-menu" role="region" aria-labelledby="nav-toggle-home-menu" style="display:<?= in_array($sidebar_current, ['dashboard', 'report', 'kiosk_statement'], true) ? 'block' : 'none' ?>">
             <a href="dashboard.php" class="nav-item nav-sub-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>Dashboard</a>
             <?php if (has_permission('statement')): ?><a href="report.php" class="nav-item nav-sub-item <?= $sidebar_current === 'report' ? 'primary' : '' ?>"><span class="nav-icon"></span>Report</a><?php endif; ?>
+            <?php if (has_permission('statement')): ?><a href="kiosk_statement.php" class="nav-item nav-sub-item <?= $sidebar_current === 'kiosk_statement' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Statement</a><?php endif; ?>
         </div>
     </div>
     <?php if (has_permission('transaction_create') || has_permission('customer_create')): ?>
@@ -48,7 +49,19 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
         </div>
     </div>
     <?php endif; ?>
-    <?php if (has_permission('transaction_create')): ?><a href="expense.php" class="nav-item <?= $sidebar_current === 'expense_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>Expense</a><?php endif; ?>
+    <?php if (has_permission('transaction_create')): ?>
+    <div class="nav-group" data-group="expense-menu">
+        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['expense_statement', 'expense_kiosk'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-expense-menu" id="nav-toggle-expense-menu">
+            <span class="nav-icon"></span>
+            <span class="nav-group-label">Expense</span>
+            <span class="nav-group-chevron" aria-hidden="true">▾</span>
+        </button>
+        <div class="nav-group-sub" id="nav-sub-expense-menu" role="region" aria-labelledby="nav-toggle-expense-menu" style="display:<?= in_array($sidebar_current, ['expense_statement', 'expense_kiosk'], true) ? 'block' : 'none' ?>">
+            <a href="expense.php" class="nav-item nav-sub-item <?= $sidebar_current === 'expense_statement' ? 'primary' : '' ?>"><span class="nav-icon"></span>Expense Statement</a>
+            <a href="kiosk_expense.php" class="nav-item nav-sub-item <?= $sidebar_current === 'expense_kiosk' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Expense</a>
+        </div>
+    </div>
+    <?php endif; ?>
     <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span>Transactions</a><?php endif; ?>
     <?php if (has_permission('rebate') || has_permission('agent')): ?>
     <div class="nav-group" data-group="rebate-menu">

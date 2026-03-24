@@ -2,8 +2,26 @@
 require 'config.php';
 require 'auth.php';
 require_permission('transaction_create');
+
+function ensure_transactions_expense_kind(PDO $pdo) {
+    try {
+        $pdo->exec("ALTER TABLE transactions ADD COLUMN expense_kind ENUM('statement','kiosk') NULL DEFAULT NULL COMMENT 'EXPENSE 分类' AFTER product");
+    } catch (Throwable $e) {
+        // 列已存在等
+    }
+}
+
+ensure_transactions_expense_kind($pdo);
+
 $quick = trim((string)($_GET['quick'] ?? ''));
-$sidebar_current = $quick === 'expense' ? 'expense_create' : 'transaction_create';
+$expense_kind_ui = 'statement';
+if ($quick === 'expense') {
+    $ekg = trim((string)($_GET['expense_kind'] ?? $_POST['expense_kind'] ?? 'statement'));
+    $expense_kind_ui = in_array($ekg, ['statement', 'kiosk'], true) ? $ekg : 'statement';
+}
+$sidebar_current = $quick === 'expense'
+    ? ($expense_kind_ui === 'kiosk' ? 'expense_kiosk' : 'expense_statement')
+    : 'transaction_create';
 
 $saved = false;
 $error = '';
@@ -38,6 +56,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $reward_pct = str_replace(',', '', trim((string)($_POST['reward_pct'] ?? '')));
     $bonus_fix  = str_replace(',', '', trim((string)($_POST['bonus'] ?? '0')));
     $remark   = trim($_POST['remark'] ?? '');
+    $expense_kind_post = trim((string)($_POST['expense_kind'] ?? ''));
+    $expense_kind_save = null;
+    if ($mode === 'EXPENSE') {
+        $expense_kind_save = in_array($expense_kind_post, ['statement', 'kiosk'], true) ? $expense_kind_post : 'statement';
+    }
 
     if ($day === '' || $mode === '') {
         $error = '请填写日期和模式。';
@@ -64,15 +87,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $staff = (string) ($_SESSION['user_name'] ?? ($_SESSION['user_id'] ?? ''));
 
         $saved = false;
-        $insertBase = [$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
+        $expKindIns = ($mode === 'EXPENSE') ? $expense_kind_save : null;
+        $insertBase = [$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $expKindIns, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
         foreach ([true, false] as $withHide) {
             try {
                 if ($withHide) {
-                    $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                    $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($insertBase);
                 } else {
-                    $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($insertBase);
                 }
@@ -80,7 +104,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             } catch (Throwable $e) {
                 $msg = $e->getMessage();
-                if (stripos($msg, 'bonus') !== false || stripos($msg, 'total') !== false || stripos($msg, 'Unknown column') !== false) {
+                if (stripos($msg, 'expense_kind') !== false || stripos($msg, 'Unknown column') !== false) {
+                    $insertBaseLegacy = [$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
+                    try {
+                        if ($withHide) {
+                            $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                            $stmt = $pdo->prepare($sql);
+                            $stmt->execute($insertBaseLegacy);
+                        } else {
+                            $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $stmt = $pdo->prepare($sql);
+                            $stmt->execute($insertBaseLegacy);
+                        }
+                        $saved = true;
+                        break;
+                    } catch (Throwable $e2) {
+                        throw $e;
+                    }
+                }
+                if (stripos($msg, 'bonus') !== false || stripos($msg, 'total') !== false) {
                     $error = '数据库缺少 bonus/total 列。请在 phpMyAdmin 中执行 migrate_bonus.sql 里的 SQL。';
                     break;
                 }
@@ -177,11 +219,12 @@ if ($is_admin) {
 
 if ($quick === 'expense') {
     try {
-        $expense_filter_banks = $pdo->query("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(bank, '')) <> '' ORDER BY bank_name ASC")->fetchAll(PDO::FETCH_COLUMN);
-        $expense_filter_products = $pdo->query("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(product, '')) <> '' ORDER BY product_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $ekSql = " AND COALESCE(expense_kind, 'statement') = " . $pdo->quote($expense_kind_ui);
+        $expense_filter_banks = $pdo->query("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $expense_filter_products = $pdo->query("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC")->fetchAll(PDO::FETCH_COLUMN);
 
-        $where = "status = 'approved' AND mode = 'EXPENSE' AND day >= ? AND day <= ?";
-        $params = [$expense_day_from, $expense_day_to];
+        $where = "status = 'approved' AND mode = 'EXPENSE' AND COALESCE(expense_kind, 'statement') = ? AND day >= ? AND day <= ?";
+        $params = [$expense_kind_ui, $expense_day_from, $expense_day_to];
         if ($expense_bank_filter !== '') {
             $where .= " AND bank = ?";
             $params[] = $expense_bank_filter;
@@ -195,7 +238,7 @@ if ($quick === 'expense') {
         $stmt->execute($params);
         $expense_report_total = (float)$stmt->fetchColumn();
 
-        $stmt = $pdo->prepare("SELECT day, time, bank, product, amount, staff, remark FROM transactions WHERE $where ORDER BY day DESC, time DESC LIMIT 120");
+        $stmt = $pdo->prepare("SELECT day, time, bank, product, expense_kind, amount, staff, remark FROM transactions WHERE $where ORDER BY day DESC, time DESC LIMIT 120");
         $stmt->execute($params);
         $expense_report_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $expense_report_count = count($expense_report_rows);
@@ -212,13 +255,20 @@ if ($quick === 'expense') {
         $error = $error !== '' ? $error : ('Expense 汇总加载失败：' . $e->getMessage());
     }
 }
+
+$expense_page_title = ($quick === 'expense')
+    ? ($expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement')
+    : '记一笔流水';
+$expense_entry_url = ($expense_kind_ui === 'kiosk') ? 'kiosk_expense.php' : 'expense.php';
+$expense_modal_should_open = ($quick === 'expense' && $_SERVER['REQUEST_METHOD'] === 'POST' && $error !== '');
+$ep = $expense_modal_should_open ? $_POST : [];
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title><?= $quick === 'expense' ? 'Expense' : '记一笔流水' ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars($expense_page_title) ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -326,6 +376,207 @@ if ($quick === 'expense') {
             background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
             box-shadow: 0 8px 18px rgba(37, 99, 235, 0.35);
         }
+        /* Expense 页工具栏（参考列表页 + Add） */
+        .expense-userlist-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: flex-start;
+            gap: 14px;
+            margin-bottom: 16px;
+            padding: 14px 18px;
+            border-radius: 12px;
+            background: linear-gradient(180deg, #f0f7ff 0%, #e8f2fc 100%);
+            border: 1px solid rgba(59, 130, 246, 0.22);
+            box-shadow: 0 4px 14px rgba(30, 64, 175, 0.06);
+        }
+        .btn-expense-add {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 140px;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 10px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+            box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4);
+        }
+        .btn-expense-add:hover {
+            filter: brightness(1.05);
+            box-shadow: 0 6px 18px rgba(37, 99, 235, 0.45);
+        }
+        /* Expense 录入弹窗（双栏 + Add User 风格） */
+        .expense-entry-modal-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 16, 40, 0.48);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1300;
+            padding: 16px;
+        }
+        .expense-entry-modal-mask.show { display: flex; }
+        .expense-entry-modal {
+            width: min(96vw, 900px);
+            max-height: min(92vh, 720px);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background: #fff;
+            border-radius: 14px;
+            border: 1px solid rgba(125, 152, 226, 0.35);
+            box-shadow: 0 24px 64px rgba(30, 58, 138, 0.28);
+        }
+        .expense-entry-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 22px;
+            font-weight: 800;
+            font-size: 18px;
+            color: #0f172a;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        .expense-entry-modal-x {
+            border: none;
+            background: #f1f5f9;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+            color: #64748b;
+        }
+        .expense-entry-modal-x:hover { color: #0f172a; background: #e2e8f0; }
+        .expense-modal-form {
+            padding: 0;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            flex: 1;
+            min-height: 0;
+        }
+        .expense-modal-2col {
+            display: flex;
+            flex: 1;
+            min-height: 0;
+            align-items: stretch;
+        }
+        .expense-modal-col {
+            flex: 1;
+            min-width: 0;
+            padding: 20px 22px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .expense-modal-col-left {
+            background: #fafbff;
+        }
+        .expense-modal-col-right {
+            background: #fff;
+            border-left: 1px solid #e2e8f0;
+        }
+        .expense-modal-section-title {
+            margin: 0 0 4px;
+            font-size: 15px;
+            font-weight: 700;
+            color: #1e3a8a;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #3b82f6;
+        }
+        .expense-modal-col-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 8px;
+        }
+        .btn-expense-save {
+            min-width: 100px;
+            padding: 10px 22px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+        }
+        .btn-expense-save:hover { filter: brightness(1.05); }
+        .btn-expense-cancel {
+            min-width: 100px;
+            padding: 10px 22px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            font-weight: 700;
+            color: #475569;
+            background: linear-gradient(180deg, #f8fafc 0%, #e2e8f0 100%);
+            cursor: pointer;
+        }
+        .btn-expense-cancel:hover { background: #e2e8f0; }
+        .expense-modal-col-actions-right {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: auto;
+            padding-top: 8px;
+        }
+        .btn-expense-select-all {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            background: linear-gradient(180deg, #22c55e 0%, #16a34a 100%);
+            box-shadow: 0 3px 10px rgba(22, 163, 74, 0.35);
+        }
+        .btn-expense-clear-all {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 8px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            background: linear-gradient(180deg, #f87171 0%, #dc2626 100%);
+            box-shadow: 0 3px 10px rgba(220, 38, 38, 0.35);
+        }
+        .expense-chip-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .expense-chip {
+            padding: 6px 12px;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            background: #f8fafc;
+            font-size: 13px;
+            font-weight: 600;
+            color: #334155;
+            cursor: pointer;
+        }
+        .expense-chip:hover { border-color: #3b82f6; color: #1d4ed8; background: #eff6ff; }
+        .expense-modal-hint {
+            margin: 0;
+            font-size: 13px;
+            color: #64748b;
+            line-height: 1.5;
+        }
+        @media (max-width: 720px) {
+            .expense-modal-2col { flex-direction: column; }
+            .expense-modal-col-right { border-left: none; border-top: 1px solid #e2e8f0; }
+        }
     </style>
 </head>
 <body>
@@ -334,7 +585,7 @@ if ($quick === 'expense') {
         <main class="dashboard-main">
     <div class="page-wrap txn-wrap">
         <div class="page-header">
-            <h2><?= $quick === 'expense' ? 'Expense' : '记一笔流水' ?></h2>
+            <h2><?= htmlspecialchars($expense_page_title) ?></h2>
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水记录</a></p>
         </div>
 
@@ -355,7 +606,7 @@ if ($quick === 'expense') {
                 <?php endif; ?>
             </div>
             <div class="success-actions">
-                <a href="<?= $quick === 'expense' ? 'expense.php' : 'transaction_create.php' ?>">再记一笔</a>
+                <a href="<?= $quick === 'expense' ? htmlspecialchars($expense_entry_url) : 'transaction_create.php' ?>">再记一笔</a>
                 <a href="transaction_list.php">看流水</a>
                 <a href="dashboard.php">回首页</a>
             </div>
@@ -364,23 +615,104 @@ if ($quick === 'expense') {
         <div class="alert alert-error"><?= $is_admin ? htmlspecialchars($error) : '✗ Faild' ?></div>
     <?php endif; ?>
 
-    <div class="card txn-form-card">
-    <form method="post" class="txn-form">
-        <?php if ($quick === 'expense'): ?>
-        <div class="form-section member-dt-section">
-            <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
-                日期 / 时间
-                <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
-                <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="展开修改日期时间">+</button>
-            </div>
-            <div id="member_dt_box" style="display:none;">
-                <div class="form-row-2">
-                    <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
-                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+    <?php if ($quick === 'expense'): ?>
+        <?php
+        $ep_day = isset($ep['day']) && preg_match('/^\d{4}-\d{2}-\d{2}/', (string)$ep['day']) ? htmlspecialchars(substr((string)$ep['day'], 0, 10)) : htmlspecialchars($today);
+        $ep_time = htmlspecialchars($now);
+        if (!empty($ep['time'])) {
+            $tr = trim((string)$ep['time']);
+            if (preg_match('/^(\d{1,2}):(\d{2})/', $tr, $tm)) {
+                $ep_time = htmlspecialchars(sprintf('%02d:%02d', min(23, (int)$tm[1]), min(59, (int)$tm[2])));
+            }
+        }
+        $ep_muc = (($ep['member_use_current_time'] ?? '1') === '0');
+        $ep_bank = isset($ep['bank']) ? (string)$ep['bank'] : '';
+        $ep_amount = isset($ep['amount']) ? htmlspecialchars((string)$ep['amount']) : '';
+        $ep_product = isset($ep['product']) ? htmlspecialchars((string)$ep['product']) : '';
+        $ep_remark = isset($ep['remark']) ? htmlspecialchars((string)$ep['remark']) : '';
+        ?>
+        <div class="expense-userlist-toolbar">
+            <button type="button" class="btn-expense-add" id="expense-modal-open">+ 新增开销</button>
+        </div>
+        <div class="expense-entry-modal-mask<?= $expense_modal_should_open ? ' show' : '' ?>" id="expense-entry-modal" aria-modal="true" role="dialog" aria-labelledby="expense-modal-title" aria-hidden="<?= $expense_modal_should_open ? 'false' : 'true' ?>">
+            <div class="expense-entry-modal">
+                <div class="expense-entry-modal-head">
+                    <span id="expense-modal-title">新增开销</span>
+                    <button type="button" class="expense-entry-modal-x" id="expense-modal-close" aria-label="关闭">×</button>
                 </div>
+                <form method="post" class="expense-modal-form txn-form" id="expense-modal-form" action="">
+                    <div class="expense-modal-2col">
+                        <div class="expense-modal-col expense-modal-col-left">
+                            <h3 class="expense-modal-section-title">开销信息</h3>
+                            <div class="form-section member-dt-section" style="margin:0; padding:12px; border-radius:12px; background:#fff; border:1px solid #e2e8f0;">
+                                <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
+                                    日期 / 时间
+                                    <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="<?= $ep_muc ? '0' : '1' ?>">
+                                    <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="展开修改日期时间"><?= $ep_muc ? '−' : '+' ?></button>
+                                </div>
+                                <div id="member_dt_box" style="display:<?= $ep_muc ? 'block' : 'none' ?>;">
+                                    <div class="form-row-2">
+                                        <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= $ep_day ?>"></div>
+                                        <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= $ep_time ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+                                    </div>
+                                </div>
+                            </div>
+                            <input type="hidden" name="mode" id="mode" value="EXPENSE">
+                            <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
+                            <div class="txn-expense-block" style="margin:0;">
+                                <div class="form-row-2">
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label>Bank <span id="bank_req_mark">*</span></label>
+                                        <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
+                                        <select name="bank" id="bank" class="form-control" required title="关联 Statement 与银行 In/Out 统计">
+                                            <option value="">-- 请选 --</option>
+                                            <?php foreach ($banks as $b): $bs = (string)$b; ?>
+                                            <option value="<?= htmlspecialchars($bs) ?>" <?= ($ep_bank !== '' && $ep_bank === $bs) ? 'selected' : '' ?>><?= htmlspecialchars($bs) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label>金额 *</label>
+                                        <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required inputmode="decimal" value="<?= $ep_amount ?>">
+                                    </div>
+                                </div>
+                                <div class="form-group" style="margin-bottom:0;">
+                                    <label>备注</label>
+                                    <textarea name="remark" id="expenseRemark" class="form-control" rows="3" placeholder="选填，可写明细说明"><?= $ep_remark ?></textarea>
+                                </div>
+                                <input type="hidden" name="reward_pct" id="reward_pct" value="0">
+                                <input type="hidden" name="bonus" id="bonus_hidden" value="0">
+                            </div>
+                            <div class="expense-modal-col-actions">
+                                <button type="submit" class="btn-expense-save">保存</button>
+                                <button type="button" class="btn-expense-cancel" id="expense-modal-cancel">取消</button>
+                            </div>
+                        </div>
+                        <div class="expense-modal-col expense-modal-col-right">
+                            <h3 class="expense-modal-section-title">Expense 项目</h3>
+                            <p class="expense-modal-hint">填写或点击下方快捷类别填入「Expense 项目」；将用于分类汇总。</p>
+                            <div class="form-group" style="margin-bottom:0;">
+                                <label id="product_label">Expense 项目 *</label>
+                                <input type="text" name="product" id="product" class="form-control" required placeholder="例如：Office / Salary" value="<?= $ep_product ?>">
+                            </div>
+                            <div class="expense-chip-grid" id="expense-chip-grid" aria-label="快捷类别">
+                                <?php foreach ($expenses as $ex): $exs = (string)$ex; ?>
+                                <button type="button" class="expense-chip" data-expense-chip="<?= htmlspecialchars($exs) ?>"><?= htmlspecialchars($exs) ?></button>
+                                <?php endforeach; ?>
+                            </div>
+                            <div class="expense-modal-col-actions-right">
+                                <button type="button" class="btn-expense-select-all" id="expense-select-all" title="选中「Expense 项目」输入框内全部文字，便于整段替换">全选文字</button>
+                                <button type="button" class="btn-expense-clear-all" id="expense-clear-all" title="清空 Expense 项目与备注">清空</button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
             </div>
         </div>
-        <?php elseif ($is_admin): ?>
+    <?php else: ?>
+    <div class="card txn-form-card">
+    <form method="post" class="txn-form">
+        <?php if ($is_admin): ?>
         <div class="form-section">
             <div class="form-section-title">日期 / 时间</div>
             <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
@@ -411,37 +743,6 @@ if ($quick === 'expense') {
         </div>
         <?php endif; ?>
 
-        <?php if ($quick === 'expense'): ?>
-        <input type="hidden" name="mode" id="mode" value="EXPENSE">
-        <div class="form-section txn-expense-block">
-            <div class="form-section-title">记账</div>
-            <div class="form-row-2">
-                <div class="form-group">
-                    <label>bank <span id="bank_req_mark">*</span></label>
-                    <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="bank" id="bank" class="form-control" required title="关联 Statement 与银行 In/Out 统计">
-                        <option value="">-- 请选 --</option>
-                        <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label>金额 *</label>
-                    <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required inputmode="decimal">
-                </div>
-            </div>
-            <div class="form-group">
-                <label id="product_label">Expense 项目 *</label>
-                <input type="text" name="product" id="product" class="form-control" required placeholder="例如：rental / office / salary">
-                <p class="form-hint" style="margin-top:4px;">用于 Expense 分类汇总。</p>
-            </div>
-            <div class="form-group" style="margin-bottom:0;">
-                <label>备注</label>
-                <textarea name="remark" class="form-control" rows="3" placeholder="选填，可写明细说明"></textarea>
-            </div>
-            <input type="hidden" name="reward_pct" id="reward_pct" value="0">
-            <input type="hidden" name="bonus" id="bonus_hidden" value="0">
-        </div>
-        <?php else: ?>
         <div class="form-section">
             <div class="form-section-title">基本信息</div>
             <div class="form-row-2">
@@ -520,17 +821,17 @@ if ($quick === 'expense') {
                 <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
             </div>
         </div>
-        <?php endif; ?>
 
         <button type="submit" class="btn btn-primary txn-submit">保存</button>
     </form>
     </div>
+    <?php endif; ?>
 
     <?php if ($quick === 'expense'): ?>
     <div class="card expense-statement-wrap">
-        <h4 class="expense-statement-title">Expense 明细与汇总</h4>
-        <form method="get" class="expense-filter-bar">
-            <input type="hidden" name="quick" value="expense">
+        <h4 class="expense-statement-title"><?= $expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement' ?> · 明细与汇总</h4>
+        <form method="get" class="expense-filter-bar" action="<?= htmlspecialchars($expense_entry_url) ?>">
+            <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
             <div class="expense-filter-item">
                 <label>From</label>
                 <input type="date" name="expense_day_from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
@@ -559,7 +860,7 @@ if ($quick === 'expense') {
             </div>
             <div class="expense-filter-actions">
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
-                <a href="expense.php" class="btn btn-back btn-sm">Reset</a>
+                <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back btn-sm">Reset</a>
             </div>
         </form>
 
@@ -606,6 +907,7 @@ if ($quick === 'expense') {
                     <tr>
                         <th>Day</th>
                         <th>Time</th>
+                        <th>Kind</th>
                         <th>Bank</th>
                         <th>Product</th>
                         <th class="num">Amount</th>
@@ -618,6 +920,7 @@ if ($quick === 'expense') {
                     <tr>
                         <td><?= htmlspecialchars((string)($row['day'] ?? '')) ?></td>
                         <td><?= htmlspecialchars((string)($row['time'] ?? '')) ?></td>
+                        <td><?= (isset($row['expense_kind']) && $row['expense_kind'] === 'kiosk') ? 'Kiosk' : 'Statement' ?></td>
                         <td><?= htmlspecialchars((string)($row['bank'] ?? '')) ?></td>
                         <td><?= htmlspecialchars((string)($row['product'] ?? '')) ?></td>
                         <td class="num out"><?= number_format((float)($row['amount'] ?? 0), 2) ?></td>
@@ -625,7 +928,7 @@ if ($quick === 'expense') {
                         <td><?= htmlspecialchars((string)($row['remark'] ?? '')) ?></td>
                     </tr>
                     <?php endforeach; ?>
-                    <?php if (!$expense_report_rows): ?><tr><td colspan="7">暂无 Expense 记录</td></tr><?php endif; ?>
+                    <?php if (!$expense_report_rows): ?><tr><td colspan="8">暂无 Expense 记录</td></tr><?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -808,6 +1111,62 @@ if ($quick === 'expense') {
             ok.addEventListener('click', closeModal);
             mask.addEventListener('click', function(e){ if (e.target === mask) closeModal(); });
         })();
+        <?php if ($quick === 'expense'): ?>
+        (function(){
+            var mask = document.getElementById('expense-entry-modal');
+            var openBtn = document.getElementById('expense-modal-open');
+            var closeBtn = document.getElementById('expense-modal-close');
+            var cancelBtn = document.getElementById('expense-modal-cancel');
+            var chipGrid = document.getElementById('expense-chip-grid');
+            var selAllBtn = document.getElementById('expense-select-all');
+            var clrAllBtn = document.getElementById('expense-clear-all');
+            if (!mask || !openBtn) return;
+            function openM() {
+                mask.classList.add('show');
+                mask.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+                var amt = document.getElementById('amount');
+                if (amt) setTimeout(function(){ amt.focus(); }, 50);
+            }
+            function closeM() {
+                mask.classList.remove('show');
+                mask.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+            openBtn.addEventListener('click', openM);
+            if (closeBtn) closeBtn.addEventListener('click', closeM);
+            if (cancelBtn) cancelBtn.addEventListener('click', closeM);
+            mask.addEventListener('click', function(e) { if (e.target === mask) closeM(); });
+            document.addEventListener('keydown', function(e) {
+                if (e.key === 'Escape' && mask.classList.contains('show')) closeM();
+            });
+            if (chipGrid) {
+                chipGrid.addEventListener('click', function(e) {
+                    var t = e.target && e.target.closest('[data-expense-chip]');
+                    if (!t) return;
+                    var v = t.getAttribute('data-expense-chip') || '';
+                    var inp = document.getElementById('product');
+                    if (inp) { inp.value = v; inp.focus(); }
+                });
+            }
+            if (selAllBtn) {
+                selAllBtn.addEventListener('click', function() {
+                    var inp = document.getElementById('product');
+                    if (!inp) return;
+                    inp.focus();
+                    if (typeof inp.select === 'function') inp.select();
+                });
+            }
+            if (clrAllBtn) {
+                clrAllBtn.addEventListener('click', function() {
+                    var p = document.getElementById('product');
+                    var r = document.getElementById('expenseRemark');
+                    if (p) p.value = '';
+                    if (r) r.value = '';
+                });
+            }
+        })();
+        <?php endif; ?>
     </script>
 </body>
 </html>
