@@ -156,17 +156,43 @@ if ($is_admin) {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>记一笔流水 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
-        .form-section { margin-bottom: 20px; }
-        .form-section-title { font-size: 12px; color: var(--muted); font-weight: 600; margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.03em; }
-        .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; }
+        .txn-wrap { max-width: 760px; }
+        .txn-form-card { padding: 24px; }
+        .txn-form {
+            display: grid;
+            gap: 18px;
+        }
+        .form-section {
+            margin: 0;
+            padding: 14px 14px 12px;
+            border: 1px solid rgba(126, 154, 228, 0.22);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.72);
+        }
+        .form-section-title {
+            font-size: 12px;
+            color: #475569;
+            font-weight: 700;
+            margin-bottom: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+        .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+        .txn-form .form-group { margin-bottom: 0; }
+        .txn-form .form-control { min-height: 46px; border-radius: 10px; }
+        .txn-form textarea.form-control { min-height: 110px; }
+        .txn-submit { width: 100%; min-height: 48px; font-size: 16px; font-weight: 700; }
         .calc-box { margin: 12px 0; padding: 12px 14px; background: #f0f9ff; border-radius: 8px; font-size: 14px; color: #0c4a6e; }
         .success-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
         .success-actions a { padding: 8px 14px; background: #fff; border: 1px solid #a7f3d0; border-radius: 6px; color: #059669; text-decoration: none; font-size: 13px; }
         .success-actions a:hover { background: #ecfdf5; }
         @media (max-width: 640px) {
             .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
+            .txn-form-card { padding: 16px; }
+            .form-section { padding: 12px; }
         }
         .pretty-modal-mask {
             position: fixed;
@@ -229,7 +255,7 @@ if ($is_admin) {
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
-    <div class="page-wrap" style="max-width: 520px;">
+    <div class="page-wrap txn-wrap">
         <div class="page-header">
             <h2>记一笔流水</h2>
             <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水记录</a></p>
@@ -261,8 +287,8 @@ if ($is_admin) {
         <div class="alert alert-error"><?= $is_admin ? htmlspecialchars($error) : '✗ Faild' ?></div>
     <?php endif; ?>
 
-    <div class="card">
-    <form method="post">
+    <div class="card txn-form-card">
+    <form method="post" class="txn-form">
         <?php if ($is_admin): ?>
         <div class="form-section">
             <div class="form-section-title">日期 / 时间</div>
@@ -373,7 +399,7 @@ if ($is_admin) {
             </div>
         </div>
 
-        <button type="submit" class="btn btn-primary" style="width:100%;">保存</button>
+        <button type="submit" class="btn btn-primary txn-submit">保存</button>
     </form>
     </div>
 
