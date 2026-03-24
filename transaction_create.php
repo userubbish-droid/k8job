@@ -168,6 +168,61 @@ if ($is_admin) {
         @media (max-width: 640px) {
             .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
         }
+        .pretty-modal-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 16, 40, 0.42);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1200;
+            padding: 20px;
+        }
+        .pretty-modal-mask.show { display: flex; }
+        .pretty-modal {
+            width: min(92vw, 460px);
+            background: #fff;
+            border-radius: 18px;
+            border: 1px solid #dbeafe;
+            box-shadow: 0 22px 60px rgba(37, 99, 235, 0.28);
+            transform: scale(0.9) translateY(8px);
+            opacity: 0;
+            transition: transform .22s ease, opacity .22s ease;
+            overflow: hidden;
+        }
+        .pretty-modal-mask.show .pretty-modal {
+            transform: scale(1) translateY(0);
+            opacity: 1;
+        }
+        .pretty-modal-head {
+            padding: 14px 18px;
+            font-weight: 700;
+            color: #1d4ed8;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+            border-bottom: 1px solid #bfdbfe;
+        }
+        .pretty-modal-body {
+            padding: 20px 18px 12px;
+            color: #0f172a;
+            font-size: 15px;
+            line-height: 1.6;
+        }
+        .pretty-modal-foot {
+            display: flex;
+            justify-content: flex-end;
+            padding: 0 18px 16px;
+        }
+        .pretty-ok {
+            min-width: 92px;
+            border: none;
+            border-radius: 999px;
+            padding: 10px 18px;
+            font-weight: 700;
+            color: #fff;
+            cursor: pointer;
+            background: linear-gradient(180deg, #3b82f6 0%, #1d4ed8 100%);
+            box-shadow: 0 8px 18px rgba(37, 99, 235, 0.35);
+        }
     </style>
 </head>
 <body>
@@ -182,14 +237,10 @@ if ($is_admin) {
 
     <?php if ($saved): ?>
         <div class="card" style="margin-bottom: 20px;">
-            <div class="alert alert-success" style="margin-bottom: 0;">
-                <?php if ($submitted_status === 'pending'): ?>已提交，等待管理员批准。<strong>批准后</strong>才会在「银行与产品」页的 In/Out 中显示。<?php elseif (!$is_admin): ?>✔ Done<?php else: ?>已保存并生效，已计入「银行与产品」In/Out。<?php endif; ?>
-            </div>
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px;">
                 <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code ?: '—') ?> <?= htmlspecialchars($saved_product ?: '—') ?> · 金额 <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?> · <strong>本笔 Bonus：<?= number_format($saved_bonus, 2) ?></strong> · 总数 <?= number_format($saved_total, 2) ?></div>
                 <?php if ($saved_bonus > 0 && !empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:var(--success);">此笔 Bonus 将计入顾客 <?= htmlspecialchars($saved_code) ?> 的汇总<?= $submitted_status === 'pending' ? '（需管理员批准后生效）' : '。' ?></p><?php endif; ?>
                 <?php if ($saved_bonus > 0 && empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:#b45309;">未选客户时，Bonus 不会计入顾客列表；请记一笔时选择客户。</p><?php endif; ?>
-                <?php if ($saved_bonus <= 0 && $saved_amount > 0): ?><p class="form-hint" style="margin-top:4px;">本笔未填「奖励/返点 %」，故 Bonus 为 0；要计入顾客 Bonus 请填写奖励% 并选择客户。</p><?php endif; ?>
                 <?php if (!empty($saved_code) || !empty($saved_product) || $saved_mode === 'WITHDRAW'): ?>
                 <?php if ($saved_mode === 'WITHDRAW' && !empty($saved_code)): ?>
                 <div class="form-hint" style="margin-bottom:4px;">顾客姓名：<?= htmlspecialchars($saved_customer_name ?: '—') ?></div>
@@ -334,6 +385,23 @@ if ($is_admin) {
     </div>
         </main>
     </div>
+    <?php if ($saved): ?>
+    <div class="pretty-modal-mask" id="saved-modal-mask">
+        <div class="pretty-modal" role="dialog" aria-modal="true" aria-label="提交结果">
+            <div class="pretty-modal-head">系统提示</div>
+            <div class="pretty-modal-body">
+                <?php if ($submitted_status === 'pending'): ?>
+                    已提交成功，等待管理员批准。
+                <?php else: ?>
+                    成功，数据已保存并生效。
+                <?php endif; ?>
+            </div>
+            <div class="pretty-modal-foot">
+                <button type="button" class="pretty-ok" id="saved-modal-ok">OK</button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
     <script>
         (function() {
             var customerData = <?= json_encode(array_column($customers, null, 'code')) ?>;
@@ -455,6 +523,15 @@ if ($is_admin) {
             };
         }
         <?php endif; ?>
+        (function(){
+            var mask = document.getElementById('saved-modal-mask');
+            var ok = document.getElementById('saved-modal-ok');
+            if (!mask || !ok) return;
+            setTimeout(function(){ mask.classList.add('show'); }, 30);
+            function closeModal(){ mask.classList.remove('show'); }
+            ok.addEventListener('click', closeModal);
+            mask.addEventListener('click', function(e){ if (e.target === mask) closeModal(); });
+        })();
     </script>
 </body>
 </html>
