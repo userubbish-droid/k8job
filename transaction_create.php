@@ -19,8 +19,10 @@ if ($expense_day_from > $expense_day_to) { $tmp = $expense_day_from; $expense_da
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
     // member：未点击「+」修改日期时间则用当前时间且自动通过审核
-    $member_use_current = !$is_admin && isset($_POST['member_use_current_time']) && (string)$_POST['member_use_current_time'] === '1';
-    if ($is_admin) {
+    $member_use_current = isset($_POST['member_use_current_time']) && (string)$_POST['member_use_current_time'] === '1';
+    if ($quick === 'expense') {
+        $can_edit_dt = !$member_use_current; // Expense 页统一：点 + 才使用手动日期时间
+    } elseif ($is_admin) {
         $can_edit_dt = !empty($_POST['edit_dt']);
     } else {
         $can_edit_dt = !$member_use_current; // member 点了「+」才用表单里的日期时间
@@ -32,20 +34,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
-    $expense_item = trim($_POST['expense_item'] ?? '');
     $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $reward_pct = str_replace(',', '', trim((string)($_POST['reward_pct'] ?? '')));
     $bonus_fix  = str_replace(',', '', trim((string)($_POST['bonus'] ?? '0')));
     $remark   = trim($_POST['remark'] ?? '');
 
-    if ($mode === 'EXPENSE' && $product === '' && $expense_item !== '') {
-        $product = $expense_item;
-    }
-
     if ($day === '' || $mode === '') {
         $error = '请填写日期和模式。';
-    } elseif ($mode === 'EXPENSE' && ($bank === '' || ($product === '' && $remark === ''))) {
-        $error = 'EXPENSE 请至少填写 Bank，且 Product 或 Remark 其中一项必填。';
+    } elseif ($mode === 'EXPENSE' && ($bank === '' || $product === '')) {
+        $error = 'EXPENSE 必须填写 Bank 和 Expense 项目。';
     } elseif (!is_numeric($amount)) {
         $error = '金额请填数字。';
     } else {
@@ -367,7 +364,21 @@ if ($quick === 'expense') {
 
     <div class="card txn-form-card">
     <form method="post" class="txn-form">
-        <?php if ($is_admin): ?>
+        <?php if ($quick === 'expense'): ?>
+        <div class="form-section member-dt-section">
+            <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
+                日期 / 时间
+                <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
+                <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="展开修改日期时间">+</button>
+            </div>
+            <div id="member_dt_box" style="display:none;">
+                <div class="form-row-2">
+                    <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+                </div>
+            </div>
+        </div>
+        <?php elseif ($is_admin): ?>
         <div class="form-section">
             <div class="form-section-title">日期 / 时间</div>
             <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
@@ -402,6 +413,11 @@ if ($quick === 'expense') {
             <div class="form-section-title">基本信息</div>
             <div class="form-row-2">
                 <div class="form-group">
+                    <?php if ($quick === 'expense'): ?>
+                    <label>模式</label>
+                    <input type="hidden" name="mode" id="mode" value="EXPENSE">
+                    <input type="text" class="form-control" value="EXPENSE" readonly>
+                    <?php else: ?>
                     <label>模式 *</label>
                     <select name="mode" id="mode" class="form-control" required>
                         <option value="">-- 请选 --</option>
@@ -414,6 +430,7 @@ if ($quick === 'expense') {
                         <option value="REBATE" <?= $selected_mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
                         <option value="OTHER" <?= $selected_mode === 'OTHER' ? 'selected' : '' ?>>OTHER</option>
                     </select>
+                    <?php endif; ?>
                 </div>
                 <?php if ($quick !== 'expense'): ?>
                 <div class="form-group">
@@ -446,15 +463,17 @@ if ($quick === 'expense') {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label id="product_label"><?= $quick === 'expense' ? 'Expense 项目（可选）' : '产品/平台 *' ?></label>
+                    <?php if ($quick === 'expense'): ?>
+                    <label id="product_label">Expense 项目 *</label>
+                    <input type="text" name="product" id="product" class="form-control" required placeholder="例如：rental / office / salary">
+                    <p class="form-hint" style="margin-top:4px;">用于 Expense 分类汇总。</p>
+                    <?php else: ?>
+                    <label id="product_label">产品/平台 *</label>
                     <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="product" id="product" class="form-control" <?= $quick === 'expense' ? '' : 'required' ?> title="用于分类统计（可选）">
+                    <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
                     </select>
-                    <?php if ($quick === 'expense'): ?>
-                    <input type="text" name="expense_item" class="form-control" style="margin-top:8px;" placeholder="可手填，如：rental / office / salary">
-                    <p class="form-hint" style="margin-top:4px;">如未选择 Product，将使用这里的内容作为分类。</p>
                     <?php endif; ?>
                 </div>
             </div>
@@ -671,6 +690,7 @@ if ($quick === 'expense') {
                     }
                 }
                 if (productSelect && productLabel) {
+                    if ((productSelect.tagName || '').toUpperCase() !== 'SELECT') return;
                     var current = productSelect.value;
                     var list = productOptionsDefault;
                     var isQuickExpenseMode = mode === 'EXPENSE' && isExpenseQuick;
@@ -757,7 +777,7 @@ if ($quick === 'expense') {
             var form = amountEl && amountEl.closest('form');
             if (form) form.addEventListener('submit', function(){ updateReward(); });
         })();
-        <?php if ($is_admin): ?>
+        <?php if ($is_admin && $quick !== 'expense'): ?>
         var cb = document.getElementById('edit_dt');
         if (cb) {
             cb.onchange = function() {
