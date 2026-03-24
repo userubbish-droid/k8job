@@ -21,6 +21,11 @@ $profit = 0.0;
 $approved_count = 0;
 $mode_rows = [];
 $top_customer_rows = [];
+$contra_in = 0.0;
+$contra_out = 0.0;
+$contra_rows = [];
+$expense_total = 0.0;
+$expense_rows = [];
 
 try {
     $stmt = $pdo->prepare("
@@ -68,6 +73,50 @@ try {
     ");
     $stmt->execute([$day_from, $day_to]);
     $top_customer_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Bank Contra（互转）：按备注「转至/来自」识别
+    $stmt = $pdo->prepare("
+        SELECT
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND remark LIKE '来自 %' THEN amount ELSE 0 END), 0) AS contra_in,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND remark LIKE '转至 %' THEN amount ELSE 0 END), 0) AS contra_out
+        FROM transactions
+        WHERE status = 'approved' AND day >= ? AND day <= ?
+    ");
+    $stmt->execute([$day_from, $day_to]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
+    $contra_in = (float)($row['contra_in'] ?? 0);
+    $contra_out = (float)($row['contra_out'] ?? 0);
+
+    $stmt = $pdo->prepare("
+        SELECT day, time, bank, mode, amount, remark
+        FROM transactions
+        WHERE status = 'approved' AND day >= ? AND day <= ?
+          AND ((mode = 'DEPOSIT' AND remark LIKE '来自 %')
+            OR (mode = 'WITHDRAW' AND remark LIKE '转至 %'))
+        ORDER BY day DESC, time DESC
+        LIMIT 30
+    ");
+    $stmt->execute([$day_from, $day_to]);
+    $contra_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // Expense（开销）
+    $stmt = $pdo->prepare("
+        SELECT COALESCE(SUM(amount), 0) AS expense_total
+        FROM transactions
+        WHERE status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
+    ");
+    $stmt->execute([$day_from, $day_to]);
+    $expense_total = (float)$stmt->fetchColumn();
+
+    $stmt = $pdo->prepare("
+        SELECT day, time, code, bank, product, amount, remark
+        FROM transactions
+        WHERE status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
+        ORDER BY day DESC, time DESC
+        LIMIT 30
+    ");
+    $stmt->execute([$day_from, $day_to]);
+    $expense_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $err = '报表加载失败：' . $e->getMessage();
 }
@@ -80,6 +129,26 @@ try {
     <title>Report - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        .report-collapse-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0;
+        }
+        .report-collapse-btn {
+            border: 1px solid var(--border);
+            background: #fff;
+            color: #334155;
+            border-radius: 8px;
+            padding: 4px 10px;
+            font-size: 12px;
+            cursor: pointer;
+        }
+        .report-collapse-body { margin-top: 12px; }
+        .report-collapse-body.collapsed { display: none; }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -119,8 +188,12 @@ try {
                     <div class="summary-item"><strong>已批准笔数</strong><span class="num"><?= (int)$approved_count ?></span></div>
                 </div>
 
-                <div class="card" style="overflow-x:auto;">
-                    <h3>模式汇总</h3>
+                <div class="card">
+                    <h3 class="report-collapse-head">
+                        <span>模式汇总</span>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-mode-body" aria-expanded="false">展开</button>
+                    </h3>
+                    <div id="report-mode-body" class="report-collapse-body collapsed" style="overflow-x:auto;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -140,10 +213,15 @@ try {
                             <?php if (empty($mode_rows)): ?><tr><td colspan="3">暂无数据</td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    </div>
                 </div>
 
-                <div class="card" style="overflow-x:auto;">
-                    <h3>客户净额 Top 10</h3>
+                <div class="card">
+                    <h3 class="report-collapse-head">
+                        <span>客户净额 Top 10</span>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-top-body" aria-expanded="false">展开</button>
+                    </h3>
+                    <div id="report-top-body" class="report-collapse-body collapsed" style="overflow-x:auto;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -169,10 +247,115 @@ try {
                             <?php if (empty($top_customer_rows)): ?><tr><td colspan="4">暂无数据</td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="report-collapse-head">
+                        <span>Bank Contra</span>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-contra-body" aria-expanded="false">展开</button>
+                    </h3>
+                    <div id="report-contra-body" class="report-collapse-body collapsed">
+                        <div class="summary" style="margin-bottom:14px;">
+                            <div class="summary-item"><strong>Contra In</strong><span class="num" style="color:var(--success);"><?= number_format($contra_in, 2) ?></span></div>
+                            <div class="summary-item"><strong>Contra Out</strong><span class="num" style="color:var(--danger);"><?= number_format($contra_out, 2) ?></span></div>
+                            <div class="summary-item"><strong>Diff</strong><span class="num"><?= number_format($contra_in - $contra_out, 2) ?></span></div>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Time</th>
+                                        <th>Bank</th>
+                                        <th>Mode</th>
+                                        <th class="num">Amount</th>
+                                        <th>Remark</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($contra_rows as $r): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars((string)($r['day'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['time'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['bank'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['mode'] ?? '')) ?></td>
+                                        <td class="num"><?= number_format((float)($r['amount'] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['remark'] ?? '')) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php if (empty($contra_rows)): ?><tr><td colspan="6">暂无互转记录</td></tr><?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="card">
+                    <h3 class="report-collapse-head">
+                        <span>Expense</span>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-expense-body" aria-expanded="false">展开</button>
+                    </h3>
+                    <div id="report-expense-body" class="report-collapse-body collapsed">
+                        <div class="summary" style="margin-bottom:14px;">
+                            <div class="summary-item"><strong>Expense Total</strong><span class="num" style="color:#b45309;"><?= number_format($expense_total, 2) ?></span></div>
+                            <div class="summary-item"><strong>Count</strong><span class="num"><?= count($expense_rows) ?></span></div>
+                        </div>
+                        <div style="overflow-x:auto;">
+                            <table class="data-table">
+                                <thead>
+                                    <tr>
+                                        <th>Day</th>
+                                        <th>Time</th>
+                                        <th>Code</th>
+                                        <th>Bank</th>
+                                        <th>Product</th>
+                                        <th class="num">Amount</th>
+                                        <th>Remark</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <?php foreach ($expense_rows as $r): ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars((string)($r['day'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['time'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['code'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['bank'] ?? '')) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['product'] ?? '')) ?></td>
+                                        <td class="num"><?= number_format((float)($r['amount'] ?? 0), 2) ?></td>
+                                        <td><?= htmlspecialchars((string)($r['remark'] ?? '')) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php if (empty($expense_rows)): ?><tr><td colspan="7">暂无开销记录</td></tr><?php endif; ?>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </main>
     </div>
+    <script>
+    (function(){
+        document.querySelectorAll('.js-report-toggle').forEach(function(btn){
+            var targetId = btn.getAttribute('data-target');
+            var body = targetId ? document.getElementById(targetId) : null;
+            if (!body) return;
+            btn.addEventListener('click', function(){
+                var collapsed = body.classList.contains('collapsed');
+                if (collapsed) {
+                    body.classList.remove('collapsed');
+                    btn.textContent = '收起';
+                    btn.setAttribute('aria-expanded', 'true');
+                } else {
+                    body.classList.add('collapsed');
+                    btn.textContent = '展开';
+                    btn.setAttribute('aria-expanded', 'false');
+                }
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
 
