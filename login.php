@@ -191,7 +191,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
     <div class="login-card">
         <div class="tabs">
             <a href="#" class="tab <?= $login_as === 'admin' ? 'active' : '' ?>" data-tab="admin">Admin</a>
-            <a href="#" class="tab <?= $login_as === 'member' ? 'active' : '' ?>" data-tab="member">Member / Agent</a>
+            <a href="#" class="tab <?= $login_as === 'member' ? 'active' : '' ?>" data-tab="member">Member</a>
         </div>
 
         <?php if ($error): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -223,7 +223,6 @@ $login_as = $_POST['login_as'] ?? 'admin';
             <button type="submit" class="btn-login">Login</button>
         </form>
 
-        <p class="foot">Agent 账号请从 Member / Agent 入口登录。没有账号请联系管理员创建。</p>
     </div>
 
     <script>

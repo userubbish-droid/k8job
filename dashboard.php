@@ -90,11 +90,21 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>首页 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        /* 首页统计卡片做紧凑版 */
+        .dashboard-compact .stat-cards { gap: 12px; }
+        .dashboard-compact .stat-card { padding: 14px 16px; min-width: 112px; border-radius: 12px; }
+        .dashboard-compact .stat-card .label { font-size: 10px; margin-bottom: 6px; }
+        .dashboard-compact .stat-card .value { font-size: 1.05rem; }
+        .dashboard-compact .card h3 { margin-bottom: 12px; }
+        .dashboard-compact .total-table-wrap { margin-top: 12px; }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
-        <main class="dashboard-main">
+        <main class="dashboard-main dashboard-compact">
             <div class="page-header dashboard-header">
                 <h1>K8 欢迎（<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>）</h1>
                 <p class="welcome-role">

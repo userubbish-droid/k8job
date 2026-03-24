@@ -304,6 +304,7 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>银行与产品 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
 </head>
 <body>
     <div class="dashboard-layout">
@@ -408,6 +409,7 @@ try {
                             </div>
                         </div>
                     </div>
+                    <div style="overflow-x:auto;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -484,11 +486,12 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="10">暂无银行/渠道</td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    </div>
                     <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（入账 In、出账 Out 为全部已审核流水合计）。</p>
                 </div>
 
                 <div class="card">
-                    <h3 style="display:flex;align-items:center;gap:8px;">
+                    <h3 class="section-title-inline">
                         产品管理
                         <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="product-add-wrap" aria-label="展开加额与添加">+</button>
                     </h3>
@@ -522,6 +525,7 @@ try {
                             <button type="submit" class="btn btn-primary">添加</button>
                         </form>
                     </div>
+                    <div style="overflow-x:auto;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -584,6 +588,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="11">暂无产品</td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    </div>
                 </div>
             </div>
         </main>
@@ -664,6 +669,13 @@ try {
     .balance-notify-name { min-width: 4em; font-size: 12px; margin: 0; }
     .bank-telegram-header { display: flex; flex-wrap: wrap; gap: 24px 32px; align-items: flex-start; }
     .bank-telegram-item { flex: 1; min-width: 260px; }
+    .section-title-inline { display:flex; align-items:center; gap:8px; margin:0; }
+    .data-table td { vertical-align: middle; }
+    .data-table td .btn { white-space: nowrap; }
+    .balance-cell-inline, .transfer-cell-inline { margin-right: 8px; }
+    @media (max-width: 768px) {
+        .bank-telegram-item { min-width: 100%; }
+    }
     </style>
 </body>
 </html>
