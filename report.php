@@ -16,6 +16,7 @@ if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 
 $total_in = 0.0;
 $total_out = 0.0;
+$total_expenses = 0.0;
 $profit = 0.0;
 $approved_count = 0;
 $mode_rows = [];
@@ -24,8 +25,15 @@ $top_customer_rows = [];
 try {
     $stmt = $pdo->prepare("
         SELECT
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT'
+                               AND bank IS NOT NULL AND TRIM(bank) <> ''
+                               AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %'))
+                              THEN amount ELSE 0 END), 0) AS total_in,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW'
+                               AND bank IS NOT NULL AND TRIM(bank) <> ''
+                               AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %'))
+                              THEN amount ELSE 0 END), 0) AS total_out,
+            COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
             COUNT(*) AS approved_count
         FROM transactions
         WHERE status = 'approved' AND day >= ? AND day <= ?
@@ -34,8 +42,9 @@ try {
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $total_in = (float)($row['total_in'] ?? 0);
     $total_out = (float)($row['total_out'] ?? 0);
+    $total_expenses = (float)($row['total_expenses'] ?? 0);
     $approved_count = (int)($row['approved_count'] ?? 0);
-    $profit = $total_in - $total_out;
+    $profit = $total_in - $total_out - $total_expenses;
 
     $stmt = $pdo->prepare("
         SELECT mode, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS amt
@@ -105,6 +114,7 @@ try {
                 <div class="summary">
                     <div class="summary-item"><strong>总入</strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
                     <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
+                    <div class="summary-item"><strong>开销</strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
                     <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
                     <div class="summary-item"><strong>已批准笔数</strong><span class="num"><?= (int)$approved_count ?></span></div>
                 </div>
