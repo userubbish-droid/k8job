@@ -157,6 +157,28 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>顾客列表 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        .column-toggle-bar {
+            margin-bottom: 10px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .column-toggle-btn {
+            min-width: 108px;
+            border-radius: 999px;
+            border: 1px solid rgba(99, 131, 214, 0.28);
+            background: linear-gradient(180deg, #f8fbff 0%, #edf3ff 100%);
+            color: #37518f;
+            font-weight: 700;
+        }
+        .column-toggle-btn.is-off {
+            opacity: .66;
+            filter: grayscale(18%);
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -228,12 +250,12 @@ try {
             </table>
             <?php else: ?>
             <?php if ($is_admin): ?>
-            <p style="margin-bottom:10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
-                <button type="button" class="btn btn-sm btn-outline" id="toggle-created-by" aria-pressed="false">显示填写人</button>
-                <button type="button" class="btn btn-sm btn-outline" id="toggle-contact" aria-pressed="false">隐藏 CONTACT</button>
-                <button type="button" class="btn btn-sm btn-outline" id="toggle-total-dp" aria-pressed="false">隐藏 Total DP</button>
-                <button type="button" class="btn btn-sm btn-outline" id="toggle-total-wd" aria-pressed="false">隐藏 Total WD</button>
-            </p>
+            <div class="column-toggle-bar">
+                <button type="button" class="btn btn-sm column-toggle-btn is-off" id="toggle-created-by" aria-pressed="false">填写人</button>
+                <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-contact" aria-pressed="false">CONTACT</button>
+                <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-total-dp" aria-pressed="false">Total DP</button>
+                <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-total-wd" aria-pressed="false">Total WD</button>
+            </div>
             <?php endif; ?>
             <table class="data-table">
                 <thead>
@@ -312,23 +334,28 @@ try {
     </div>
     <script>
     (function(){
-        function toggleCol(btnId, colClass, showText, hideText, columnStartsVisible) {
+        function toggleCol(btnId, colClass, columnStartsVisible) {
             columnStartsVisible = columnStartsVisible !== false;
             var btn = document.getElementById(btnId);
             if (!btn) return;
             var cells = document.querySelectorAll('th.' + colClass + ', td.' + colClass);
+            function setOff(off) {
+                if (off) btn.classList.add('is-off');
+                else btn.classList.remove('is-off');
+            }
+            setOff(!columnStartsVisible);
             btn.addEventListener('click', function(){
                 var visible = columnStartsVisible ? (btn.getAttribute('aria-pressed') !== 'true') : (btn.getAttribute('aria-pressed') === 'true');
                 var newVisible = !visible;
                 btn.setAttribute('aria-pressed', newVisible ? (columnStartsVisible ? 'false' : 'true') : (columnStartsVisible ? 'true' : 'false'));
-                btn.textContent = newVisible ? (columnStartsVisible ? showText : hideText) : (columnStartsVisible ? hideText : showText);
                 cells.forEach(function(el){ el.style.display = newVisible ? '' : 'none'; });
+                setOff(!newVisible);
             });
         }
-        toggleCol('toggle-created-by', 'col-created-by', '显示填写人', '隐藏填写人', false);
-        toggleCol('toggle-contact', 'col-contact', '显示 CONTACT', '隐藏 CONTACT', true);
-        toggleCol('toggle-total-dp', 'col-total-dp', '显示 Total DP', '隐藏 Total DP', true);
-        toggleCol('toggle-total-wd', 'col-total-wd', '显示 Total WD', '隐藏 Total WD', true);
+        toggleCol('toggle-created-by', 'col-created-by', false);
+        toggleCol('toggle-contact', 'col-contact', true);
+        toggleCol('toggle-total-dp', 'col-total-dp', true);
+        toggleCol('toggle-total-wd', 'col-total-wd', true);
     })();
     </script>
 </body>

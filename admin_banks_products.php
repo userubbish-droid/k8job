@@ -7,13 +7,17 @@ $sidebar_current = 'admin_banks_products';
 function _ensure_balance_adjust_table(PDO $pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS balance_adjust (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        adjust_type ENUM('bank','product') NOT NULL,
+        adjust_type ENUM('bank','product','expense') NOT NULL,
         name VARCHAR(80) NOT NULL,
         initial_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL,
         UNIQUE KEY (adjust_type, name)
     )");
+    try {
+        // 兼容旧库：补 expense 枚举值
+        $pdo->exec("ALTER TABLE balance_adjust MODIFY adjust_type ENUM('bank','product','expense') NOT NULL");
+    } catch (Throwable $e) {}
 }
 
 function _ensure_expenses_table(PDO $pdo) {
@@ -185,7 +189,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $type = $_POST['adjust_type'] ?? '';
             $name = trim($_POST['name'] ?? '');
             $val = str_replace(',', '', trim($_POST['balance'] ?? '0'));
-            if ($name === '' || !in_array($type, ['bank', 'product'], true) || !is_numeric($val)) throw new RuntimeException('参数错误。');
+            if ($name === '' || !in_array($type, ['bank', 'product', 'expense'], true) || !is_numeric($val)) throw new RuntimeException('参数错误。');
             try {
                 $stmt = $pdo->prepare("INSERT INTO balance_adjust (adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)
                     ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
@@ -229,6 +233,7 @@ $products = [];
 $expenses = [];
 $balance_bank = [];
 $balance_product = [];
+$balance_expense = [];
 $balance_adjust_ok = false;
 try {
     $sql = "SELECT id, name, is_active, sort_order, created_at FROM banks";
@@ -262,11 +267,13 @@ try {
         $k = strtolower(trim((string)$r['name']));
         if ($k === '') continue;
         if ($r['adjust_type'] === 'bank') $balance_bank[$k] = (float)$r['initial_balance'];
-        else $balance_product[$k] = (float)$r['initial_balance'];
+        elseif ($r['adjust_type'] === 'product') $balance_product[$k] = (float)$r['initial_balance'];
+        else $balance_expense[$k] = (float)$r['initial_balance'];
     }
 } catch (Throwable $e) {
     $balance_bank = [];
     $balance_product = [];
+    $balance_expense = [];
 }
 
 // Balance Now = Starting Balance + 入账(deposit) − 出账(withdraw)，按银行/产品对扣
@@ -275,6 +282,8 @@ $total_out_bank = [];
 $total_in_product = [];
 $total_topup_product = [];
 $total_out_product = [];
+$total_in_expense = [];
+$total_out_expense = [];
 $diag_bank_rows = [];
 $diag_product_rows = [];
 $diag_error = '';
@@ -315,6 +324,23 @@ try {
         $total_topup_product[$k] = $topup;
         $total_out_product[$k] = $to;
         $diag_product_rows[$k] = ['in' => $ti, 'topup' => $topup, 'out' => $to];
+    }
+} catch (Throwable $e) {
+    if (empty($diag_error)) $diag_error = $e->getMessage();
+}
+try {
+    $stmt = $pdo->query("SELECT COALESCE(product, '') AS expense_name,
+        COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS tout
+        FROM transactions
+        WHERE status = 'approved'
+        GROUP BY COALESCE(product, '')");
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    foreach ($rows as $r) {
+        $nameVal = $r['expense_name'] ?? '';
+        $k = strtolower(trim((string)$nameVal));
+        if ($k === '') continue;
+        $total_in_expense[$k] = 0;
+        $total_out_expense[$k] = (float)($r['tout'] ?? 0);
     }
 } catch (Throwable $e) {
     if (empty($diag_error)) $diag_error = $e->getMessage();
@@ -674,6 +700,10 @@ try {
                                 <th>状态</th>
                                 <th>排序</th>
                                 <th>创建时间</th>
+                                <th class="num">Starting Balance</th>
+                                <th class="num">In</th>
+                                <th class="num">Out</th>
+                                <th class="num">Balance</th>
                                 <th>操作</th>
                             </tr>
                         </thead>
@@ -685,7 +715,31 @@ try {
                                 <td><?= ((int)$e['is_active'] === 1) ? '启用' : '禁用' ?></td>
                                 <td><?= (int)$e['sort_order'] ?></td>
                                 <td><?= htmlspecialchars((string)$e['created_at']) ?></td>
+                                <?php
+                                    $ename = trim((string)$e['name']);
+                                    $ekey = strtolower($ename);
+                                    $ecur = $balance_expense[$ekey] ?? null;
+                                    $estart = $ecur !== null ? (float)$ecur : 0;
+                                    $ein = (float)($total_in_expense[$ekey] ?? 0);
+                                    $eout = (float)($total_out_expense[$ekey] ?? 0);
+                                    $ebalance = $estart + $ein - $eout;
+                                ?>
+                                <td class="num"><?= $ecur !== null ? number_format($ecur, 2) : '0.00' ?></td>
+                                <td class="num in"><?= $ein != 0 ? number_format($ein, 2) : '—' ?></td>
+                                <td class="num out"><?= $eout != 0 ? number_format($eout, 2) : '—' ?></td>
+                                <td class="num profit"><?= number_format($ebalance, 2) ?></td>
                                 <td>
+                                    <span class="balance-cell-inline">
+                                        <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
+                                        <form method="post" class="balance-inline-form" style="display:none;">
+                                            <input type="hidden" name="action" value="save_balance">
+                                            <input type="hidden" name="adjust_type" value="expense">
+                                            <input type="hidden" name="name" value="<?= htmlspecialchars($ename) ?>">
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="Starting Balance" inputmode="decimal" required size="6" value="<?= $ecur !== null ? htmlspecialchars(sprintf('%.2f', $ecur)) : '' ?>" title="仅修改 Starting Balance">
+                                            <button type="submit" class="btn btn-sm btn-primary">确定</button>
+                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
+                                        </form>
+                                    </span>
                                     <form method="post" class="inline" style="display:inline;">
                                         <input type="hidden" name="action" value="toggle_expense">
                                         <input type="hidden" name="id" value="<?= (int)$e['id'] ?>">
@@ -694,7 +748,7 @@ try {
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$expenses): ?><tr><td colspan="6">暂无 Expense</td></tr><?php endif; ?>
+                            <?php if (!$expenses): ?><tr><td colspan="10">暂无 Expense</td></tr><?php endif; ?>
                         </tbody>
                     </table>
                     </div>
