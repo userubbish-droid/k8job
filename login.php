@@ -21,22 +21,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $stmt->execute([$user]);
         $u = $stmt->fetch();
 
+        $db_role = strtolower(trim((string)($u['role'] ?? '')));
         if (!$u || (int)$u['is_active'] !== 1 || !password_verify($pass, $u['password_hash'])) {
             $error = '用户名或密码错误';
-        } elseif ($login_as === 'admin' && $u['role'] !== 'admin') {
+        } elseif ($login_as === 'admin' && $db_role !== 'admin') {
             $error = '请使用 Admin 登录入口，或该账号不是管理员';
-        } elseif ($login_as === 'member' && !in_array($u['role'], ['member', 'agent'], true)) {
-            $error = '请使用 Member 登录入口，或该账号不是员工/代理';
+        } elseif ($login_as === 'member' && !in_array($db_role, ['member', 'agent'], true)) {
+            $error = '当前账号角色为 ' . ($db_role !== '' ? $db_role : '未设置') . '，Member / Agent 入口仅允许 member 或 agent。请到「用户管理」修改角色。';
         } else {
             $_SESSION['user_id'] = (int)$u['id'];
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
-            $_SESSION['user_role'] = $u['role'];
+            $_SESSION['user_role'] = $db_role;
             if ($company_id !== '') $_SESSION['company_id'] = $company_id;
             if ($remember) {
                 $params = session_get_cookie_params();
                 setcookie(session_name(), session_id(), time() + 86400 * 14, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
             }
-            if ($u['role'] === 'agent') {
+            if ($db_role === 'agent') {
                 $_SESSION['agent_code'] = $u['username']; // 与 customers.recommend 对应
                 header('Location: agents.php');
             } else {
