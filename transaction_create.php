@@ -32,15 +32,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $code    = trim($_POST['code'] ?? '');
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
+    $expense_item = trim($_POST['expense_item'] ?? '');
     $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
     $reward_pct = str_replace(',', '', trim((string)($_POST['reward_pct'] ?? '')));
     $bonus_fix  = str_replace(',', '', trim((string)($_POST['bonus'] ?? '0')));
     $remark   = trim($_POST['remark'] ?? '');
 
+    if ($mode === 'EXPENSE' && $product === '' && $expense_item !== '') {
+        $product = $expense_item;
+    }
+
     if ($day === '' || $mode === '') {
         $error = '请填写日期和模式。';
-    } elseif ($mode === 'EXPENSE' && ($bank === '' || $product === '')) {
-        $error = 'EXPENSE 必须选择 Bank 和 Product。';
+    } elseif ($mode === 'EXPENSE' && ($bank === '' || ($product === '' && $remark === ''))) {
+        $error = 'EXPENSE 请至少填写 Bank，且 Product 或 Remark 其中一项必填。';
     } elseif (!is_numeric($amount)) {
         $error = '金额请填数字。';
     } else {
@@ -410,6 +415,7 @@ if ($quick === 'expense') {
                         <option value="OTHER" <?= $selected_mode === 'OTHER' ? 'selected' : '' ?>>OTHER</option>
                     </select>
                 </div>
+                <?php if ($quick !== 'expense'): ?>
                 <div class="form-group">
                     <label>customer</label>
                     <?php if (empty($customers)): ?>
@@ -424,6 +430,7 @@ if ($quick === 'expense') {
                     </select>
                     <?php endif; ?>
                 </div>
+                <?php endif; ?>
             </div>
             <div id="withdraw_customer_box" class="form-group" style="display:none; padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:14px; border:1px solid #fcd34d;">
                 <div style="margin-bottom:4px;"><strong>顾客姓名</strong>：<span id="withdraw_customer_name">—</span></div>
@@ -439,13 +446,24 @@ if ($quick === 'expense') {
                     </select>
                 </div>
                 <div class="form-group">
-                    <label id="product_label">产品/平台 *</label>
+                    <label id="product_label"><?= $quick === 'expense' ? 'Expense 项目（可选）' : '产品/平台 *' ?></label>
                     <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
+                    <select name="product" id="product" class="form-control" <?= $quick === 'expense' ? '' : 'required' ?> title="用于分类统计（可选）">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
                     </select>
+                    <?php if ($quick === 'expense'): ?>
+                    <input type="text" name="expense_item" class="form-control" style="margin-top:8px;" placeholder="可手填，如：rental / office / salary">
+                    <p class="form-hint" style="margin-top:4px;">如未选择 Product，将使用这里的内容作为分类。</p>
+                    <?php endif; ?>
                 </div>
+            </div>
+        </div>
+
+        <div class="form-section">
+            <div class="form-group">
+                <label>备注</label>
+                <textarea name="remark" class="form-control" rows="2" placeholder="<?= $quick === 'expense' ? '例如：rental' : '选填' ?>"></textarea>
             </div>
         </div>
 
@@ -456,20 +474,20 @@ if ($quick === 'expense') {
                     <label>金额 *</label>
                     <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
                 </div>
+                <?php if ($quick !== 'expense'): ?>
                 <div class="form-group">
                     <label>奖励/返点 %</label>
                     <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="" inputmode="decimal" title="按金额百分比计算 bonus，顾客列表 Bonus 列即此项合计">
                     <input type="hidden" name="bonus" id="bonus_hidden" value="0">
                 </div>
+                <?php else: ?>
+                <input type="hidden" name="reward_pct" id="reward_pct" value="0">
+                <input type="hidden" name="bonus" id="bonus_hidden" value="0">
+                <?php endif; ?>
             </div>
+            <?php if ($quick !== 'expense'): ?>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
-        </div>
-
-        <div class="form-section">
-            <div class="form-group">
-                <label>备注</label>
-                <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
-            </div>
+            <?php endif; ?>
         </div>
 
         <button type="submit" class="btn btn-primary txn-submit">保存</button>
@@ -610,6 +628,7 @@ if ($quick === 'expense') {
     <script>
         (function() {
             var customerData = <?= json_encode(array_column($customers, null, 'code')) ?>;
+            var isExpenseQuick = <?= $quick === 'expense' ? 'true' : 'false' ?>;
             var productOptionsDefault = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE) ?>;
             var productOptionsExpense = <?= json_encode(array_values($expenses), JSON_UNESCAPED_UNICODE) ?>;
             function updateWithdrawCustomer() {
@@ -654,8 +673,9 @@ if ($quick === 'expense') {
                 if (productSelect && productLabel) {
                     var current = productSelect.value;
                     var list = productOptionsDefault;
-                    var fallback = '产品/平台';
-                    productLabel.textContent = fallback + ' *';
+                    var isQuickExpenseMode = mode === 'EXPENSE' && isExpenseQuick;
+                    var fallback = isQuickExpenseMode ? 'Expense 项目（可选）' : '产品/平台';
+                    productLabel.textContent = isQuickExpenseMode ? fallback : (fallback + ' *');
                     productSelect.innerHTML = '<option value="">-- 请选 --</option>';
                     (list || []).forEach(function(name){
                         var op = document.createElement('option');
