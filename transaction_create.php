@@ -2,7 +2,8 @@
 require 'config.php';
 require 'auth.php';
 require_permission('transaction_create');
-$sidebar_current = 'transaction_create';
+$quick = trim((string)($_GET['quick'] ?? ''));
+$sidebar_current = $quick === 'expense' ? 'expense_create' : 'transaction_create';
 
 $saved = false;
 $error = '';
@@ -121,6 +122,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $today = date('Y-m-d');
 $now   = date('H:i');
+$selected_mode = trim((string)($_POST['mode'] ?? ($quick === 'expense' ? 'EXPENSE' : '')));
 
 // 银行/产品：仅 admin 可“设置”（在 admin_banks / admin_products 管理）；员工只能从已设置的选项中选择
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
@@ -327,14 +329,14 @@ if ($is_admin) {
                     <label>模式 *</label>
                     <select name="mode" id="mode" class="form-control" required>
                         <option value="">-- 请选 --</option>
-                        <option value="DEPOSIT">DEPOSIT</option>
-                        <option value="WITHDRAW">WITHDRAW</option>
-                        <option value="FREE">FREE</option>
-                        <option value="FREE WITHDRAW">FREE WITHDRAW</option>
-                        <option value="EXPENSE">EXPENSE</option>
-                        <option value="BANK">BANK</option>
-                        <option value="REBATE">REBATE</option>
-                        <option value="OTHER">OTHER</option>
+                        <option value="DEPOSIT" <?= $selected_mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT</option>
+                        <option value="WITHDRAW" <?= $selected_mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW</option>
+                        <option value="FREE" <?= $selected_mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
+                        <option value="FREE WITHDRAW" <?= $selected_mode === 'FREE WITHDRAW' ? 'selected' : '' ?>>FREE WITHDRAW</option>
+                        <option value="EXPENSE" <?= $selected_mode === 'EXPENSE' ? 'selected' : '' ?>>EXPENSE</option>
+                        <option value="BANK" <?= $selected_mode === 'BANK' ? 'selected' : '' ?>>BANK</option>
+                        <option value="REBATE" <?= $selected_mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
+                        <option value="OTHER" <?= $selected_mode === 'OTHER' ? 'selected' : '' ?>>OTHER</option>
                     </select>
                 </div>
                 <div class="form-group">

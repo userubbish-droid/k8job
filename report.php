@@ -238,7 +238,6 @@ try {
                     <div class="report-kpi-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
                     <div class="report-kpi-item"><strong>开销</strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
                     <div class="report-kpi-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
-                    <div class="report-kpi-item"><strong>已批准笔数</strong><span class="num"><?= (int)$approved_count ?></span></div>
                 </div>
 
                 <div class="card report-section-card">

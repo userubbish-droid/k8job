@@ -37,13 +37,14 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
     </div>
     <?php if (has_permission('transaction_create') || has_permission('customer_create')): ?>
     <div class="nav-group" data-group="add-menu">
-        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['transaction_create', 'customer_create'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-add-menu" id="nav-toggle-add-menu">
+        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['transaction_create', 'customer_create', 'expense_create'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-add-menu" id="nav-toggle-add-menu">
             <span class="nav-icon"></span>
             <span class="nav-group-label">Add</span>
             <span class="nav-group-chevron" aria-hidden="true">▾</span>
         </button>
-        <div class="nav-group-sub" id="nav-sub-add-menu" role="region" aria-labelledby="nav-toggle-add-menu" style="display:<?= in_array($sidebar_current, ['transaction_create', 'customer_create'], true) ? 'block' : 'none' ?>">
+        <div class="nav-group-sub" id="nav-sub-add-menu" role="region" aria-labelledby="nav-toggle-add-menu" style="display:<?= in_array($sidebar_current, ['transaction_create', 'customer_create', 'expense_create'], true) ? 'block' : 'none' ?>">
             <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item nav-sub-item <?= $sidebar_current === 'transaction_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>Add Transaction</a><?php endif; ?>
+            <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php?quick=expense" class="nav-item nav-sub-item <?= $sidebar_current === 'expense_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>Expense</a><?php endif; ?>
             <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item nav-sub-item <?= $sidebar_current === 'customer_create' ? 'primary' : '' ?>"><span class="nav-icon"></span>New Customer</a><?php endif; ?>
         </div>
     </div>
