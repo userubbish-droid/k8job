@@ -1,10 +1,10 @@
 /* 算账网 - 统一样式（参考 EAZYCOUNT 等优化版） */
 :root {
-    --primary: #2563eb;
-    --primary-hover: #1d4ed8;
-    --primary-deep: #1e40af;
-    --primary-light: #dbeafe;
-    --primary-soft: #eff6ff;
+    --primary: #4f7dff;
+    --primary-hover: #3b6bff;
+    --primary-deep: #2747c7;
+    --primary-light: #dbe7ff;
+    --primary-soft: #eef3ff;
     --success: #059669;
     --success-soft: #ecfdf5;
     --success-bg: #d1fae5;
@@ -12,13 +12,13 @@
     --danger-soft: #fef2f2;
     --danger-bg: #fee2e2;
     --danger-hover: #b91c1c;
-    --muted: #64748b;
-    --muted-light: #94a3b8;
-    --border: #e2e8f0;
-    --border-light: #f1f5f9;
-    --bg: #f8fafc;
-    --card-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    --card-shadow-hover: 0 8px 24px rgba(0,0,0,0.07);
+    --muted: #54627d;
+    --muted-light: #8090ad;
+    --border: #dbe4fb;
+    --border-light: #edf2ff;
+    --bg: #f1f4ff;
+    --card-shadow: 0 6px 20px rgba(33, 52, 112, 0.12);
+    --card-shadow-hover: 0 14px 36px rgba(33, 52, 112, 0.2);
     --card-radius: 14px;
     --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
 }
@@ -28,13 +28,29 @@ body {
     font-family: var(--font);
     margin: 0;
     padding: 0;
-    background: linear-gradient(165deg, #e8ecf4 0%, #eef2f7 30%, #f1f5f9 60%, #eef2f7 100%);
+    background:
+        radial-gradient(1200px 600px at -10% -10%, rgba(111, 66, 193, 0.16) 0%, transparent 55%),
+        radial-gradient(900px 520px at 110% 0%, rgba(59, 130, 246, 0.16) 0%, transparent 58%),
+        radial-gradient(1000px 640px at 50% 120%, rgba(8, 145, 178, 0.13) 0%, transparent 60%),
+        linear-gradient(155deg, #edf1ff 0%, #e9efff 38%, #f5f8ff 72%, #edf2ff 100%);
     background-attachment: fixed;
     color: #334155;
     line-height: 1.55;
     font-size: 15px;
     min-height: 100vh;
     -webkit-tap-highlight-color: transparent;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: -1;
+    background-image:
+        linear-gradient(rgba(79, 125, 255, 0.05) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(79, 125, 255, 0.05) 1px, transparent 1px);
+    background-size: 44px 44px, 44px 44px;
 }
 
 .page-wrap {
@@ -65,7 +81,7 @@ body {
 .page-header {
     margin-bottom: 28px;
     padding-bottom: 20px;
-    border-bottom: 1px solid rgba(226, 232, 240, 0.9);
+    border-bottom: 1px solid rgba(140, 165, 235, 0.35);
     text-align: center;
 }
 .page-header h1,
@@ -101,15 +117,16 @@ body {
 
 /* 卡片 */
 .card {
-    background: #fff;
+    background: rgba(255, 255, 255, 0.82);
+    backdrop-filter: blur(6px);
     border-radius: var(--card-radius);
-    box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+    box-shadow: var(--card-shadow);
     padding: 24px 28px;
     margin-bottom: 22px;
-    border: 1px solid rgba(226, 232, 240, 0.9);
-    transition: box-shadow 0.25s ease, border-color 0.2s;
+    border: 1px solid rgba(152, 176, 242, 0.32);
+    transition: box-shadow 0.25s ease, border-color 0.2s, transform 0.2s;
 }
-.card:hover { box-shadow: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 12px rgba(0, 0, 0, 0.04); border-color: rgba(226, 232, 240, 1); }
+.card:hover { box-shadow: var(--card-shadow-hover); border-color: rgba(112, 149, 242, 0.6); transform: translateY(-1px); }
 .card h3 {
     margin: 0 0 18px;
     font-size: 1rem;
@@ -169,11 +186,11 @@ body {
 }
 .btn:active { transform: scale(0.98); }
 .btn-primary {
-    background: linear-gradient(180deg, #3b82f6 0%, var(--primary) 100%);
+    background: linear-gradient(180deg, #6e8dff 0%, var(--primary) 100%);
     color: #fff;
-    box-shadow: 0 2px 8px rgba(37, 99, 235, 0.35);
+    box-shadow: 0 4px 14px rgba(79, 125, 255, 0.45), 0 0 0 1px rgba(255,255,255,0.2) inset;
 }
-.btn-primary:hover { background: linear-gradient(180deg, var(--primary) 0%, var(--primary-hover) 100%); color: #fff; box-shadow: 0 4px 14px rgba(37, 99, 235, 0.4); }
+.btn-primary:hover { background: linear-gradient(180deg, #5f83ff 0%, var(--primary-hover) 100%); color: #fff; box-shadow: 0 8px 20px rgba(79, 125, 255, 0.5), 0 0 0 1px rgba(255,255,255,0.25) inset; }
 .btn-outline {
     background: #fff;
     color: #475569;
@@ -241,7 +258,7 @@ body {
     border-bottom: 1px solid var(--border-light);
 }
 .data-table thead th {
-    background: linear-gradient(180deg, #3b82f6 0%, var(--primary-deep) 100%);
+    background: linear-gradient(180deg, #5b86ff 0%, #2f57d1 100%);
     color: #fff;
     font-weight: 600;
     font-size: 11px;
@@ -476,11 +493,14 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     flex-wrap: nowrap !important;
     width: 232px !important;
     min-width: 232px !important;
-    background: linear-gradient(180deg, #1e3a5f 0%, #1a3352 50%, #152a45 100%);
+    background:
+        radial-gradient(220px 180px at 0% 0%, rgba(95, 131, 255, 0.28) 0%, transparent 70%),
+        radial-gradient(300px 220px at 100% 100%, rgba(15, 164, 179, 0.18) 0%, transparent 72%),
+        linear-gradient(185deg, #16284d 0%, #16203f 48%, #121a35 100%);
     border-right: 1px solid rgba(0, 0, 0, 0.2);
     padding: 0 0 20px;
     flex-shrink: 0;
-    box-shadow: 4px 0 24px rgba(0, 0, 0, 0.12);
+    box-shadow: 8px 0 30px rgba(18, 28, 63, 0.34);
 }
 .sidebar-profile {
     padding: 26px 20px 22px;
@@ -547,7 +567,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 }
 .dashboard-sidebar .nav-item.primary .nav-icon { background: rgba(255,255,255,0.9); }
 .dashboard-sidebar .nav-item:hover { background: rgba(255, 255, 255, 0.1); color: #fff; }
-.dashboard-sidebar .nav-item.primary { background: rgba(255, 255, 255, 0.18); color: #fff; font-weight: 600; border-left-color: rgba(255,255,255,0.8); }
+.dashboard-sidebar .nav-item.primary { background: linear-gradient(90deg, rgba(120, 155, 255, 0.35), rgba(79, 125, 255, 0.22)); color: #fff; font-weight: 600; border-left-color: rgba(255,255,255,0.85); box-shadow: 0 8px 18px rgba(56, 88, 183, 0.28); }
 .dashboard-sidebar .nav-item.primary .nav-icon { background: rgba(255,255,255,0.9); }
 .dashboard-sidebar .nav-group { margin-bottom: 0; }
 .dashboard-sidebar .nav-group-toggle { cursor: pointer; text-align: left; background: none; border: none; font: inherit; color: inherit; justify-content: space-between; }
