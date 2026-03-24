@@ -8,6 +8,13 @@ $sidebar_current = $quick === 'expense' ? 'expense_create' : 'transaction_create
 $saved = false;
 $error = '';
 $submitted_status = '';
+$expense_day_from_raw = trim((string)($_GET['expense_day_from'] ?? date('Y-m-01')));
+$expense_day_to_raw = trim((string)($_GET['expense_day_to'] ?? date('Y-m-d')));
+$expense_bank_filter = trim((string)($_GET['expense_bank'] ?? ''));
+$expense_product_filter = trim((string)($_GET['expense_product'] ?? ''));
+$expense_day_from = preg_match('/^\d{4}-\d{2}-\d{2}$/', $expense_day_from_raw) ? $expense_day_from_raw : date('Y-m-01');
+$expense_day_to = preg_match('/^\d{4}-\d{2}-\d{2}$/', $expense_day_to_raw) ? $expense_day_to_raw : date('Y-m-d');
+if ($expense_day_from > $expense_day_to) { $tmp = $expense_day_from; $expense_day_from = $expense_day_to; $expense_day_to = $tmp; }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
@@ -131,6 +138,12 @@ $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $banks = [];
 $products = [];
 $expenses = [];
+$expense_report_rows = [];
+$expense_report_count = 0;
+$expense_report_total = 0.0;
+$expense_report_by_product = [];
+$expense_filter_banks = [];
+$expense_filter_products = [];
 // 客户代码下拉选项（含 name、bank_details 供 WITHDRAW 时显示）
 $customers = [];
 try {
@@ -158,6 +171,44 @@ if ($is_admin) {
     if (!$banks) $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
     if (!$products) $products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
     if (!$expenses) $expenses = ['Office', 'Salary', 'Ads', 'Transport'];
+}
+
+if ($quick === 'expense') {
+    try {
+        $expense_filter_banks = $pdo->query("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(bank, '')) <> '' ORDER BY bank_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $expense_filter_products = $pdo->query("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(product, '')) <> '' ORDER BY product_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+
+        $where = "status = 'approved' AND mode = 'EXPENSE' AND day >= ? AND day <= ?";
+        $params = [$expense_day_from, $expense_day_to];
+        if ($expense_bank_filter !== '') {
+            $where .= " AND bank = ?";
+            $params[] = $expense_bank_filter;
+        }
+        if ($expense_product_filter !== '') {
+            $where .= " AND product = ?";
+            $params[] = $expense_product_filter;
+        }
+
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE $where");
+        $stmt->execute($params);
+        $expense_report_total = (float)$stmt->fetchColumn();
+
+        $stmt = $pdo->prepare("SELECT day, time, bank, product, amount, staff, remark FROM transactions WHERE $where ORDER BY day DESC, time DESC LIMIT 120");
+        $stmt->execute($params);
+        $expense_report_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $expense_report_count = count($expense_report_rows);
+
+        $stmt = $pdo->prepare("SELECT COALESCE(NULLIF(TRIM(product), ''), '未填写产品') AS product_name, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total_amount
+            FROM transactions
+            WHERE $where
+            GROUP BY COALESCE(NULLIF(TRIM(product), ''), '未填写产品')
+            ORDER BY total_amount DESC");
+        $stmt->execute($params);
+        $expense_report_by_product = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        // 保持页面可用，仅在下方展示错误信息
+        $error = $error !== '' ? $error : ('Expense 汇总加载失败：' . $e->getMessage());
+    }
 }
 ?>
 <!DOCTYPE html>
@@ -200,10 +251,21 @@ if ($is_admin) {
         .success-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
         .success-actions a { padding: 8px 14px; background: #fff; border: 1px solid #a7f3d0; border-radius: 6px; color: #059669; text-decoration: none; font-size: 13px; }
         .success-actions a:hover { background: #ecfdf5; }
+        .expense-statement-wrap { margin-top: 14px; padding: 14px 16px; }
+        .expense-statement-title { margin: 0 0 10px; font-size: 14px; }
+        .expense-filter-bar { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 12px; }
+        .expense-filter-item label { display: block; font-size: 12px; margin-bottom: 4px; color: var(--muted); }
+        .expense-filter-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+        .expense-kpi-grid { display: grid; grid-template-columns: repeat(3, minmax(120px, 1fr)); gap: 10px; margin-bottom: 10px; }
+        .expense-kpi-card { border: 1px solid rgba(115, 146, 230, 0.25); border-radius: 10px; background: rgba(255,255,255,0.82); padding: 10px 12px; }
+        .expense-kpi-card strong { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+        .expense-kpi-card .num { font-size: 1.2rem; font-weight: 700; line-height: 1; }
         @media (max-width: 640px) {
             .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
             .txn-form-card { padding: 16px; }
             .form-section { padding: 12px; }
+            .expense-filter-bar { grid-template-columns: 1fr 1fr; }
+            .expense-kpi-grid { grid-template-columns: 1fr; }
         }
         .pretty-modal-mask {
             position: fixed;
@@ -413,6 +475,112 @@ if ($is_admin) {
         <button type="submit" class="btn btn-primary txn-submit">保存</button>
     </form>
     </div>
+
+    <?php if ($quick === 'expense'): ?>
+    <div class="card expense-statement-wrap">
+        <h4 class="expense-statement-title">Expense 明细与汇总</h4>
+        <form method="get" class="expense-filter-bar">
+            <input type="hidden" name="quick" value="expense">
+            <div class="expense-filter-item">
+                <label>From</label>
+                <input type="date" name="expense_day_from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
+            </div>
+            <div class="expense-filter-item">
+                <label>To</label>
+                <input type="date" name="expense_day_to" class="form-control" value="<?= htmlspecialchars($expense_day_to) ?>">
+            </div>
+            <div class="expense-filter-item">
+                <label>Bank</label>
+                <select name="expense_bank" class="form-control">
+                    <option value="">全部</option>
+                    <?php foreach ($expense_filter_banks as $bank_name): ?>
+                    <option value="<?= htmlspecialchars((string)$bank_name) ?>" <?= $expense_bank_filter === (string)$bank_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$bank_name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="expense-filter-item">
+                <label>Product</label>
+                <select name="expense_product" class="form-control">
+                    <option value="">全部</option>
+                    <?php foreach ($expense_filter_products as $product_name): ?>
+                    <option value="<?= htmlspecialchars((string)$product_name) ?>" <?= $expense_product_filter === (string)$product_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$product_name) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="expense-filter-actions">
+                <button type="submit" class="btn btn-primary btn-sm">Search</button>
+                <a href="transaction_create.php?quick=expense" class="btn btn-back btn-sm">Reset</a>
+            </div>
+        </form>
+
+        <div class="expense-kpi-grid">
+            <div class="expense-kpi-card">
+                <strong>总开销</strong>
+                <span class="num out"><?= number_format($expense_report_total, 2) ?></span>
+            </div>
+            <div class="expense-kpi-card">
+                <strong>记录数</strong>
+                <span class="num"><?= (int)$expense_report_count ?></span>
+            </div>
+            <div class="expense-kpi-card">
+                <strong>产品数</strong>
+                <span class="num"><?= count($expense_report_by_product) ?></span>
+            </div>
+        </div>
+
+        <div style="overflow-x:auto; margin-bottom: 10px;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Product</th>
+                        <th class="num">Count</th>
+                        <th class="num">Total Expense</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($expense_report_by_product as $row): ?>
+                    <tr>
+                        <td><?= htmlspecialchars((string)($row['product_name'] ?? '')) ?></td>
+                        <td class="num"><?= (int)($row['cnt'] ?? 0) ?></td>
+                        <td class="num out"><?= number_format((float)($row['total_amount'] ?? 0), 2) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$expense_report_by_product): ?><tr><td colspan="3">暂无 Product 汇总</td></tr><?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+
+        <div style="overflow-x:auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Day</th>
+                        <th>Time</th>
+                        <th>Bank</th>
+                        <th>Product</th>
+                        <th class="num">Amount</th>
+                        <th>Staff</th>
+                        <th>Remark</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <?php foreach ($expense_report_rows as $row): ?>
+                    <tr>
+                        <td><?= htmlspecialchars((string)($row['day'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars((string)($row['time'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars((string)($row['bank'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars((string)($row['product'] ?? '')) ?></td>
+                        <td class="num out"><?= number_format((float)($row['amount'] ?? 0), 2) ?></td>
+                        <td><?= htmlspecialchars((string)($row['staff'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars((string)($row['remark'] ?? '')) ?></td>
+                    </tr>
+                    <?php endforeach; ?>
+                    <?php if (!$expense_report_rows): ?><tr><td colspan="7">暂无 Expense 记录</td></tr><?php endif; ?>
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <?php endif; ?>
 
     <p class="breadcrumb" style="margin-top:16px;">
         <a href="dashboard.php">返回首页</a><span>·</span>
