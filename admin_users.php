@@ -21,6 +21,13 @@ function ensure_users_role_supports_agent(PDO $pdo): void {
     $pdo->exec($sql);
 }
 
+function ensure_users_login_meta(PDO $pdo): void {
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER is_active"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"); } catch (Throwable $e) {}
+}
+
+ensure_users_login_meta($pdo);
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -94,7 +101,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$users_sql = "SELECT id, username, role, display_name, is_active, created_at FROM users";
+$users_sql = "SELECT id, username, role, display_name, is_active, last_login_at, last_login_ip, created_at FROM users";
 if ($status_filter === 'active') {
     $users_sql .= " WHERE is_active = 1";
 } elseif ($status_filter === 'inactive') {
@@ -189,6 +196,8 @@ $users = $pdo->query($users_sql)->fetchAll();
                         <th>显示名</th>
                         <th>角色</th>
                         <th>状态</th>
+                        <th>Login IP</th>
+                        <th>Last Login</th>
                         <th>创建时间</th>
                         <th>操作</th>
                     </tr>
@@ -212,8 +221,11 @@ $users = $pdo->query($users_sql)->fetchAll();
                             </form>
                         </td>
                         <td><?= ((int)$u['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                        <td><?= htmlspecialchars((string)($u['last_login_ip'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars((string)($u['last_login_at'] ?? '')) ?></td>
                         <td><?= htmlspecialchars($u['created_at']) ?></td>
                         <td>
+                            <a class="btn btn-outline btn-sm inline" href="admin_user_edit.php?id=<?= (int)$u['id'] ?>">编辑</a>
                             <form method="post" class="inline">
                                 <input type="hidden" name="action" value="toggle_active">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
@@ -229,7 +241,7 @@ $users = $pdo->query($users_sql)->fetchAll();
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$users): ?>
-                    <tr><td colspan="7" class="admin-users-center">暂无账号</td></tr>
+                    <tr><td colspan="9" class="admin-users-center">暂无账号</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

@@ -6,6 +6,25 @@ if (isset($_SESSION['user_id'])) {
     exit;
 }
 
+function ensure_users_login_meta(PDO $pdo): void {
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER is_active"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"); } catch (Throwable $e) {}
+}
+
+function get_login_ip(): string {
+    $ip = '';
+    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+        $ip = (string)$_SERVER['HTTP_CF_CONNECTING_IP'];
+    } elseif (!empty($_SERVER['REMOTE_ADDR'])) {
+        $ip = (string)$_SERVER['REMOTE_ADDR'];
+    }
+    $ip = trim($ip);
+    if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) {
+        return $ip;
+    }
+    return '';
+}
+
 $error = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
@@ -32,6 +51,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = (int)$u['id'];
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
             $_SESSION['user_role'] = $db_role;
+            try {
+                ensure_users_login_meta($pdo);
+                $ip = get_login_ip();
+                $stmt2 = $pdo->prepare("UPDATE users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?");
+                $stmt2->execute([$ip !== '' ? $ip : null, (int)$u['id']]);
+            } catch (Throwable $e) {
+            }
             if ($company_id !== '') $_SESSION['company_id'] = $company_id;
             if ($remember) {
                 $params = session_get_cookie_params();

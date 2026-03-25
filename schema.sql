@@ -28,6 +28,8 @@ CREATE TABLE IF NOT EXISTS users (
   role ENUM('admin','member','agent') NOT NULL DEFAULT 'member',
   display_name VARCHAR(80) NULL,
   is_active TINYINT(1) NOT NULL DEFAULT 1,
+  last_login_at DATETIME NULL,
+  last_login_ip VARCHAR(45) NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

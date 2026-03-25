@@ -9,19 +9,22 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 function get_permission_options(): array
 {
     return [
-        'transaction_create' => '记一笔',
-        'transaction_list'   => '流水记录',
-        'rebate'             => '返点 Rebate',
-        'customers'          => '顾客列表',
-        'customer_create'    => '新增顾客',
-        'customer_edit'      => '编辑顾客（含产品账号）',
-        'product_library'    => '产品账号',
+        // 文案尽量与左侧侧栏一致（便于 admin 开关）
+        'home_dashboard'     => 'Dashboard',
+        'transaction_create' => 'Add Transaction',
+        'expense_statement'  => 'Expense Statement',
+        'kiosk_expense_view' => 'Kiosk Expense',
+        'transaction_list'   => 'Transactions',
+        'rebate'             => 'Rebate',
+        'customers'          => 'Customers',
+        'customer_create'    => 'New Customer',
+        'customer_edit'      => 'Edit Customer (incl. Product Accounts)',
+        'product_library'    => 'Product Accounts',
         // 兼容：旧版只用 statement 一个开关；新版拆分为多个开关（statement_*）
-        'statement'          => 'statement（旧总开关）',
+        'statement'          => 'Statement (legacy master)',
         'statement_report'   => 'Report',
-        'statement_balance'  => 'Statement（Bank / Game Platform）',
+        'statement_balance'  => 'Statement',
         'kiosk_statement'    => 'Kiosk Statement',
-        'kiosk_expense_view' => 'Kiosk Expense（查看）',
         'agent'              => 'Agent',
     ];
 }
@@ -53,6 +56,14 @@ function has_permission(string $key): bool
         // 向后兼容：如果 member 勾了旧的 statement，则默认拥有所有 statement_* 与 kiosk_* 查看权限
         if (in_array($key, ['statement_report', 'statement_balance', 'kiosk_statement', 'kiosk_expense_view'], true)) {
             $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = 'statement' LIMIT 1");
+            $stmt->execute([$uid]);
+            if ((bool)$stmt->fetch()) {
+                return true;
+            }
+        }
+        // 向后兼容：如果 member 勾了 transaction_create 或 transaction_list，则默认允许进 Dashboard
+        if ($key === 'home_dashboard') {
+            $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key IN ('transaction_create','transaction_list','statement') LIMIT 1");
             $stmt->execute([$uid]);
             if ((bool)$stmt->fetch()) {
                 return true;

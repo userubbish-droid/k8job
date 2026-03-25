@@ -6,6 +6,7 @@ if (($_SESSION['user_role'] ?? '') === 'agent') {
     header('Location: agents.php');
     exit;
 }
+require_permission('home_dashboard');
 
 $today = date('Y-m-d');
 $month_start = date('Y-m-01');
