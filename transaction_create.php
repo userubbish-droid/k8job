@@ -1,7 +1,6 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_permission('transaction_create');
 
 function ensure_transactions_expense_kind(PDO $pdo) {
     try {
@@ -22,6 +21,18 @@ function ensure_products_kiosk_columns(PDO $pdo) {
         $pdo->exec("ALTER TABLE products ADD COLUMN kiosk_paid_amount DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Kiosk amount paid' AFTER kiosk_fee_pct");
     } catch (Throwable $e) {
     }
+}
+
+// 权限：
+// - Kiosk Expense（quick=expense&expense_kind=kiosk）：允许拥有 statement 权限的 member 查看（不含录入）。
+// - 其他 transaction_create 功能：需要 transaction_create 权限。
+$quick = trim((string)($_GET['quick'] ?? ''));
+$ekg_raw = trim((string)($_GET['expense_kind'] ?? $_POST['expense_kind'] ?? 'statement'));
+$expense_kind_ui_pre = ($quick === 'expense' && in_array($ekg_raw, ['statement', 'kiosk'], true)) ? $ekg_raw : 'statement';
+if ($quick === 'expense' && $expense_kind_ui_pre === 'kiosk') {
+    require_permission('statement');
+} else {
+    require_permission('transaction_create');
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']) && trim((string)($_POST['expense_kind'] ?? '')) === 'kiosk') {
@@ -70,7 +81,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
     exit;
 }
 
-$quick = trim((string)($_GET['quick'] ?? ''));
 $expense_kind_ui = 'statement';
 if ($quick === 'expense') {
     $ekg = trim((string)($_GET['expense_kind'] ?? $_POST['expense_kind'] ?? 'statement'));

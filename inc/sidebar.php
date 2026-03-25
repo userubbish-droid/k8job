@@ -34,6 +34,7 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
             <a href="dashboard.php" class="nav-item nav-sub-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>Dashboard</a>
             <?php if (has_permission('statement')): ?><a href="report.php" class="nav-item nav-sub-item <?= $sidebar_current === 'report' ? 'primary' : '' ?>"><span class="nav-icon"></span>Report</a><?php endif; ?>
             <?php if (has_permission('statement')): ?><a href="kiosk_statement.php" class="nav-item nav-sub-item <?= $sidebar_current === 'kiosk_statement' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Statement</a><?php endif; ?>
+            <?php if (has_permission('statement')): ?><a href="kiosk_expense.php" class="nav-item nav-sub-item <?= $sidebar_current === 'expense_kiosk' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Expense</a><?php endif; ?>
         </div>
     </div>
     <?php if (has_permission('transaction_create') || has_permission('customer_create')): ?>
