@@ -61,14 +61,6 @@ function has_permission(string $key): bool
                 return true;
             }
         }
-        // 向后兼容：如果 member 勾了 transaction_create 或 transaction_list，则默认允许进 Dashboard
-        if ($key === 'home_dashboard') {
-            $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key IN ('transaction_create','transaction_list','statement') LIMIT 1");
-            $stmt->execute([$uid]);
-            if ((bool)$stmt->fetch()) {
-                return true;
-            }
-        }
         $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1");
         $stmt->execute([$uid, $key]);
         return (bool) $stmt->fetch();
