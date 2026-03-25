@@ -30,7 +30,7 @@ $quick = trim((string)($_GET['quick'] ?? ''));
 $ekg_raw = trim((string)($_GET['expense_kind'] ?? $_POST['expense_kind'] ?? 'statement'));
 $expense_kind_ui_pre = ($quick === 'expense' && in_array($ekg_raw, ['statement', 'kiosk'], true)) ? $ekg_raw : 'statement';
 if ($quick === 'expense' && $expense_kind_ui_pre === 'kiosk') {
-    require_permission('statement');
+    require_permission('kiosk_expense_view');
 } else {
     require_permission('transaction_create');
 }

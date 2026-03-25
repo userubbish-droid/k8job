@@ -5,7 +5,7 @@
 require 'config.php';
 require 'auth.php';
 require_login();
-require_permission('statement');
+require_permission('kiosk_statement');
 
 $sidebar_current = 'kiosk_statement';
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';

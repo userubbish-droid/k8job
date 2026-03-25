@@ -32,9 +32,9 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
         </button>
         <div class="nav-group-sub" id="nav-sub-home-menu" role="region" aria-labelledby="nav-toggle-home-menu" style="display:<?= in_array($sidebar_current, ['dashboard', 'report', 'kiosk_statement'], true) ? 'block' : 'none' ?>">
             <a href="dashboard.php" class="nav-item nav-sub-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span>Dashboard</a>
-            <?php if (has_permission('statement')): ?><a href="report.php" class="nav-item nav-sub-item <?= $sidebar_current === 'report' ? 'primary' : '' ?>"><span class="nav-icon"></span>Report</a><?php endif; ?>
-            <?php if (has_permission('statement')): ?><a href="kiosk_statement.php" class="nav-item nav-sub-item <?= $sidebar_current === 'kiosk_statement' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Statement</a><?php endif; ?>
-            <?php if (has_permission('statement')): ?><a href="kiosk_expense.php" class="nav-item nav-sub-item <?= $sidebar_current === 'expense_kiosk' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Expense</a><?php endif; ?>
+            <?php if (has_permission('statement_report')): ?><a href="report.php" class="nav-item nav-sub-item <?= $sidebar_current === 'report' ? 'primary' : '' ?>"><span class="nav-icon"></span>Report</a><?php endif; ?>
+            <?php if (has_permission('kiosk_statement')): ?><a href="kiosk_statement.php" class="nav-item nav-sub-item <?= $sidebar_current === 'kiosk_statement' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Statement</a><?php endif; ?>
+            <?php if (has_permission('kiosk_expense_view')): ?><a href="kiosk_expense.php" class="nav-item nav-sub-item <?= $sidebar_current === 'expense_kiosk' ? 'primary' : '' ?>"><span class="nav-icon"></span>Kiosk Expense</a><?php endif; ?>
         </div>
     </div>
     <?php if (has_permission('transaction_create') || has_permission('customer_create')): ?>
@@ -90,7 +90,7 @@ $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
         </div>
     </div>
     <?php endif; ?>
-    <?php if (has_permission('statement')): ?><a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>Statement</a><?php endif; ?>
+    <?php if (has_permission('statement_balance')): ?><a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span>Statement</a><?php endif; ?>
     <?php endif; ?>
     <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>User Management</a>

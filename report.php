@@ -1,7 +1,7 @@
 <?php
 require 'config.php';
 require 'auth.php';
-require_permission('statement');
+require_permission('statement_report');
 $sidebar_current = 'report';
 
 $err = '';

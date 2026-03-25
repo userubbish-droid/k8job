@@ -16,7 +16,12 @@ function get_permission_options(): array
         'customer_create'    => '新增顾客',
         'customer_edit'      => '编辑顾客（含产品账号）',
         'product_library'    => '产品账号',
-        'statement'          => 'statement',
+        // 兼容：旧版只用 statement 一个开关；新版拆分为多个开关（statement_*）
+        'statement'          => 'statement（旧总开关）',
+        'statement_report'   => 'Report',
+        'statement_balance'  => 'Statement（Bank / Game Platform）',
+        'kiosk_statement'    => 'Kiosk Statement',
+        'kiosk_expense_view' => 'Kiosk Expense（查看）',
         'agent'              => 'Agent',
     ];
 }
@@ -45,6 +50,14 @@ function has_permission(string $key): bool
         return false;
     }
     try {
+        // 向后兼容：如果 member 勾了旧的 statement，则默认拥有所有 statement_* 与 kiosk_* 查看权限
+        if (in_array($key, ['statement_report', 'statement_balance', 'kiosk_statement', 'kiosk_expense_view'], true)) {
+            $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = 'statement' LIMIT 1");
+            $stmt->execute([$uid]);
+            if ((bool)$stmt->fetch()) {
+                return true;
+            }
+        }
         $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1");
         $stmt->execute([$uid, $key]);
         return (bool) $stmt->fetch();
