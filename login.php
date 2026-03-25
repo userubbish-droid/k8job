@@ -1,8 +1,41 @@
 <?php
 require 'config.php';
+require 'auth.php';
 session_start();
+
+function choose_landing_url_for_role(string $role): string {
+    $role = strtolower(trim($role));
+    if ($role === 'agent') return 'agents.php';
+    if ($role === 'admin') return 'dashboard.php';
+
+    // member：不强制 Dashboard；按权限优先跳到可用页面
+    $candidates = [
+        'transaction_create' => 'transaction_create.php',
+        'expense_statement'  => 'expense.php',
+        'kiosk_expense_view' => 'kiosk_expense.php',
+        'statement_balance'  => 'balance_summary.php',
+        'statement_report'   => 'report.php',
+        'kiosk_statement'    => 'kiosk_statement.php',
+        'transaction_list'   => 'transaction_list.php',
+        'customers'          => 'customers.php',
+        'product_library'    => 'product_library.php',
+        'rebate'             => 'rebate.php',
+    ];
+    foreach ($candidates as $perm => $url) {
+        if (has_permission($perm)) return $url;
+    }
+    return '';
+}
+
 if (isset($_SESSION['user_id'])) {
-    header('Location: ' . (($_SESSION['user_role'] ?? '') === 'agent' ? 'agents.php' : 'dashboard.php'));
+    $target = choose_landing_url_for_role((string)($_SESSION['user_role'] ?? ''));
+    if ($target !== '') {
+        header('Location: ' . $target);
+        exit;
+    }
+    // 已登录但无权限：强制退出，回登录页
+    session_destroy();
+    header('Location: login.php?no_perm=1');
     exit;
 }
 
@@ -26,6 +59,9 @@ function get_login_ip(): string {
 }
 
 $error = '';
+if (!empty($_GET['no_perm'])) {
+    $error = '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。';
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
     $pass = (string) ($_POST['pass'] ?? '');
@@ -67,9 +103,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $_SESSION['agent_code'] = $u['username']; // 与 customers.recommend 对应
                 header('Location: agents.php');
             } else {
-                header('Location: dashboard.php');
+                $target = choose_landing_url_for_role($db_role);
+                if ($target === '') {
+                    // 登录成功但无任何权限：不让进入系统
+                    session_destroy();
+                    $error = '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。';
+                } else {
+                    header('Location: ' . $target);
+                    exit;
+                }
             }
-            exit;
+            if ($error === '') exit;
         }
     }
 }
