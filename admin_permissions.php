@@ -74,6 +74,35 @@ if ($selected_id > 0) {
         .perm-list li:last-child { border-bottom: none; }
         .perm-list input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
         .member-select { margin-bottom: 20px; }
+        .perm-groups { margin: 0; padding: 0; list-style: none; }
+        .perm-group { border-bottom: 1px solid var(--border); }
+        .perm-group:last-child { border-bottom: none; }
+        .perm-group-toggle {
+            width: 100%;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 6px;
+            border: none;
+            background: transparent;
+            color: #0f172a;
+            font-weight: 700;
+            cursor: pointer;
+        }
+        .perm-group-toggle:hover { background: rgba(59,130,246,0.06); border-radius: 10px; }
+        .perm-group-chevron { margin-left: auto; color: var(--muted); font-weight: 900; }
+        .perm-group-sub { display: none; padding: 0 6px 8px; }
+        .perm-group-sub.show { display: block; }
+        .perm-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 9px 4px;
+            border-bottom: 1px dashed rgba(148,163,184,0.45);
+        }
+        .perm-item:last-child { border-bottom: none; }
+        .perm-label { font-weight: 600; color: #1f2937; }
+        .perm-legacy { color: var(--muted); font-weight: 600; }
     </style>
 </head>
 <body>
@@ -111,11 +140,45 @@ if ($selected_id > 0) {
             <?php if ($selected_id > 0): ?>
             <form method="post">
                 <input type="hidden" name="user_id" value="<?= $selected_id ?>">
-                <ul class="perm-list">
-                    <?php foreach ($options as $key => $label): ?>
-                    <li>
-                        <input type="checkbox" name="perms[]" value="<?= htmlspecialchars($key) ?>" id="perm_<?= htmlspecialchars($key) ?>" <?= in_array($key, $current, true) ? 'checked' : '' ?>>
-                        <label for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
+                <?php
+                    $perm_groups = [
+                        'Home' => ['home_dashboard', 'statement_report'],
+                        'Statement' => ['statement_balance'],
+                        'Expense' => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
+                        'Add' => ['transaction_create'],
+                        'Transactions' => ['transaction_list'],
+                        'Rebate' => ['rebate'],
+                        'Customer Detail' => ['customers', 'customer_create', 'customer_edit', 'product_library'],
+                        'Agent' => ['agent'],
+                        'Legacy（旧版兼容）' => ['statement'],
+                    ];
+                    $group_id = 0;
+                ?>
+                <ul class="perm-groups" id="perm-groups">
+                    <?php foreach ($perm_groups as $glabel => $keys):
+                        $group_id++;
+                        // 过滤掉不存在的 key（避免未来改名导致报错）
+                        $keys = array_values(array_filter($keys, function($k) use ($options){ return array_key_exists($k, $options); }));
+                        if (!$keys) continue;
+                        $expanded = false;
+                        foreach ($keys as $k) { if (in_array($k, $current, true)) { $expanded = true; break; } }
+                    ?>
+                    <li class="perm-group" data-group="<?= $group_id ?>">
+                        <button type="button" class="perm-group-toggle" aria-expanded="<?= $expanded ? 'true' : 'false' ?>" aria-controls="perm-group-sub-<?= $group_id ?>">
+                            <span><?= htmlspecialchars($glabel) ?></span>
+                            <span class="perm-group-chevron" aria-hidden="true"><?= $expanded ? '▾' : '▸' ?></span>
+                        </button>
+                        <div class="perm-group-sub<?= $expanded ? ' show' : '' ?>" id="perm-group-sub-<?= $group_id ?>">
+                            <?php foreach ($keys as $key):
+                                $label = (string)($options[$key] ?? $key);
+                                $isLegacy = ($key === 'statement');
+                            ?>
+                            <div class="perm-item">
+                                <input type="checkbox" name="perms[]" value="<?= htmlspecialchars($key) ?>" id="perm_<?= htmlspecialchars($key) ?>" <?= in_array($key, $current, true) ? 'checked' : '' ?>>
+                                <label class="perm-label<?= $isLegacy ? ' perm-legacy' : '' ?>" for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
+                            </div>
+                            <?php endforeach; ?>
+                        </div>
                     </li>
                     <?php endforeach; ?>
                 </ul>
@@ -127,5 +190,21 @@ if ($selected_id > 0) {
     </div>
         </main>
     </div>
+    <script>
+    (function(){
+        document.querySelectorAll('.perm-group-toggle').forEach(function(btn){
+            var subId = btn.getAttribute('aria-controls');
+            var sub = subId ? document.getElementById(subId) : null;
+            var chev = btn.querySelector('.perm-group-chevron');
+            if (!sub) return;
+            btn.addEventListener('click', function(){
+                var expanded = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
+                sub.classList.toggle('show', !expanded);
+                if (chev) chev.textContent = expanded ? '▸' : '▾';
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
