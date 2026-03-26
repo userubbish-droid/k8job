@@ -11,6 +11,7 @@ require_permission('home_dashboard');
 $today = date('Y-m-d');
 $month_start = date('Y-m-01');
 $month_end   = date('Y-m-t');
+$company_id = current_company_id();
 
 $sidebar_current = 'dashboard';
 $db_error = '';
@@ -41,8 +42,8 @@ try {
                                   COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
                                   COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
                                   COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus
-                           FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL");
-    $stmt->execute([$today]);
+                           FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
+    $stmt->execute([$company_id, $today]);
     $day = $stmt->fetch();
     $day_in   = (float)($day['total_in'] ?? 0);
     $day_out  = (float)($day['total_out'] ?? 0);
@@ -60,8 +61,8 @@ try {
                                   COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
                                   COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
                                   COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus
-                           FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL");
-    $stmt->execute([$month_start, $month_end]);
+                           FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL");
+    $stmt->execute([$company_id, $month_start, $month_end]);
     $month = $stmt->fetch();
     $month_in       = (float)($month['total_in'] ?? 0);
     $month_out      = (float)($month['total_out'] ?? 0);
@@ -73,12 +74,12 @@ try {
     $month_bonus = (float)($month['bonus'] ?? 0);
 
     // 今日上线客户数（今日已批准流水中不重复的顾客 code 数）
-    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND code != ''");
-    $stmt->execute([$today]);
+    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND code != ''");
+    $stmt->execute([$company_id, $today]);
     $day_customers_count = (int) $stmt->fetchColumn();
     // 今日单数（今日已批准流水条数）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL");
-    $stmt->execute([$today]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
+    $stmt->execute([$company_id, $today]);
     $day_orders_count = (int) $stmt->fetchColumn();
 
     // 几个新顾客（今日新增的顾客数，按 customers 表 created_at）
@@ -87,8 +88,8 @@ try {
     $day_new_customers = (int) $stmt->fetchColumn();
 
     // 新客户进多少单（今日已批准流水中，顾客代码属于「今日新增顾客」的条数）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND {$customer_day_filter_alias} WHERE t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
-    $stmt->execute([$today, $today]);
+    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND {$customer_day_filter_alias} WHERE t.company_id = ? AND c.company_id = ? AND t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
+    $stmt->execute([$company_id, $company_id, $today, $today]);
     $day_new_customer_orders = (int) $stmt->fetchColumn();
 } catch (Throwable $e) {
     $db_error = $e->getMessage();

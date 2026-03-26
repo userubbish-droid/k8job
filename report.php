@@ -8,6 +8,7 @@ $err = '';
 $today = date('Y-m-d');
 $default_from = date('Y-m-01');
 $default_to = date('Y-m-t');
+$company_id = current_company_id();
 $day_from_raw = $_GET['day_from'] ?? $default_from;
 $day_to_raw = $_GET['day_to'] ?? $default_to;
 $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : $default_from;
@@ -42,9 +43,9 @@ try {
             COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
             COUNT(*) AS approved_count
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ?
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ?
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $total_in = (float)($row['total_in'] ?? 0);
     $total_out = (float)($row['total_out'] ?? 0);
@@ -55,11 +56,11 @@ try {
     $stmt = $pdo->prepare("
         SELECT mode, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS amt
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ?
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ?
         GROUP BY mode
         ORDER BY amt DESC
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $mode_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stmt = $pdo->prepare("
@@ -67,12 +68,12 @@ try {
                COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ? AND code IS NOT NULL AND TRIM(code) <> ''
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ? AND code IS NOT NULL AND TRIM(code) <> ''
         GROUP BY code
         ORDER BY (COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)) DESC
         LIMIT 10
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $top_customer_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Bank Contra（互转）：按备注「转至/来自」识别
@@ -81,9 +82,9 @@ try {
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND remark LIKE '来自 %' THEN amount ELSE 0 END), 0) AS contra_in,
             COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND remark LIKE '转至 %' THEN amount ELSE 0 END), 0) AS contra_out
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ?
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ?
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $row = $stmt->fetch(PDO::FETCH_ASSOC) ?: [];
     $contra_in = (float)($row['contra_in'] ?? 0);
     $contra_out = (float)($row['contra_out'] ?? 0);
@@ -91,32 +92,32 @@ try {
     $stmt = $pdo->prepare("
         SELECT day, time, bank, mode, amount, remark
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ?
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ?
           AND ((mode = 'DEPOSIT' AND remark LIKE '来自 %')
             OR (mode = 'WITHDRAW' AND remark LIKE '转至 %'))
         ORDER BY day DESC, time DESC
         LIMIT 30
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $contra_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Expense（开销）
     $stmt = $pdo->prepare("
         SELECT COALESCE(SUM(amount), 0) AS expense_total
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $expense_total = (float)$stmt->fetchColumn();
 
     $stmt = $pdo->prepare("
         SELECT day, time, code, bank, product, amount, remark
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
         ORDER BY day DESC, time DESC
         LIMIT 30
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $expense_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     $stmt = $pdo->prepare("

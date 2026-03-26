@@ -56,6 +56,8 @@ if ($quick === 'expense' && $expense_kind_ui_pre === 'kiosk') {
     require_permission('transaction_create');
 }
 
+$company_id = current_company_id();
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']) && trim((string)($_POST['expense_kind'] ?? '')) === 'kiosk') {
     if (($_SESSION['user_role'] ?? '') !== 'admin') {
         header('Location: kiosk_expense.php');
@@ -194,15 +196,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $saved = false;
         $expKindIns = ($mode === 'EXPENSE') ? $expense_kind_save : null;
-        $insertBase = [$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $expKindIns, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
+        $insertBase = [$company_id, $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $expKindIns, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
         foreach ([true, false] as $withHide) {
             try {
                 if ($withHide) {
-                    $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                    $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($insertBase);
                 } else {
-                    $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($insertBase);
                 }
@@ -211,14 +213,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } catch (Throwable $e) {
                 $msg = $e->getMessage();
                 if (stripos($msg, 'expense_kind') !== false || stripos($msg, 'Unknown column') !== false) {
-                    $insertBaseLegacy = [$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
+                    $insertBaseLegacy = [$company_id, $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
                     try {
                         if ($withHide) {
-                            $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                            $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
                             $stmt = $pdo->prepare($sql);
                             $stmt->execute($insertBaseLegacy);
                         } else {
-                            $sql = "INSERT INTO transactions (day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                             $stmt = $pdo->prepare($sql);
                             $stmt->execute($insertBaseLegacy);
                         }

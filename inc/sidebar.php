@@ -14,6 +14,27 @@ $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
 $sidebar_user_role = ($_SESSION['user_role'] ?? '') === 'admin' ? 'Admin' : (($_SESSION['user_role'] ?? '') === 'agent' ? 'Agent' : 'Staff');
 $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
 $sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
+$sidebar_company_id = (int)($_SESSION['company_id'] ?? 0);
+$sidebar_company_label = '';
+try {
+    if (!empty($pdo) && $sidebar_company_id > 0) {
+        $stmt = $pdo->prepare("SELECT code, name FROM companies WHERE id = ? LIMIT 1");
+        $stmt->execute([$sidebar_company_id]);
+        $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($r) {
+            $sidebar_company_label = trim((string)($r['code'] ?? '')) . ' - ' . trim((string)($r['name'] ?? ''));
+        }
+    }
+} catch (Throwable $e) {}
+$sidebar_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+$sidebar_companies = [];
+if ($sidebar_is_superadmin) {
+    try {
+        $sidebar_companies = $pdo->query("SELECT id, code, name FROM companies WHERE is_active = 1 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $sidebar_companies = [];
+    }
+}
 ?>
 <aside class="dashboard-sidebar">
     <div class="sidebar-drawer-header">
@@ -29,6 +50,23 @@ $sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
         </div>
         <div class="sidebar-name"><?= htmlspecialchars($sidebar_user_name) ?></div>
         <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
+        <?php if ($sidebar_company_label !== ''): ?>
+            <div class="sidebar-role" style="margin-top:-6px; text-transform:none; letter-spacing:0; font-size:12px; color:rgba(255,255,255,0.78);">
+                <?= htmlspecialchars($sidebar_company_label) ?>
+            </div>
+        <?php endif; ?>
+        <?php if ($sidebar_is_superadmin): ?>
+            <form method="post" action="switch_company.php" style="width:100%; margin-top: 8px;">
+                <input type="hidden" name="return_to" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'dashboard.php') ?>">
+                <select name="company_id" class="form-control" onchange="this.form.submit()" style="width:100%; min-height:40px; border-radius:12px; border:1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.12); color:#fff;">
+                    <?php foreach ($sidebar_companies as $c): ?>
+                        <option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === $sidebar_company_id ? 'selected' : '' ?> style="color:#0f172a;">
+                            <?= htmlspecialchars((string)$c['code']) ?> - <?= htmlspecialchars((string)$c['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
+            </form>
+        <?php endif; ?>
     </div>
     <div class="sidebar-sep" aria-hidden="true"></div>
     <?php if (($_SESSION['user_role'] ?? '') === 'agent'): ?>

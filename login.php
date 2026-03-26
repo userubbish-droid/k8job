@@ -6,6 +6,7 @@ session_start();
 function choose_landing_url_for_role(string $role): string {
     $role = strtolower(trim($role));
     if ($role === 'agent') return 'agents.php';
+    if ($role === 'superadmin') return 'dashboard.php';
     if ($role === 'admin') return 'dashboard.php';
 
     // member：不强制 Dashboard；按权限优先跳到可用页面
@@ -62,24 +63,35 @@ $error = '';
 if (!empty($_GET['no_perm'])) {
     $error = '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。';
 }
+if (!empty($_GET['need_company'])) {
+    $error = '请先选择公司再登录。';
+}
+
+// 公司列表（用于登录选择）
+$companies = [];
+try {
+    $companies = $pdo->query("SELECT id, code, name FROM companies WHERE is_active = 1 ORDER BY id ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $companies = [];
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
     $pass = (string) ($_POST['pass'] ?? '');
     $login_as = trim($_POST['login_as'] ?? 'admin'); // admin | member（含 agent 账号）
-    $company_id = trim($_POST['company_id'] ?? '');
+    $company_id = (int)($_POST['company_id'] ?? 0);
     $remember = !empty($_POST['remember']);
 
     if ($user === '' || $pass === '') {
         $error = '请输入用户名和密码';
     } else {
-        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, is_active FROM users WHERE username = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE username = ? LIMIT 1");
         $stmt->execute([$user]);
         $u = $stmt->fetch();
 
         $db_role = strtolower(trim((string)($u['role'] ?? '')));
         if (!$u || (int)$u['is_active'] !== 1 || !password_verify($pass, $u['password_hash'])) {
             $error = '用户名或密码错误';
-        } elseif ($login_as === 'admin' && $db_role !== 'admin') {
+        } elseif ($login_as === 'admin' && !in_array($db_role, ['admin', 'superadmin'], true)) {
             $error = '请使用 Admin 登录入口，或该账号不是管理员';
         } elseif ($login_as === 'member' && !in_array($db_role, ['member', 'agent'], true)) {
             $error = '当前账号角色为 ' . ($db_role !== '' ? $db_role : '未设置') . '，Member / Agent 入口仅允许 member 或 agent。请到「用户管理」修改角色。';
@@ -88,6 +100,29 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
             $_SESSION['user_role'] = $db_role;
             $_SESSION['avatar_url'] = trim((string)($u['avatar_url'] ?? ''));
+            $db_company_id = (int)($u['company_id'] ?? 0);
+
+            // company 绑定规则：
+            // - superadmin：可选任意 company（必须选择一个用于当前会话）
+            // - admin/member/agent：必须绑定到自己的 company_id（忽略输入）
+            if ($db_role === 'superadmin') {
+                if ($company_id <= 0) {
+                    $error = '请选择 Company。';
+                    session_destroy();
+                } else {
+                    $_SESSION['company_id'] = $company_id;
+                }
+            } else {
+                if ($db_company_id <= 0) {
+                    session_destroy();
+                    $error = '该账号未绑定公司，请到用户管理里设置 company_id。';
+                } else {
+                    $_SESSION['company_id'] = $db_company_id;
+                }
+            }
+            if ($error !== '') {
+                // fallthrough to show error
+            } else {
             try {
                 ensure_users_login_meta($pdo);
                 $ip = get_login_ip();
@@ -95,7 +130,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt2->execute([$ip !== '' ? $ip : null, (int)$u['id']]);
             } catch (Throwable $e) {
             }
-            if ($company_id !== '') $_SESSION['company_id'] = $company_id;
             if ($remember) {
                 $params = session_get_cookie_params();
                 setcookie(session_name(), session_id(), time() + 86400 * 14, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
@@ -115,6 +149,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             if ($error === '') exit;
+            }
         }
     }
 }
@@ -309,7 +344,14 @@ $login_as = $_POST['login_as'] ?? 'admin';
 
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <input type="text" name="company_id" placeholder="Company Id" value="<?= htmlspecialchars($_POST['company_id'] ?? '') ?>">
+                <select name="company_id" class="login-input">
+                    <option value="">Company</option>
+                    <?php foreach ($companies as $c): ?>
+                        <option value="<?= (int)$c['id'] ?>" <?= ((int)($_POST['company_id'] ?? 0) === (int)($c['id'] ?? 0) ? 'selected' : '') ?>>
+                            <?= htmlspecialchars((string)$c['code']) ?> - <?= htmlspecialchars((string)$c['name']) ?>
+                        </option>
+                    <?php endforeach; ?>
+                </select>
             </div>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>

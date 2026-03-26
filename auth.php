@@ -41,6 +41,9 @@ function get_permission_options(): array
 function has_permission(string $key): bool
 {
     $role = $_SESSION['user_role'] ?? '';
+    if ($role === 'superadmin') {
+        return true;
+    }
     if ($role === 'admin') {
         return true;
     }
@@ -95,6 +98,16 @@ function require_login(): void
         exit;
     }
     $role = $_SESSION['user_role'] ?? '';
+    // 多公司：除 superadmin 外必须绑定 company_id
+    if ($role !== 'superadmin') {
+        $cid = (int)($_SESSION['company_id'] ?? 0);
+        if ($cid <= 0) {
+            // 回登录页重新选择公司
+            session_destroy();
+            header('Location: login.php?need_company=1');
+            exit;
+        }
+    }
     if ($role === 'agent') {
         $script = basename($_SERVER['SCRIPT_NAME'] ?? '');
         $allow = ['agents.php', 'logout.php'];
@@ -111,10 +124,17 @@ function require_login(): void
 function require_admin(): void
 {
     require_login();
-    if (($_SESSION['user_role'] ?? '') !== 'admin') {
+    if (!in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true)) {
         http_response_code(403);
         echo '无权限（仅 admin 可访问）';
         exit;
     }
 }
+
+/** 当前公司 ID（superadmin 也会有：用于切换查看） */
+function current_company_id(): int {
+    $cid = (int)($_SESSION['company_id'] ?? 0);
+    return $cid > 0 ? $cid : 0;
+}
+
 

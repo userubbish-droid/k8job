@@ -18,7 +18,7 @@ function redirect_self(): void {
 }
 
 function ensure_users_role_supports_agent(PDO $pdo): void {
-    $sql = "ALTER TABLE users MODIFY role ENUM('admin','member','agent') NOT NULL DEFAULT 'member'";
+    $sql = "ALTER TABLE users MODIFY role ENUM('superadmin','admin','member','agent') NOT NULL DEFAULT 'member'";
     $pdo->exec($sql);
 }
 
@@ -50,23 +50,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($username === '' || $password === '') {
                 throw new RuntimeException('请填写用户名和密码。');
             }
-            if (!in_array($role, ['admin', 'member', 'agent'], true)) {
+            if (!in_array($role, ['superadmin', 'admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
             }
 
-            if ($role === 'agent') {
+            if (in_array($role, ['agent', 'superadmin'], true)) {
                 // 兼容旧库：旧版本 users.role 仅支持 admin/member
                 ensure_users_role_supports_agent($pdo);
                 if (!is_array($agent_customers) || empty($agent_customers)) {
-                    throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
+                    if ($role === 'agent') {
+                        throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
+                    }
                 }
             }
 
             $hash = password_hash($password, PASSWORD_DEFAULT);
             $pdo->beginTransaction();
             try {
-                $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)");
-                $stmt->execute([$username, $hash, $role, $display_name !== '' ? $display_name : null]);
+            $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name, company_id) VALUES (?, ?, ?, ?, ?)");
+            // superadmin 不绑定公司（可在侧栏切换）
+            $company_id = ($role === 'superadmin') ? null : 1;
+            $stmt->execute([$username, $hash, $role, $display_name !== '' ? $display_name : null, $company_id]);
 
                 if ($role === 'agent') {
                     $codes = array_values(array_filter(array_map(function($x){
@@ -91,10 +95,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)($_POST['id'] ?? 0);
             $role = trim($_POST['role'] ?? 'member');
             if ($id <= 0) throw new RuntimeException('参数错误。');
-            if (!in_array($role, ['admin', 'member', 'agent'], true)) {
+            if (!in_array($role, ['superadmin', 'admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
             }
-            if ($role === 'agent') {
+            if (in_array($role, ['agent', 'superadmin'], true)) {
                 // 兼容旧库：旧版本 users.role 仅支持 admin/member
                 ensure_users_role_supports_agent($pdo);
             }
@@ -247,6 +251,7 @@ $users = $pdo->query($users_sql)->fetchAll();
                             <option value="member" selected>member</option>
                             <option value="admin">admin</option>
                             <option value="agent">agent</option>
+                            <option value="superadmin">superadmin</option>
                         </select>
                     </div>
                     <div class="form-group">
@@ -316,6 +321,7 @@ $users = $pdo->query($users_sql)->fetchAll();
                                 <input type="hidden" name="action" value="change_role">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                                 <select name="role" class="form-control">
+                                    <option value="superadmin" <?= ($u['role'] ?? '') === 'superadmin' ? 'selected' : '' ?>>superadmin</option>
                                     <option value="member" <?= ($u['role'] ?? '') === 'member' ? 'selected' : '' ?>>member</option>
                                     <option value="admin" <?= ($u['role'] ?? '') === 'admin' ? 'selected' : '' ?>>admin</option>
                                     <option value="agent" <?= ($u['role'] ?? '') === 'agent' ? 'selected' : '' ?>>agent</option>

@@ -38,6 +38,31 @@ try {
 } catch (Throwable $e) {
 }
 
+// 多公司（多租户）支持：companies + company_id
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS companies (
+        id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        code VARCHAR(32) NOT NULL UNIQUE,
+        name VARCHAR(120) NOT NULL,
+        is_active TINYINT(1) NOT NULL DEFAULT 1,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )");
+} catch (Throwable $e) {}
+try {
+    // 默认公司：k8（id=1）
+    $pdo->exec("INSERT IGNORE INTO companies (id, code, name, is_active) VALUES (1, 'k8', 'K8', 1)");
+} catch (Throwable $e) {}
+
+// users.company_id（superadmin 可为空；其他必须有）
+try { $pdo->exec("ALTER TABLE users ADD COLUMN company_id INT UNSIGNED NULL AFTER avatar_url"); } catch (Throwable $e) {}
+try { $pdo->exec("CREATE INDEX idx_users_company_id ON users(company_id)"); } catch (Throwable $e) {}
+
+// 业务表 company_id（旧数据默认归到 1）
+foreach (['customers','transactions','banks','products','expenses','customer_product_accounts','balance_adjust','user_permissions','rebate_given','agent_rebate_settings'] as $__t) {
+    try { $pdo->exec("ALTER TABLE {$__t} ADD COLUMN company_id INT UNSIGNED NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
+    try { $pdo->exec("CREATE INDEX idx_{$__t}_company_id ON {$__t}(company_id)"); } catch (Throwable $e) {}
+}
+
 // 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
 $NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAHWcn815xZ-L4It23rwqMTbcO7G24AYwV4';
 $NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';
