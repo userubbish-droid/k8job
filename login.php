@@ -74,6 +74,11 @@ try {
 } catch (Throwable $e) {
     $companies = [];
 }
+$default_company_id = 0;
+foreach ($companies as $c) {
+    $default_company_id = (int)($c['id'] ?? 0);
+    if ($default_company_id > 0) break;
+}
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
     $pass = (string) ($_POST['pass'] ?? '');
@@ -106,11 +111,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // - superadmin：可选任意 company（必须选择一个用于当前会话）
             // - admin/member/agent：必须绑定到自己的 company_id（忽略输入）
             if ($db_role === 'superadmin') {
-                if ($company_id <= 0) {
-                    $error = '请选择 Company。';
+                // superadmin：允许不选公司，默认进入第一家（一般是 k8），之后可在侧栏一键切换
+                $use_company = $company_id > 0 ? $company_id : $default_company_id;
+                if ($use_company <= 0) {
+                    $error = '暂无可用公司，请先创建公司。';
                     session_destroy();
                 } else {
-                    $_SESSION['company_id'] = $company_id;
+                    $_SESSION['company_id'] = $use_company;
                 }
             } else {
                 if ($db_company_id <= 0) {
@@ -182,6 +189,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
             body { padding: 16px; }
             .login-card { padding: 24px 20px; }
             .input-wrap input { min-height: 44px; font-size: 16px; }
+            .input-wrap select { min-height: 44px; font-size: 16px; }
             .btn-login { min-height: 48px; font-size: 16px; }
         }
         body::before {
@@ -253,6 +261,17 @@ $login_as = $_POST['login_as'] ?? 'admin';
             border-color: #3b82f6;
         }
         .input-wrap input::placeholder { color: #94a3b8; }
+        .input-wrap select {
+            width: 100%;
+            padding: 12px 12px 12px 42px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            transition: border-color 0.2s;
+            background: #fff;
+            appearance: auto;
+        }
+        .input-wrap select:focus { outline: none; border-color: #3b82f6; }
         .row {
             display: flex;
             align-items: center;
