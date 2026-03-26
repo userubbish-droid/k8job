@@ -112,6 +112,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt = $pdo->prepare("UPDATE users SET is_active = IF(is_active=1,0,1) WHERE id = ?");
             $stmt->execute([$id]);
             $msg = '已更新账号状态。';
+        } elseif ($action === 'delete_user') {
+            $id = (int)($_POST['id'] ?? 0);
+            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException('不能删除自己。');
+
+            // 删除账号同时清理权限表（若表不存在则忽略）
+            $pdo->beginTransaction();
+            try {
+                try {
+                    $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?")->execute([$id]);
+                } catch (Throwable $e) {
+                    // user_permissions 表可能未创建，不阻断删除
+                }
+                $stmt = $pdo->prepare("DELETE FROM users WHERE id = ?");
+                $stmt->execute([$id]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
+            $msg = '账号已删除。';
         } elseif ($action === 'reset_password') {
             $id = (int)($_POST['id'] ?? 0);
             $new_password = (string) ($_POST['new_password'] ?? '');
@@ -312,6 +333,11 @@ $users = $pdo->query($users_sql)->fetchAll();
                                 <input type="hidden" name="action" value="toggle_active">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                                 <button type="submit" class="btn btn-gray btn-sm"><?= ((int)$u['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                            </form>
+                            <form method="post" class="inline" data-confirm="确定删除该账号？删除后不可恢复。">
+                                <input type="hidden" name="action" value="delete_user">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-danger" <?= ((int)$u['id'] === (int)($_SESSION['user_id'] ?? 0)) ? 'disabled' : '' ?>>删除</button>
                             </form>
                             <form method="post" class="admin-users-reset-form inline">
                                 <input type="hidden" name="action" value="reset_password">

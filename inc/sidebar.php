@@ -4,7 +4,10 @@ if (!isset($sidebar_current)) $sidebar_current = '';
 $sidebar_pending = 0;
 if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
     try {
-        $sidebar_pending = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending' AND deleted_at IS NULL")->fetchColumn();
+        $has_deleted_at = true;
+        try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
+        $sql = "SELECT COUNT(*) FROM transactions WHERE status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
+        $sidebar_pending = (int) $pdo->query($sql)->fetchColumn();
     } catch (Throwable $e) {}
 }
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';

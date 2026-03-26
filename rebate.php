@@ -9,8 +9,9 @@ $msg = '';
 $err = '';
 
 $today = date('Y-m-d');
-$day_from_raw = $_REQUEST['day_from'] ?? $today;
-$day_to_raw   = $_REQUEST['day_to'] ?? $today;
+$yesterday = date('Y-m-d', strtotime('-1 day'));
+$day_from_raw = isset($_REQUEST['day_from']) && trim((string)$_REQUEST['day_from']) !== '' ? $_REQUEST['day_from'] : $yesterday;
+$day_to_raw   = isset($_REQUEST['day_to']) && trim((string)$_REQUEST['day_to']) !== '' ? $_REQUEST['day_to'] : $yesterday;
 $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : $today;
 $day_to   = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw)   ? substr($day_to_raw, 0, 10)   : $today;
 if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
@@ -101,7 +102,7 @@ $stmt = $pdo->prepare("
            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
     FROM transactions
-    WHERE day >= ? AND day <= ? AND status = 'approved' AND code IS NOT NULL AND TRIM(code) <> ''
+    WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) <> ''
     GROUP BY code
     ORDER BY code ASC
 ");

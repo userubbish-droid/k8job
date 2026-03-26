@@ -12,8 +12,9 @@ $is_agent_user = ($_SESSION['user_role'] ?? '') === 'agent';
 $agent_code = $is_agent_user ? trim((string)($_SESSION['agent_code'] ?? '')) : '';
 $agent_rebate_settings_map = [];
 $today = date('Y-m-d');
-$day_from_raw = $_REQUEST['day_from'] ?? $today;
-$day_to_raw = $_REQUEST['day_to'] ?? $today;
+$yesterday = date('Y-m-d', strtotime('-1 day'));
+$day_from_raw = isset($_REQUEST['day_from']) && trim((string)$_REQUEST['day_from']) !== '' ? $_REQUEST['day_from'] : $yesterday;
+$day_to_raw = isset($_REQUEST['day_to']) && trim((string)$_REQUEST['day_to']) !== '' ? $_REQUEST['day_to'] : $yesterday;
 $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : $today;
 $day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw) ? substr($day_to_raw, 0, 10) : $today;
 if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }

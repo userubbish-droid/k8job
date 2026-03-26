@@ -141,15 +141,17 @@ if ($selected_id > 0) {
             <form method="post">
                 <input type="hidden" name="user_id" value="<?= $selected_id ?>">
                 <?php
+                    // 按侧栏 inc/sidebar.php 的分组/顺序组织（与侧栏尽量一致）
                     $perm_groups = [
                         'Home' => ['home_dashboard', 'statement_report'],
                         'Statement' => ['statement_balance'],
+                        'Add' => ['transaction_create', 'customer_create'],
                         'Expense' => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
-                        'Add' => ['transaction_create'],
                         'Transactions' => ['transaction_list'],
-                        'Rebate' => ['rebate'],
-                        'Customer Detail' => ['customers', 'customer_create', 'customer_edit', 'product_library'],
-                        'Agent' => ['agent'],
+                        'Rebate' => ['rebate', 'agent'],
+                        'Customer Detail' => ['customers', 'product_library'],
+                        // 不在侧栏单独显示但实际需要的权限，单独放一个组，避免和侧栏不一致
+                        'More（高级）' => ['customer_edit'],
                         'Legacy（旧版兼容）' => ['statement'],
                     ];
                     $group_id = 0;

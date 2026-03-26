@@ -42,7 +42,10 @@ function send_pending_approval_notify(PDO $pdo) {
     global $NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $NOTIFY_BASE_URL;
 
     try {
-        $cnt = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending' AND deleted_at IS NULL")->fetchColumn();
+        $has_deleted_at = true;
+        try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
+        $sql = "SELECT COUNT(*) FROM transactions WHERE status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
+        $cnt = (int) $pdo->query($sql)->fetchColumn();
     } catch (Throwable $e) {
         return;
     }

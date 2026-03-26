@@ -25,6 +25,13 @@ try {
     die('数据库连接失败：' . htmlspecialchars($e->getMessage()));
 }
 
+// 软删除支持：transactions.deleted_at（用于“删除后保留 2 个月再物理删除”）
+try {
+    $pdo->exec("ALTER TABLE transactions ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL AFTER status");
+} catch (Throwable $e) {
+    // 列已存在 / 无权限等：不阻断页面
+}
+
 // 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
 $NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAHWcn815xZ-L4It23rwqMTbcO7G24AYwV4';
 $NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';
