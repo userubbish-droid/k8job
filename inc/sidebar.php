@@ -13,13 +13,20 @@ if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
 $sidebar_user_role = ($_SESSION['user_role'] ?? '') === 'admin' ? 'Admin' : (($_SESSION['user_role'] ?? '') === 'agent' ? 'Agent' : 'Staff');
 $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
+$sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
 ?>
 <aside class="dashboard-sidebar">
     <div class="sidebar-drawer-header">
         <button type="button" class="sidebar-close" id="sidebar-close" aria-label="Close menu">×</button>
     </div>
     <div class="sidebar-profile">
-        <div class="sidebar-avatar" aria-hidden="true"><?= htmlspecialchars($sidebar_user_initial) ?></div>
+        <div class="sidebar-avatar" aria-hidden="true">
+            <?php if ($sidebar_avatar_url !== ''): ?>
+                <img src="<?= htmlspecialchars($sidebar_avatar_url) ?>" alt="" loading="lazy" decoding="async">
+            <?php else: ?>
+                <?= htmlspecialchars($sidebar_user_initial) ?>
+            <?php endif; ?>
+        </div>
         <div class="sidebar-name"><?= htmlspecialchars($sidebar_user_name) ?></div>
         <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
     </div>

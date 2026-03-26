@@ -72,7 +72,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user === '' || $pass === '') {
         $error = '请输入用户名和密码';
     } else {
-        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, display_name, is_active FROM users WHERE username = ? LIMIT 1");
+        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, is_active FROM users WHERE username = ? LIMIT 1");
         $stmt->execute([$user]);
         $u = $stmt->fetch();
 
@@ -87,6 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $_SESSION['user_id'] = (int)$u['id'];
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
             $_SESSION['user_role'] = $db_role;
+            $_SESSION['avatar_url'] = trim((string)($u['avatar_url'] ?? ''));
             try {
                 ensure_users_login_meta($pdo);
                 $ip = get_login_ip();

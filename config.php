@@ -32,6 +32,12 @@ try {
     // 列已存在 / 无权限等：不阻断页面
 }
 
+// 头像支持：users.avatar_url（用于侧栏显示头像；可留空）
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) NULL DEFAULT NULL AFTER display_name");
+} catch (Throwable $e) {
+}
+
 // 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
 $NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAHWcn815xZ-L4It23rwqMTbcO7G24AYwV4';
 $NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';

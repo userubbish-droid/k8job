@@ -22,13 +22,20 @@ $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim((string)($_POST['username'] ?? ''));
     $display_name = trim((string)($_POST['display_name'] ?? ''));
+    $avatar_url = trim((string)($_POST['avatar_url'] ?? ''));
     $is_active = isset($_POST['is_active']) && (string)$_POST['is_active'] === '1' ? 1 : 0;
     if ($username === '') {
         $err = '用户名不能为空。';
     } else {
         try {
-            $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, is_active = ? WHERE id = ?");
-            $stmt->execute([$username, $display_name !== '' ? $display_name : null, $is_active, $id]);
+            $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, avatar_url = ?, is_active = ? WHERE id = ?");
+            $stmt->execute([
+                $username,
+                $display_name !== '' ? $display_name : null,
+                $avatar_url !== '' ? $avatar_url : null,
+                $is_active,
+                $id
+            ]);
             $msg = '已保存。';
         } catch (Throwable $e) {
             $raw = (string)$e->getMessage();
@@ -42,7 +49,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT id, username, role, display_name, is_active, last_login_at, last_login_ip, created_at FROM users WHERE id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, username, role, display_name, avatar_url, is_active, last_login_at, last_login_ip, created_at FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$id]);
     $u = $stmt->fetch();
 } catch (Throwable $e) {
@@ -89,6 +96,11 @@ if (!$u) {
                                 <label>显示名</label>
                                 <input class="form-control" name="display_name" value="<?= htmlspecialchars((string)($u['display_name'] ?? '')) ?>" placeholder="选填">
                             </div>
+                        </div>
+                        <div class="form-group">
+                            <label>头像 URL（可选）</label>
+                            <input class="form-control" name="avatar_url" value="<?= htmlspecialchars((string)($u['avatar_url'] ?? '')) ?>" placeholder="例如：https://.../avatar.png">
+                            <p class="form-hint">留空则侧栏显示首字母。建议使用 https 图片地址。</p>
                         </div>
                         <div class="form-row-2">
                             <div class="form-group">
