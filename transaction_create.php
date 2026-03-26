@@ -400,7 +400,7 @@ if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
 
 $expense_page_title = ($quick === 'expense')
     ? ($expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement')
-    : '记一笔流水';
+    : 'Add Transaction';
 $expense_entry_url = ($expense_kind_ui === 'kiosk') ? 'kiosk_expense.php' : 'expense.php';
 $expense_modal_should_open = ($quick === 'expense' && $expense_kind_ui !== 'kiosk' && $_SERVER['REQUEST_METHOD'] === 'POST' && $error !== '');
 $ep = $expense_modal_should_open ? $_POST : [];
@@ -461,6 +461,17 @@ $ep = $expense_modal_should_open ? $_POST : [];
             margin-top: 14px;
             padding-top: 14px;
             border-top: 1px solid rgba(140, 165, 235, 0.22);
+        }
+        @media (max-width: 640px) {
+            .txn-wrap { max-width: 100%; }
+            .page-wrap.txn-wrap { padding-left: 12px; padding-right: 12px; }
+            .txn-modal { padding: 14px 12px 12px; border-radius: 14px; }
+            .txn-modal-head { margin-bottom: 10px; }
+            .txn-modal-title { font-size: 16px; }
+            .txn-actions { flex-direction: column; align-items: stretch; }
+            .txn-actions .btn { width: 100%; }
+            .txn-submit { min-width: 0 !important; }
+            .form-section { padding: 12px; }
         }
         .form-section {
             margin: 0;
