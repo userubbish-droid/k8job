@@ -50,7 +50,7 @@ if ($sidebar_is_superadmin) {
         </div>
         <div class="sidebar-name"><?= htmlspecialchars($sidebar_user_name) ?></div>
         <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
-        <?php if ($sidebar_company_label !== ''): ?>
+        <?php if ($sidebar_is_superadmin && $sidebar_company_label !== ''): ?>
             <div class="sidebar-role" style="margin-top:-6px; text-transform:none; letter-spacing:0; font-size:12px; color:rgba(255,255,255,0.78);">
                 <?= htmlspecialchars($sidebar_company_label) ?>
             </div>
