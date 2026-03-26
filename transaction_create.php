@@ -326,8 +326,8 @@ if ($is_admin) {
 if ($quick === 'expense') {
     try {
         $ekSql = " AND COALESCE(expense_kind, 'statement') = " . $pdo->quote($expense_kind_ui);
-        $expense_filter_banks = $pdo->query("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC")->fetchAll(PDO::FETCH_COLUMN);
-        $expense_filter_products = $pdo->query("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $expense_filter_banks = $pdo->query("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND deleted_at IS NULL AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $expense_filter_products = $pdo->query("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved' AND deleted_at IS NULL AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC")->fetchAll(PDO::FETCH_COLUMN);
 
         $where = "status = 'approved' AND mode = 'EXPENSE' AND COALESCE(expense_kind, 'statement') = ? AND day >= ? AND day <= ?";
         $params = [$expense_kind_ui, $expense_day_from, $expense_day_to];
@@ -340,18 +340,18 @@ if ($quick === 'expense') {
             $params[] = $expense_product_filter;
         }
 
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE $where");
+        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE $where AND deleted_at IS NULL");
         $stmt->execute($params);
         $expense_report_total = (float)$stmt->fetchColumn();
 
-        $stmt = $pdo->prepare("SELECT day, time, bank, product, expense_kind, amount, staff, remark FROM transactions WHERE $where ORDER BY day DESC, time DESC LIMIT 120");
+        $stmt = $pdo->prepare("SELECT day, time, bank, product, expense_kind, amount, staff, remark FROM transactions WHERE $where AND deleted_at IS NULL ORDER BY day DESC, time DESC LIMIT 120");
         $stmt->execute($params);
         $expense_report_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $expense_report_count = count($expense_report_rows);
 
         $stmt = $pdo->prepare("SELECT COALESCE(NULLIF(TRIM(product), ''), '未填写产品') AS product_name, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total_amount
             FROM transactions
-            WHERE $where
+            WHERE $where AND deleted_at IS NULL
             GROUP BY COALESCE(NULLIF(TRIM(product), ''), '未填写产品')
             ORDER BY total_amount DESC");
         $stmt->execute($params);

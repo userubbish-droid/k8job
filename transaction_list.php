@@ -22,6 +22,14 @@ $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 $params = [];
 $where  = ['1=1'];
 
+// 软删除：隐藏已删除流水（保留 2 个月后物理删除）
+try {
+    $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+    $where[] = "deleted_at IS NULL";
+} catch (Throwable $e) {
+    if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
+}
+
 // 审批过滤：默认只看已批准
 if ($is_admin) {
     if ($status === '' || $status === 'approved') {
@@ -117,9 +125,16 @@ $stmt->execute($params);
 $rows = $stmt->fetchAll();
 
 // 用于下拉筛选（从已有流水中取 distinct，简单可靠）
-$banks = $pdo->query("SELECT DISTINCT bank FROM transactions WHERE bank IS NOT NULL AND bank <> '' ORDER BY bank ASC")->fetchAll(PDO::FETCH_COLUMN);
-$products = $pdo->query("SELECT DISTINCT product FROM transactions WHERE product IS NOT NULL AND product <> '' ORDER BY product ASC")->fetchAll(PDO::FETCH_COLUMN);
-$codes = $pdo->query("SELECT DISTINCT code FROM transactions WHERE code IS NOT NULL AND code <> '' ORDER BY code ASC")->fetchAll(PDO::FETCH_COLUMN);
+$distinct_base = "FROM transactions WHERE ";
+try {
+    $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+    $distinct_base .= "deleted_at IS NULL AND ";
+} catch (Throwable $e) {
+    if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
+}
+$banks = $pdo->query("SELECT DISTINCT bank $distinct_base bank IS NOT NULL AND bank <> '' ORDER BY bank ASC")->fetchAll(PDO::FETCH_COLUMN);
+$products = $pdo->query("SELECT DISTINCT product $distinct_base product IS NOT NULL AND product <> '' ORDER BY product ASC")->fetchAll(PDO::FETCH_COLUMN);
+$codes = $pdo->query("SELECT DISTINCT code $distinct_base code IS NOT NULL AND code <> '' ORDER BY code ASC")->fetchAll(PDO::FETCH_COLUMN);
 
 // 当前筛选下的总入、总出、利润
 $sum_sql = "SELECT

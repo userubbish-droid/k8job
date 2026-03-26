@@ -31,7 +31,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uid = (int)($_SESSION['user_id'] ?? 0);
                 if (!empty($given)) {
                     $placeholders = implode(',', array_fill(0, count($given), '?'));
-                    $stmt_bal = $pdo->prepare("SELECT code, COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND code IN ($placeholders) GROUP BY code");
+                    $stmt_bal = $pdo->prepare("SELECT code, COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY code");
                     $stmt_bal->execute(array_merge([$post_day_from, $post_day_to], $given));
                     $balances = [];
                     while ($row = $stmt_bal->fetch(PDO::FETCH_ASSOC)) {

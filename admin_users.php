@@ -6,6 +6,7 @@ $sidebar_current = 'admin_users';
 
 $msg = '';
 $err = '';
+$customers_for_agent = [];
 $status_filter = trim((string)($_GET['status_filter'] ?? 'all'));
 if (!in_array($status_filter, ['all', 'active', 'inactive'], true)) {
     $status_filter = 'all';
@@ -28,6 +29,13 @@ function ensure_users_login_meta(PDO $pdo): void {
 
 ensure_users_login_meta($pdo);
 
+try {
+    // Agent 绑定下线用：客户列表（显示 code + name）
+    $customers_for_agent = $pdo->query("SELECT code, name, COALESCE(recommend,'') AS recommend FROM customers WHERE code IS NOT NULL AND TRIM(code) != '' ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {
+    $customers_for_agent = [];
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
 
@@ -37,6 +45,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $password = (string) ($_POST['password'] ?? '');
             $role = trim($_POST['role'] ?? 'member');
             $display_name = trim($_POST['display_name'] ?? '');
+            $agent_customers = $_POST['agent_customers'] ?? [];
 
             if ($username === '' || $password === '') {
                 throw new RuntimeException('请填写用户名和密码。');
@@ -48,11 +57,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($role === 'agent') {
                 // 兼容旧库：旧版本 users.role 仅支持 admin/member
                 ensure_users_role_supports_agent($pdo);
+                if (!is_array($agent_customers) || empty($agent_customers)) {
+                    throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
+                }
             }
 
             $hash = password_hash($password, PASSWORD_DEFAULT);
-            $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$username, $hash, $role, $display_name !== '' ? $display_name : null]);
+            $pdo->beginTransaction();
+            try {
+                $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name) VALUES (?, ?, ?, ?)");
+                $stmt->execute([$username, $hash, $role, $display_name !== '' ? $display_name : null]);
+
+                if ($role === 'agent') {
+                    $codes = array_values(array_filter(array_map(function($x){
+                        return trim((string)$x);
+                    }, $agent_customers), function($x){ return $x !== ''; }));
+                    $codes = array_values(array_unique($codes));
+                    if (empty($codes)) {
+                        throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
+                    }
+                    $placeholders = implode(',', array_fill(0, count($codes), '?'));
+                    $params = array_merge([$username], $codes);
+                    $up = $pdo->prepare("UPDATE customers SET recommend = ? WHERE code IN ($placeholders)");
+                    $up->execute($params);
+                }
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) $pdo->rollBack();
+                throw $e;
+            }
             $msg = "已创建账号：{$username}（{$role}）";
         } elseif ($action === 'change_role') {
             $id = (int)($_POST['id'] ?? 0);
@@ -129,6 +162,34 @@ $users = $pdo->query($users_sql)->fetchAll();
         @media (max-width: 768px) {
             .admin-users-grid { grid-template-columns: 1fr; }
         }
+        .agent-customer-box {
+            margin-top: 10px;
+            padding: 12px;
+            border: 1px solid rgba(59, 130, 246, 0.22);
+            border-radius: 12px;
+            background: rgba(255,255,255,0.75);
+        }
+        .agent-customer-box h4 { margin: 0 0 8px; font-size: 13px; }
+        .agent-customer-hint { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+        .agent-customer-list {
+            max-height: 220px;
+            overflow: auto;
+            border: 1px solid rgba(148, 163, 184, 0.45);
+            border-radius: 10px;
+            padding: 10px 12px;
+            background: #fff;
+        }
+        .agent-customer-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 6px 4px;
+            border-bottom: 1px dashed rgba(148, 163, 184, 0.35);
+        }
+        .agent-customer-item:last-child { border-bottom: none; }
+        .agent-customer-code { font-weight: 800; color: #1e3a8a; min-width: 74px; }
+        .agent-customer-name { color: #0f172a; }
+        .agent-customer-meta { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
     </style>
 </head>
 <body>
@@ -161,7 +222,7 @@ $users = $pdo->query($users_sql)->fetchAll();
                 <div class="admin-users-grid">
                     <div class="form-group">
                         <label>角色 *</label>
-                        <select class="form-control" name="role" required>
+                        <select class="form-control" name="role" id="create_role" required>
                             <option value="member" selected>member</option>
                             <option value="admin">admin</option>
                             <option value="agent">agent</option>
@@ -172,7 +233,28 @@ $users = $pdo->query($users_sql)->fetchAll();
                         <input class="form-control" name="display_name" placeholder="例如 小明">
                     </div>
                 </div>
-                <p class="form-hint">Agent 账号：用户名须与顾客的 Recommend（推荐人/推荐码）一致，登录后只能看自己的下线。</p>
+                <div class="agent-customer-box" id="agent_customer_box" style="display:none;">
+                    <h4>选择该 Agent 的客户</h4>
+                    <p class="agent-customer-hint">当角色为 agent 时，创建成功后会把所选客户的 Recommend 自动设置为该 Agent 的用户名（即归属到此 Agent）。</p>
+                    <div class="agent-customer-list" role="group" aria-label="Agent customers">
+                        <?php foreach ($customers_for_agent as $c):
+                            $ccode = trim((string)($c['code'] ?? ''));
+                            if ($ccode === '') continue;
+                            $cname = trim((string)($c['name'] ?? ''));
+                            $crec = trim((string)($c['recommend'] ?? ''));
+                        ?>
+                        <label class="agent-customer-item">
+                            <input type="checkbox" name="agent_customers[]" value="<?= htmlspecialchars($ccode, ENT_QUOTES) ?>">
+                            <span class="agent-customer-code"><?= htmlspecialchars($ccode) ?></span>
+                            <span class="agent-customer-name"><?= htmlspecialchars($cname !== '' ? $cname : '—') ?></span>
+                            <span class="agent-customer-meta"><?= $crec !== '' ? ('当前 Recommend：' . htmlspecialchars($crec)) : '当前 Recommend：—' ?></span>
+                        </label>
+                        <?php endforeach; ?>
+                        <?php if (!$customers_for_agent): ?>
+                            <div style="color:var(--muted); padding:6px 2px;">暂无客户数据，无法绑定。请先创建 Customer。</div>
+                        <?php endif; ?>
+                    </div>
+                </div>
                 <div class="admin-users-actions" style="margin-top: 12px;">
                     <button type="submit" class="btn btn-primary">创建</button>
                     <a href="dashboard.php" class="btn btn-outline">返回首页</a>
@@ -250,6 +332,19 @@ $users = $pdo->query($users_sql)->fetchAll();
     </div>
         </main>
     </div>
+    <script>
+    (function(){
+        var roleEl = document.getElementById('create_role');
+        var box = document.getElementById('agent_customer_box');
+        if (!roleEl || !box) return;
+        function sync() {
+            var isAgent = (roleEl.value || '') === 'agent';
+            box.style.display = isAgent ? 'block' : 'none';
+        }
+        roleEl.addEventListener('change', sync);
+        sync();
+    })();
+    </script>
 </body>
 </html>
 

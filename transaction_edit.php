@@ -13,7 +13,14 @@ if (strpos($return_to, 'transaction_list.php') !== 0) {
 
 $row = null;
 if ($id > 0) {
-    $stmt = $pdo->prepare("SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by FROM transactions WHERE id = ?");
+    $sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by FROM transactions WHERE id = ?";
+    try {
+        $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+        $sql .= " AND deleted_at IS NULL";
+    } catch (Throwable $e) {
+        if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
+    }
+    $stmt = $pdo->prepare($sql);
     $stmt->execute([$id]);
     $row = $stmt->fetch();
 }

@@ -6,6 +6,7 @@ $sidebar_current = 'agents';
 
 $err = '';
 $msg = '';
+$warn = '';
 $agents = [];
 $is_agent_user = ($_SESSION['user_role'] ?? '') === 'agent';
 $agent_code = $is_agent_user ? trim((string)($_SESSION['agent_code'] ?? '')) : '';
@@ -55,8 +56,8 @@ function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $d
             LEFT JOIN (
                 SELECT TRIM(code) AS code,
                        SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
-                FROM transactions
-                WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
+            FROM transactions
+            WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
                 GROUP BY TRIM(code)
             ) sub ON TRIM(c.code) = sub.code
             WHERE c.recommend IS NOT NULL AND TRIM(c.recommend) != '' AND TRIM(c.recommend) = ?";
@@ -65,7 +66,9 @@ function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $d
     return (float)$stmt->fetchColumn();
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
+    $warn = '代理账号仅可查看 Win(Loss) 与 Commission，不能修改本页设置。';
+} elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim((string)($_POST['action'] ?? ''));
     if ($action === 'save_rebate_pct') {
         try {
@@ -195,6 +198,9 @@ try {
         .agent-pct-edit { display: none; align-items: center; gap: 6px; justify-content: flex-end; width: 100%; }
         .agent-pct-badge { font-weight: 600; color: #1f2937; }
         .agent-pct-note { font-size: 12px; color: var(--muted); }
+        .agent-self-table { max-width: 520px; }
+        .agent-self-table th,
+        .agent-self-table td { font-size: 15px; }
     </style>
 </head>
 <body>
@@ -203,8 +209,14 @@ try {
         <main class="dashboard-main">
             <div class="page-wrap">
                 <div class="page-header">
-                    <h2>Agent</h2>
-                    <p class="breadcrumb"><a href="dashboard.php">Home</a><span>·</span>Agent (from Customer Recommend)</p>
+                    <h2><?= $is_agent_user ? '我的代理数据' : 'Agent' ?></h2>
+                    <p class="breadcrumb">
+                        <?php if ($is_agent_user): ?>
+                        <span>Win(Loss)</span><span>·</span><span>Commission</span>
+                        <?php else: ?>
+                        <a href="dashboard.php">Home</a><span>·</span>Agent (from Customer Recommend)
+                        <?php endif; ?>
+                    </p>
                 </div>
                 <?php
                     $this_week_start = date('Y-m-d', strtotime('monday this week'));
@@ -235,19 +247,29 @@ try {
                         <a href="agents.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset">Last Month</a>
                     </div>
                 </form>
+                <?php if ($warn): ?>
+                    <div class="alert alert-error" role="status"><?= htmlspecialchars($warn) ?></div>
+                <?php endif; ?>
                 <?php if ($err): ?>
                     <div class="alert alert-error"><?= htmlspecialchars($err) ?></div>
                 <?php elseif ($msg): ?>
                     <div class="alert alert-success"><?= htmlspecialchars($msg) ?></div>
-                <?php else: ?>
+                <?php endif; ?>
+                <?php if (!$err): ?>
+                <?php if (!$is_agent_user): ?>
                 <div class="summary">
                     <div class="summary-item"><strong>Agent</strong><span class="num"><?= count($agents) ?></span></div>
                 </div>
-                <div class="card" style="overflow-x: auto;">
-                    <h3>列表</h3>
+                <?php endif; ?>
+                <div class="card<?= $is_agent_user ? ' agent-self-table' : '' ?>" style="overflow-x: auto;">
+                    <h3><?= $is_agent_user ? '汇总' : '列表' ?></h3>
                     <table class="data-table">
                         <thead>
                             <tr>
+                                <?php if ($is_agent_user): ?>
+                                <th class="num">Win(Loss)</th>
+                                <th class="num">Commission</th>
+                                <?php else: ?>
                                 <th>Agent</th>
                                 <th class="num">Customers</th>
                                 <th class="num">Win(Loss)</th>
@@ -256,6 +278,7 @@ try {
                                 <th>Rebate Switch</th>
                                 <th>Paid</th>
                                 <th>操作</th>
+                                <?php endif; ?>
                             </tr>
                         </thead>
                         <tbody>
@@ -276,6 +299,10 @@ try {
                                 if (!$can_pay) $is_paid = false;
                             ?>
                             <tr>
+                                <?php if ($is_agent_user): ?>
+                                <td class="num <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>"><?= number_format($winLoss, 2) ?></td>
+                                <td class="num <?= $rebate_amount > 0 ? 'agent-winloss-pos' : '' ?>"><?= number_format($rebate_amount, 2) ?></td>
+                                <?php else: ?>
                                 <td><?= htmlspecialchars($agent) ?></td>
                                 <td class="num"><?= $cnt ?></td>
                                 <td class="num <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>"><?= number_format($winLoss, 2) ?></td>
@@ -329,10 +356,11 @@ try {
                                     <?php if ($paid_at !== ''): ?><span class="agent-paid-at">（<?= htmlspecialchars($paid_at) ?>）</span><?php endif; ?>
                                 </td>
                                 <td><a href="customers.php?recommend=<?= $recommend_param ?>">View Customers</a></td>
+                                <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>
                             <?php if (empty($agents)): ?>
-                            <tr><td colspan="8" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
+                            <tr><td colspan="<?= $is_agent_user ? '2' : '8' ?>" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

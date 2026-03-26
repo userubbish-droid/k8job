@@ -18,7 +18,7 @@ try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE day < ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
+        FROM transactions WHERE day < ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
     $stmt->execute([$day_from]);
     foreach ($stmt->fetchAll() as $r) {
         $b = strtolower(trim((string)$r['bank']));
@@ -35,7 +35,7 @@ try {
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE day < ? AND status = 'approved' GROUP BY product");
+        FROM transactions WHERE day < ? AND status = 'approved' AND deleted_at IS NULL GROUP BY product");
     $stmt->execute([$day_from]);
     foreach ($stmt->fetchAll() as $r) {
         $p = strtolower(trim((string)($r['product'] ?? '')));
@@ -52,7 +52,7 @@ try {
     $stmt = $pdo->prepare("SELECT bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND bank IS NOT NULL AND TRIM(bank) != ''
+        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != ''
         GROUP BY bank");
     $stmt->execute([$day_from, $day_to]);
     $range_in_bank = [];
@@ -74,7 +74,7 @@ try {
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'
+        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
         GROUP BY product");
     $stmt->execute([$day_from, $day_to]);
     $range_in_product = [];
@@ -104,7 +104,7 @@ try {
         COALESCE(SUM(CASE WHEN mode = 'FREE' THEN $line ELSE 0 END), 0) AS fr,
         COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN $line ELSE 0 END), 0) AS fwd,
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN COALESCE(bonus,0) ELSE 0 END), 0) AS bns
-        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved'
+        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
         GROUP BY product");
     $stmt->execute([$day_from, $day_to]);
     foreach ($stmt->fetchAll() as $r) {
