@@ -766,12 +766,46 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .kiosk-gp-table.is-inout-hidden td:nth-child(2),
         .kiosk-gp-table.is-inout-hidden td:nth-child(3) { display: none; }
         .kiosk-expense-filter-in-gp { margin-bottom: 14px; }
+        /* Kiosk：快捷日期条 — 与上方筛选区区分、圆角胶囊按钮 */
+        .kiosk-expense-filter-in-gp .expense-quick-ranges {
+            margin-top: 10px;
+            padding: 12px 14px;
+            border-top: none;
+            border-radius: 12px;
+            background: linear-gradient(135deg, rgba(239, 246, 255, 0.98) 0%, rgba(219, 234, 254, 0.45) 100%);
+            border: 1px solid rgba(59, 130, 246, 0.22);
+            box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.75), 0 2px 10px rgba(30, 64, 175, 0.06);
+            gap: 8px;
+        }
+        .kiosk-expense-filter-in-gp .expense-quick-ranges > span:first-child {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 0.04em;
+            color: #1e40af;
+            margin-right: 2px;
+        }
+        .kiosk-expense-filter-in-gp .expense-quick-ranges .expense-quick-range {
+            border-radius: 999px;
+            padding: 6px 14px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid rgba(37, 99, 235, 0.32);
+            background: rgba(255, 255, 255, 0.92);
+            color: #1d4ed8;
+            transition: background 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+        }
+        .kiosk-expense-filter-in-gp .expense-quick-ranges .expense-quick-range:hover {
+            background: #fff;
+            border-color: rgba(37, 99, 235, 0.5);
+            box-shadow: 0 2px 10px rgba(37, 99, 235, 0.14);
+        }
+        .kiosk-expense-filter-in-gp .expense-quick-ranges .expense-quick-range:active {
+            transform: scale(0.98);
+        }
         .kiosk-gp-meta-form { margin: 0; }
         .kiosk-gp-meta-form .form-control.kiosk-gp-input { min-height: 36px; padding: 6px 8px; font-size: 13px; max-width: 120px; margin-left: auto; }
         .kiosk-gp-meta-form .form-control.kiosk-gp-paid[readonly] { background: #f1f5f9; cursor: default; color: #334155; }
         .kiosk-gp-meta-actions { margin-top: 12px; }
-        .kiosk-gp-filters input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.55; }
-        .kiosk-gp-filter-placeholder { cursor: not-allowed; color: #64748b; font-weight: 500; }
     </style>
 </head>
 <body>
@@ -861,8 +895,8 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <button type="submit" class="btn btn-primary btn-sm">Search</button>
                     <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back btn-sm">Reset</a>
                 </div>
-                <div class="expense-quick-ranges" aria-label="日期快捷">
-                    <span>快捷：</span>
+                <div class="expense-quick-ranges kiosk-quick-dates" aria-label="日期快捷">
+                    <span>快捷</span>
                     <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="yesterday" title="昨天">昨日</button>
                     <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_week" title="本周一至本周日">本周</button>
                     <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
@@ -871,8 +905,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 </div>
             </form>
             <div class="kiosk-gp-filters" role="group" aria-label="Game Platform filters">
-                <label><input type="checkbox" id="kiosk-gp-show-inout" checked> Show In / Out</label>
-                <label class="kiosk-gp-filter-placeholder"><input type="checkbox" id="kiosk-gp-reserved" disabled aria-disabled="true"> （待定）</label>
+                <label><input type="checkbox" id="kiosk-gp-show-inout"> Show In / Out</label>
             </div>
             <?php if ($is_admin): ?>
             <form method="post" action="kiosk_expense.php" class="kiosk-gp-meta-form" autocomplete="off">
@@ -886,7 +919,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
             <div class="kiosk-gp-meta-form">
             <?php endif; ?>
             <div style="overflow-x:auto;">
-                <table class="data-table kiosk-gp-table" id="kiosk-gp-table">
+                <table class="data-table kiosk-gp-table is-inout-hidden" id="kiosk-gp-table">
                     <thead>
                         <tr>
                             <th>Game Platform</th>
@@ -949,7 +982,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
             </div>
                 <?php if ($is_admin && !empty($kiosk_gp_products)): ?>
                 <div class="kiosk-gp-meta-actions">
-                    <button type="submit" class="btn btn-primary btn-sm">保存 % / amount paid</button>
+                    <button type="submit" class="btn btn-primary btn-sm">保存设置</button>
                 </div>
                 <?php endif; ?>
             <?php if ($is_admin): ?>
