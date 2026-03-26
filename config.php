@@ -65,6 +65,11 @@ foreach (['customers','transactions','banks','products','expenses','customer_pro
     try { $pdo->exec("CREATE INDEX idx_{$__t}_company_id ON {$__t}(company_id)"); } catch (Throwable $e) {}
 }
 
+// customers 审核支持：status（默认 approved）
+try { $pdo->exec("ALTER TABLE customers ADD COLUMN status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved' AFTER is_active"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_by INT UNSIGNED NULL AFTER status"); } catch (Throwable $e) {}
+try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_at DATETIME NULL AFTER approved_by"); } catch (Throwable $e) {}
+
 // 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
 $NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAHWcn815xZ-L4It23rwqMTbcO7G24AYwV4';
 $NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';

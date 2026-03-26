@@ -16,9 +16,18 @@ if ($filter_recommend !== '') {
 $sidebar_current = 'customers';
 
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$company_id = current_company_id();
+$has_customer_status = false;
+try {
+    $stmt = $pdo->query("SHOW COLUMNS FROM customers LIKE 'status'");
+    $has_customer_status = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
+} catch (Throwable $e) {}
 
 $msg = '';
 $err = '';
+if (!empty($_GET['pending_customer'])) {
+    $msg = '已提交客户资料，等待管理员审核通过后才会显示。';
+}
 
 // 从 Agent 页进入（带 recommend 筛选）时不允许 POST 操作，且只显示代号+输赢，不显示客户资料
 $agent_view = $filter_recommend !== '';
@@ -62,21 +71,27 @@ $month_withdraw_by_code = [];
 try {
     $where = [];
     $params = [];
+    $where[] = "c.company_id = ?";
+    $params[] = $company_id;
+    if ($has_customer_status) {
+        // 待审核客户不出现在 Customers 列表（统一在 admin_customer_approvals.php 处理）
+        $where[] = "c.status = 'approved'";
+    }
     if ($filter_recommend !== '') {
         $where[] = "TRIM(c.recommend) = ?";
         $params[] = $filter_recommend;
     }
     $where_sql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
     if ($filter_recommend !== '') {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE TRIM(recommend) = ?");
-        $stmt->execute([$filter_recommend]);
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND " . ($has_customer_status ? "status='approved' AND " : "") . "TRIM(recommend) = ?");
+        $stmt->execute([$company_id, $filter_recommend]);
         $summary['total'] = (int) $stmt->fetchColumn();
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE is_active = 1 AND TRIM(recommend) = ?");
-        $stmt->execute([$filter_recommend]);
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND is_active = 1 AND " . ($has_customer_status ? "status='approved' AND " : "") . "TRIM(recommend) = ?");
+        $stmt->execute([$company_id, $filter_recommend]);
         $summary['active'] = (int) $stmt->fetchColumn();
     } else {
-        $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers")->fetchColumn();
-        $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE is_active = 1")->fetchColumn();
+        $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
+        $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . " AND is_active = 1" . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
     }
     $sql = "SELECT c.id, c.code, c.name, c.phone, c.remark, c.is_active, c.created_at,
                    c.register_date, c.bank_details, c.regular_customer, c.recommend, c.created_by,
@@ -85,13 +100,9 @@ try {
             LEFT JOIN users u ON c.created_by = u.id
             $where_sql
             ORDER BY c.is_active DESC, c.code ASC";
-    if ($params) {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $rows = $stmt->fetchAll();
-    } else {
-        $rows = $pdo->query($sql)->fetchAll();
-    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll();
     $stmt = $pdo->query("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
         FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''

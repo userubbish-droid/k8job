@@ -6,6 +6,9 @@ $sidebar_current = 'customer_create';
 
 $msg = '';
 $err = '';
+$need_confirm = false;
+$confirm_message = '';
+$company_id = current_company_id();
 
 // 建议下一个客户代码：按现有 C001、C009 等递增，下一个为 C010
 $suggested_code = 'C001';
@@ -29,34 +32,40 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $remark = trim($_POST['remark'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
     $recommend = trim($_POST['recommend'] ?? '');
+    $confirm_override = isset($_POST['confirm_override']) && (string)$_POST['confirm_override'] === '1';
 
     if ($code === '') {
         $err = '请输入客户代码。';
     } else {
         $conflicts = [];
         if ($phone !== '') {
-            $stmt = $pdo->prepare("SELECT code FROM customers WHERE phone = ? LIMIT 1");
-            $stmt->execute([$phone]);
+            $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND phone = ? LIMIT 1");
+            $stmt->execute([$company_id, $phone]);
             $row = $stmt->fetch();
             if ($row) {
                 $conflicts[] = $row['code'] . ' 电话号码同样';
             }
         }
         if ($bank_details !== '') {
-            $stmt = $pdo->prepare("SELECT code FROM customers WHERE bank_details = ? LIMIT 1");
-            $stmt->execute([$bank_details]);
+            $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND bank_details = ? LIMIT 1");
+            $stmt->execute([$company_id, $bank_details]);
             $row = $stmt->fetch();
             if ($row) {
                 $conflicts[] = $row['code'] . ' 银行号码同样';
             }
         }
-        if (!empty($conflicts)) {
-            $err = '顾客已注册：' . implode('；', $conflicts);
+        if (!empty($conflicts) && !$confirm_override) {
+            $need_confirm = true;
+            $confirm_message = '发现重复：' . implode('；', $conflicts) . '。是否仍要使用相同资料创建？确认后将进入待审核，管理员通过后才生效。';
         } else {
             try {
                 $register_date = date('Y-m-d');
-                $stmt = $pdo->prepare("INSERT INTO customers (code, name, phone, remark, created_by, register_date, bank_details, recommend) VALUES (?, ?, ?, ?, ?, ?, ?, ?)");
+                $status = (!empty($conflicts) && $confirm_override) ? 'pending' : 'approved';
+                $approved_by = $status === 'approved' ? (int)($_SESSION['user_id'] ?? 0) : null;
+                $approved_at = $status === 'approved' ? date('Y-m-d H:i:s') : null;
+                $stmt = $pdo->prepare("INSERT INTO customers (company_id, code, name, phone, remark, created_by, register_date, bank_details, recommend, status, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([
+                    $company_id,
                     $code,
                     $name !== '' ? $name : null,
                     $phone !== '' ? $phone : null,
@@ -64,10 +73,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (int)($_SESSION['user_id'] ?? 0),
                     $register_date,
                     $bank_details !== '' ? $bank_details : null,
-                    $recommend !== '' ? $recommend : null
+                    $recommend !== '' ? $recommend : null,
+                    $status,
+                    $approved_by,
+                    $approved_at
                 ]);
                 $new_id = (int) $pdo->lastInsertId();
-                header('Location: customer_edit.php?id=' . $new_id . '&created=1');
+                if ($status === 'pending') {
+                    header('Location: customers.php?pending_customer=1');
+                } else {
+                    header('Location: customer_edit.php?id=' . $new_id . '&created=1');
+                }
                 exit;
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
@@ -158,7 +174,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 <div class="form-modal-title">New Customer</div>
                 <a class="form-modal-close" href="customers.php" aria-label="关闭">×</a>
             </div>
-            <form method="post" autocomplete="off">
+            <form method="post" autocomplete="off" id="customer-create-form">
+                <input type="hidden" name="confirm_override" id="confirm_override" value="0">
                 <div class="form-grid-2">
                     <div class="form-section">
                         <h4>Personal Information</h4>
@@ -197,5 +214,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
         </main>
     </div>
+    <?php if ($need_confirm): ?>
+    <script>
+    (function(){
+        var form = document.getElementById('customer-create-form');
+        var hidden = document.getElementById('confirm_override');
+        if (!form || !hidden) return;
+        if (typeof window.appModalConfirm !== 'function') return;
+        window.appModalConfirm("<?= htmlspecialchars($confirm_message, ENT_QUOTES) ?>", function(){
+            hidden.value = '1';
+            form.submit();
+        }, "重复资料");
+    })();
+    </script>
+    <?php endif; ?>
 </body>
 </html>

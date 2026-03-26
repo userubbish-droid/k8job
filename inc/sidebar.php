@@ -143,6 +143,7 @@ if ($sidebar_is_superadmin) {
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>User Management</a>
         <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>Banks & Products</a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span>Permissions</a>
+        <a href="admin_customer_approvals.php" class="nav-item <?= $sidebar_current === 'admin_customer_approvals' ? 'primary' : '' ?>"><span class="nav-icon"></span>Customer Approvals</a>
     <?php endif; ?>
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>Logout</a>
 </aside>
