@@ -870,45 +870,44 @@ $ep = $expense_modal_should_open ? $_POST : [];
         <?php if ($expense_kind_ui === 'kiosk'): ?>
         <div class="kiosk-io-summary">
             <div class="kiosk-io-title" style="margin-bottom:10px;">Game Platform</div>
-            <form method="get" class="expense-filter-bar kiosk-expense-filter-in-gp" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
+            <form method="get" class="filters-bar filters-bar-flow kiosk-expense-filter-in-gp" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
                 <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
-                <div class="expense-filter-item">
-                    <label>From</label>
-                    <input type="date" name="expense_day_from" id="expense-day-from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
+                <div class="filters-row filters-row-main">
+                    <div class="filter-group">
+                        <label>From</label>
+                        <input type="date" name="expense_day_from" id="expense-day-from" class="form-control" value="<?= htmlspecialchars($expense_day_from) ?>">
+                    </div>
+                    <div class="filter-group">
+                        <label>To</label>
+                        <input type="date" name="expense_day_to" id="expense-day-to" class="form-control" value="<?= htmlspecialchars($expense_day_to) ?>">
+                    </div>
+                    <div class="filter-group">
+                        <label>Bank</label>
+                        <select name="expense_bank" class="form-control">
+                            <option value="">全部</option>
+                            <?php foreach ($expense_filter_banks as $bank_name): ?>
+                            <option value="<?= htmlspecialchars((string)$bank_name) ?>" <?= $expense_bank_filter === (string)$bank_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$bank_name) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <div class="filter-group">
+                        <label>Product</label>
+                        <select name="expense_product" class="form-control">
+                            <option value="">全部</option>
+                            <?php foreach ($expense_filter_products as $product_name): ?>
+                            <option value="<?= htmlspecialchars((string)$product_name) ?>" <?= $expense_product_filter === (string)$product_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$product_name) ?></option>
+                            <?php endforeach; ?>
+                        </select>
+                    </div>
+                    <button type="submit" class="btn btn-search">Search</button>
+                    <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back">Reset</a>
                 </div>
-                <div class="expense-filter-item">
-                    <label>To</label>
-                    <input type="date" name="expense_day_to" id="expense-day-to" class="form-control" value="<?= htmlspecialchars($expense_day_to) ?>">
-                </div>
-                <div class="expense-filter-item">
-                    <label>Bank</label>
-                    <select name="expense_bank" class="form-control">
-                        <option value="">全部</option>
-                        <?php foreach ($expense_filter_banks as $bank_name): ?>
-                        <option value="<?= htmlspecialchars((string)$bank_name) ?>" <?= $expense_bank_filter === (string)$bank_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$bank_name) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="expense-filter-item">
-                    <label>Product</label>
-                    <select name="expense_product" class="form-control">
-                        <option value="">全部</option>
-                        <?php foreach ($expense_filter_products as $product_name): ?>
-                        <option value="<?= htmlspecialchars((string)$product_name) ?>" <?= $expense_product_filter === (string)$product_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$product_name) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-                <div class="expense-filter-actions">
-                    <button type="submit" class="btn btn-primary btn-sm">Search</button>
-                    <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back btn-sm">Reset</a>
-                </div>
-                <div class="expense-quick-ranges kiosk-quick-dates" aria-label="日期快捷">
-                    <span>快捷</span>
-                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="yesterday" title="昨天">昨日</button>
-                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_week" title="本周一至本周日">本周</button>
-                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
-                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">本月</button>
-                    <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">上月</button>
+                <div class="filters-row filters-row-presets kiosk-quick-dates" aria-label="日期快捷">
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="yesterday" title="昨天">Yesterday</a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="this_week" title="本周一至本周日">This Week</a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="last_week" title="上周一至上周日">Last Week</a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">This Month</a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">Last Month</a>
                 </div>
             </form>
             <div class="kiosk-gp-filters" role="group" aria-label="Game Platform filters">
@@ -1563,7 +1562,9 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 return x;
             }
             document.querySelectorAll('.expense-quick-range').forEach(function(btn) {
-                btn.addEventListener('click', function() {
+                btn.addEventListener('click', function(e) {
+                    // 兼容 a.btn-preset：不跳转，由 JS 直接提交表单
+                    if (e && typeof e.preventDefault === 'function') e.preventDefault();
                     var range = btn.getAttribute('data-range');
                     var now = new Date();
                     var from, to;

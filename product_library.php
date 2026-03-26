@@ -89,10 +89,86 @@ try {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>产品账号 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
         .product-cell { font-size: 13px; white-space: nowrap; }
         .product-cell .id { color: #0f172a; }
         .product-cell .ps { color: var(--muted); margin-top: 2px; }
+        .addacct-mask {
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 16, 40, 0.42);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 1600;
+            padding: 18px;
+        }
+        .addacct-mask.show { display: flex; }
+        .addacct-modal {
+            width: min(980px, 96vw);
+            max-height: min(86vh, 900px);
+            overflow: auto;
+            background: #fff;
+            border-radius: 18px;
+            border: 1px solid #dbeafe;
+            box-shadow: 0 22px 60px rgba(37, 99, 235, 0.28);
+        }
+        .addacct-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            font-weight: 800;
+            color: #0f172a;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+            border-bottom: 1px solid #bfdbfe;
+        }
+        .addacct-close {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid rgba(148,163,184,0.55);
+            background: rgba(255,255,255,0.9);
+            cursor: pointer;
+            font-size: 18px;
+            line-height: 1;
+        }
+        .addacct-body { padding: 16px 18px 10px; }
+        .addacct-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .addacct-sec { padding: 12px; border: 1px solid rgba(59,130,246,0.18); border-radius: 12px; background: linear-gradient(180deg, rgba(239,246,255,0.55) 0%, rgba(255,255,255,0.92) 100%); }
+        .addacct-sec h4 { margin: 0 0 10px; font-size: 13px; font-weight: 800; color: #1e3a8a; }
+        .seg {
+            display: inline-flex;
+            background: rgba(241,245,249,0.9);
+            border: 1px solid rgba(148,163,184,0.45);
+            border-radius: 999px;
+            padding: 3px;
+            gap: 4px;
+        }
+        .seg button {
+            border: none;
+            background: transparent;
+            padding: 8px 14px;
+            border-radius: 999px;
+            font-weight: 700;
+            cursor: pointer;
+            color: #334155;
+        }
+        .seg button.active {
+            background: linear-gradient(180deg, #6e8dff 0%, var(--primary) 100%);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(79, 125, 255, 0.35);
+        }
+        .addacct-foot {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            padding: 12px 18px 16px;
+            border-top: 1px solid rgba(140,165,235,0.25);
+        }
+        @media (max-width: 820px) { .addacct-grid { grid-template-columns: 1fr; } }
     </style>
 </head>
 <body>
@@ -116,43 +192,84 @@ try {
         <div class="card">
             <h3 style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
                 顾客产品资料
-                <button type="button" id="product_lib_add_btn" class="btn btn-outline btn-sm" style="padding:2px 10px; font-size:13px;">add</button>
+                <button type="button" id="product_lib_add_btn" class="btn btn-outline btn-sm" style="padding:2px 10px; font-size:13px;">Add Account</button>
             </h3>
-            <div id="product_lib_add_box" style="display:<?= $show_add_box ? 'block' : 'none' ?>; margin-top:12px; padding:12px; background:#f8fafc; border:1px solid var(--border); border-radius:8px;">
-                <form method="post">
-                    <input type="hidden" name="action" value="add_product">
-                    <div class="form-row-2" style="display:grid; grid-template-columns:repeat(auto-fill,minmax(140px,1fr)); gap:10px; align-items:end;">
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>顾客</label>
-                            <select name="customer_id" class="form-control" required>
-                                <option value="">-- 请选 --</option>
-                                <?php foreach ($customers_list as $c): ?>
-                                <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['code']) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>产品</label>
-                            <select name="product_name" class="form-control" required>
-                                <option value="">-- 请选 --</option>
-                                <?php foreach ($products as $p): ?>
-                                <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
-                                <?php endforeach; ?>
-                            </select>
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>账号</label>
-                            <input name="account" class="form-control" placeholder="账号">
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <label>密码</label>
-                            <input name="password" type="text" class="form-control" placeholder="不填则 Aaaa8888">
-                        </div>
-                        <div class="form-group" style="margin-bottom:0;">
-                            <button type="submit" class="btn btn-primary btn-sm">添加</button>
-                        </div>
+            <div class="addacct-mask<?= $show_add_box ? ' show' : '' ?>" id="addacct-mask" aria-hidden="<?= $show_add_box ? 'false' : 'true' ?>">
+                <div class="addacct-modal" role="dialog" aria-modal="true" aria-label="Add Account">
+                    <div class="addacct-head">
+                        <span>Add Account</span>
+                        <button type="button" class="addacct-close" id="addacct-close" aria-label="关闭">×</button>
                     </div>
-                </form>
+                    <form method="post" id="addacct-form" autocomplete="off">
+                        <input type="hidden" name="action" value="add_product">
+                        <div class="addacct-body">
+                            <div class="addacct-grid">
+                                <div class="addacct-sec">
+                                    <h4>Personal Information</h4>
+                                    <div class="form-group">
+                                        <label>Customer *</label>
+                                        <select name="customer_id" class="form-control" required>
+                                            <option value="">Select Customer</option>
+                                            <?php foreach ($customers_list as $c): ?>
+                                            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['code']) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Game / Product *</label>
+                                        <select name="product_name" class="form-control" required>
+                                            <option value="">Select Game</option>
+                                            <?php foreach ($products as $p): ?>
+                                            <option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option>
+                                            <?php endforeach; ?>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Account ID *</label>
+                                        <input name="account" class="form-control" placeholder="Account ID">
+                                    </div>
+                                </div>
+                                <div class="addacct-sec">
+                                    <h4>Payment</h4>
+                                    <div class="form-group">
+                                        <label>Password *</label>
+                                        <input name="password" type="text" class="form-control" placeholder="不填则 Aaaa8888">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Payment Alert</label>
+                                        <div class="seg" role="group" aria-label="Payment Alert">
+                                            <button type="button" class="active" data-alert="yes">Yes</button>
+                                            <button type="button" data-alert="no">No</button>
+                                        </div>
+                                        <input type="hidden" name="payment_alert" id="payment_alert" value="yes">
+                                    </div>
+                                    <div class="form-group">
+                                        <label>Remark</label>
+                                        <input name="remark" class="form-control" placeholder="Remark（仅显示，不入库）">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="addacct-sec" style="margin-top:14px;">
+                                <h4>Advanced Account</h4>
+                                <div class="form-row-2" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label>Other Currency</label>
+                                        <input class="form-control" placeholder="MYR（展示用）" disabled>
+                                    </div>
+                                    <div class="form-group" style="margin-bottom:0;">
+                                        <label>Company</label>
+                                        <input class="form-control" placeholder="—" disabled>
+                                    </div>
+                                </div>
+                                <p class="form-hint" style="margin:8px 0 0;">此区块仅用于对齐你提供的模板视觉（当前系统未落库）。</p>
+                            </div>
+                        </div>
+                        <div class="addacct-foot">
+                            <button type="button" class="btn btn-outline" id="addacct-cancel">Cancel</button>
+                            <button type="submit" class="btn btn-primary">Add Account</button>
+                        </div>
+                    </form>
+                </div>
             </div>
             <?php if ($products || $codes): ?>
             <div style="overflow-x: auto;">
@@ -211,9 +328,29 @@ try {
     <script>
     (function(){
         var btn = document.getElementById('product_lib_add_btn');
-        var box = document.getElementById('product_lib_add_box');
-        if (btn && box) {
-            btn.addEventListener('click', function(){ box.style.display = box.style.display === 'none' ? 'block' : 'none'; });
+        var mask = document.getElementById('addacct-mask');
+        var closeBtn = document.getElementById('addacct-close');
+        var cancelBtn = document.getElementById('addacct-cancel');
+        if (!btn || !mask) return;
+        function openM() { mask.classList.add('show'); mask.setAttribute('aria-hidden', 'false'); }
+        function closeM() { mask.classList.remove('show'); mask.setAttribute('aria-hidden', 'true'); }
+        btn.addEventListener('click', openM);
+        if (closeBtn) closeBtn.addEventListener('click', closeM);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeM);
+        mask.addEventListener('click', function(e){ if (e.target === mask) closeM(); });
+        document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && mask.classList.contains('show')) closeM(); });
+
+        // Segmented control
+        var seg = mask.querySelector('.seg');
+        var hidden = document.getElementById('payment_alert');
+        if (seg && hidden) {
+            seg.querySelectorAll('button').forEach(function(b){
+                b.addEventListener('click', function(){
+                    seg.querySelectorAll('button').forEach(function(x){ x.classList.remove('active'); });
+                    b.classList.add('active');
+                    hidden.value = b.getAttribute('data-alert') || 'yes';
+                });
+            });
         }
     })();
     </script>

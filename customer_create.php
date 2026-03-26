@@ -89,46 +89,113 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>新增顾客 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        .form-modal {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(152, 176, 242, 0.32);
+            border-radius: 14px;
+            box-shadow: var(--card-shadow);
+            padding: 18px 18px 16px;
+        }
+        .form-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(140, 165, 235, 0.28);
+            margin-bottom: 14px;
+        }
+        .form-modal-title { margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; }
+        .form-modal-close {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid rgba(148,163,184,0.55);
+            background: #fff;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            line-height: 1;
+            font-size: 18px;
+        }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-section {
+            border: 1px solid rgba(59, 130, 246, 0.18);
+            border-radius: 12px;
+            background: linear-gradient(180deg, rgba(239, 246, 255, 0.7) 0%, rgba(255,255,255,0.92) 100%);
+            padding: 12px 12px 10px;
+        }
+        .form-section h4 { margin: 0 0 10px; font-size: 13px; font-weight: 800; color: #1e3a8a; }
+        .form-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(140, 165, 235, 0.22);
+        }
+        @media (max-width: 720px) { .form-grid-2 { grid-template-columns: 1fr; } }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
-    <div class="page-wrap" style="max-width: 560px;">
+    <div class="page-wrap" style="max-width: 860px;">
         <div class="page-header">
             <h2>新增顾客</h2>
             <p class="breadcrumb"><a href="customers.php">← 返回顾客列表</a></p>
         </div>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-        <div class="card">
-            <form method="post">
-                <div class="form-group">
-                    <label>客户代码 *</label>
-                    <input name="code" class="form-control" required placeholder="<?= htmlspecialchars($suggested_code) ?>" value="<?= htmlspecialchars($_POST['code'] ?? $suggested_code) ?>">
+        <div class="form-modal">
+            <div class="form-modal-head">
+                <div class="form-modal-title">New Customer</div>
+                <a class="form-modal-close" href="customers.php" aria-label="关闭">×</a>
+            </div>
+            <form method="post" autocomplete="off">
+                <div class="form-grid-2">
+                    <div class="form-section">
+                        <h4>Personal Information</h4>
+                        <div class="form-group">
+                            <label>客户代码 *</label>
+                            <input name="code" class="form-control" required placeholder="<?= htmlspecialchars($suggested_code) ?>" value="<?= htmlspecialchars($_POST['code'] ?? $suggested_code) ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>姓名</label>
+                            <input name="name" class="form-control" placeholder="FULL NAME" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>联系电话</label>
+                            <input name="phone" class="form-control" placeholder="CONTACT" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+                        </div>
+                    </div>
+                    <div class="form-section">
+                        <h4>Payment</h4>
+                        <div class="form-group">
+                            <label>银行资料</label>
+                            <input name="bank_details" class="form-control" placeholder="例如 TNG 160402395453、PBB 8413574015" value="<?= htmlspecialchars($_POST['bank_details'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>Recommend</label>
+                            <input name="recommend" class="form-control" placeholder="推荐人/推荐码" value="<?= htmlspecialchars($_POST['recommend'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label>备注</label>
+                            <textarea name="remark" class="form-control" placeholder="REMARK"><?= htmlspecialchars($_POST['remark'] ?? '') ?></textarea>
+                        </div>
+                        <p class="form-hint" style="margin: 0;">注册日期将按当前日期自动记录。</p>
+                    </div>
                 </div>
-                <div class="form-group">
-                    <label>姓名</label>
-                    <input name="name" class="form-control" placeholder="FULL NAME" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
+                <div class="form-actions">
+                    <a href="customers.php" class="btn btn-outline">Cancel</a>
+                    <button type="submit" class="btn btn-primary">保存并继续</button>
                 </div>
-                <div class="form-group">
-                    <label>联系电话</label>
-                    <input name="phone" class="form-control" placeholder="CONTACT" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
-                </div>
-                <div class="form-group">
-                    <label>银行资料</label>
-                    <input name="bank_details" class="form-control" placeholder="例如 TNG 160402395453、PBB 8413574015" value="<?= htmlspecialchars($_POST['bank_details'] ?? '') ?>">
-                </div>
-                <div class="form-group">
-                    <label>备注</label>
-                    <textarea name="remark" class="form-control" placeholder="REMARK"><?= htmlspecialchars($_POST['remark'] ?? '') ?></textarea>
-                </div>
-                <div class="form-group">
-                    <label>Recommend</label>
-                    <input name="recommend" class="form-control" placeholder="推荐人/推荐码" value="<?= htmlspecialchars($_POST['recommend'] ?? '') ?>">
-                </div>
-                <p class="form-hint">注册日期将按当前日期自动记录。</p>
-                <button type="submit" class="btn btn-primary">保存并继续</button>
             </form>
         </div>
     </div>

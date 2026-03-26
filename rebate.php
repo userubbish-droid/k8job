@@ -140,15 +140,6 @@ $rows_for_sum = $all_rows; // 合计用全部客户
     .rebate-given-label { font-size: 12px; color: var(--success); font-weight: 600; margin-left: 6px; }
     .rebate-code-cell { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
     .rebate-code-cell input[type=checkbox] { margin: 0; accent-color: var(--primary); }
-    /* From/To 日期时间（图1样式）：圆角、细边框、右侧日历图标 */
-    .rebate-filter-form { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 16px; }
-    .rebate-datetime-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 20px; }
-    .rebate-dt-group { display: flex; flex-direction: column; gap: 6px; }
-    .rebate-dt-group label { font-size: 13px; color: #475569; font-weight: 500; margin: 0; }
-    .rebate-dt-input-wrap { position: relative; display: inline-flex; align-items: center; }
-    .rebate-dt-input { padding: 9px 36px 9px 12px; border: 1px solid #e2e8f0; border-radius: 8px; font-size: 14px; min-width: 180px; background: #fff; }
-    .rebate-dt-input:focus { outline: none; border-color: var(--primary); }
-    .rebate-cal-icon { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); pointer-events: none; color: #64748b; display: flex; align-items: center; }
     </style>
 </head>
 <body>
@@ -164,24 +155,36 @@ $rows_for_sum = $all_rows; // 合计用全部客户
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <form method="get" class="rebate-filter-form" id="rebate-filter-form" style="margin-bottom:16px;">
-                <div class="rebate-datetime-row">
-                    <div class="rebate-dt-group">
+            <?php
+                $this_week_start = date('Y-m-d', strtotime('monday this week'));
+                $this_week_end = date('Y-m-d', strtotime('sunday this week'));
+                $last_week_start = date('Y-m-d', strtotime('monday last week'));
+                $last_week_end = date('Y-m-d', strtotime('sunday last week'));
+                $this_month_start = date('Y-m-01');
+                $this_month_end = date('Y-m-t');
+                $last_month_start = date('Y-m-01', strtotime('first day of last month'));
+                $last_month_end = date('Y-m-t', strtotime('last day of last month'));
+            ?>
+            <form class="filters-bar filters-bar-flow" method="get" id="rebate-filter-form" style="margin-bottom:16px;">
+                <div class="filters-row filters-row-main">
+                    <div class="filter-group">
                         <label>From:</label>
-                        <div class="rebate-dt-input-wrap">
-                            <input type="datetime-local" name="day_from" id="rebate-day-from" value="<?= htmlspecialchars($day_from) ?>T00:00" step="60" class="rebate-dt-input">
-                            <span class="rebate-cal-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
-                        </div>
+                        <input type="datetime-local" name="day_from" id="rebate-day-from" value="<?= htmlspecialchars($day_from) ?>T00:00" step="60">
                     </div>
-                    <div class="rebate-dt-group">
+                    <div class="filter-group">
                         <label>To:</label>
-                        <div class="rebate-dt-input-wrap">
-                            <input type="datetime-local" name="day_to" id="rebate-day-to" value="<?= htmlspecialchars($day_to) ?>T23:59" step="60" class="rebate-dt-input">
-                            <span class="rebate-cal-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg></span>
-                        </div>
+                        <input type="datetime-local" name="day_to" id="rebate-day-to" value="<?= htmlspecialchars($day_to) ?>T23:59" step="60">
                     </div>
+                    <button type="submit" class="btn btn-search">Search</button>
                 </div>
-                <button type="submit" class="btn btn-primary">查询</button>
+                <div class="filters-row filters-row-presets">
+                    <a href="rebate.php?<?= http_build_query(['day_from' => $today, 'day_to' => $today]) ?>" class="btn btn-preset">Today</a>
+                    <a href="rebate.php?<?= http_build_query(['day_from' => $yesterday, 'day_to' => $yesterday]) ?>" class="btn btn-preset">Yesterday</a>
+                    <a href="rebate.php?<?= http_build_query(['day_from' => $this_week_start, 'day_to' => $this_week_end]) ?>" class="btn btn-preset">This Week</a>
+                    <a href="rebate.php?<?= http_build_query(['day_from' => $last_week_start, 'day_to' => $last_week_end]) ?>" class="btn btn-preset">Last Week</a>
+                    <a href="rebate.php?<?= http_build_query(['day_from' => $this_month_start, 'day_to' => $this_month_end]) ?>" class="btn btn-preset">This Month</a>
+                    <a href="rebate.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset">Last Month</a>
+                </div>
             </form>
             <form method="post" id="rebate-form">
                 <input type="hidden" name="day" value="<?= htmlspecialchars($day_to) ?>">
