@@ -87,7 +87,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>新增顾客 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title>NEW REGISTER CUSTOMER - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -123,7 +123,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             line-height: 1;
             font-size: 18px;
         }
-        .form-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-grid-2 { display: grid; grid-template-columns: 1fr; gap: 14px; }
         .form-section {
             border: 1px solid rgba(59, 130, 246, 0.18);
             border-radius: 12px;
@@ -148,7 +148,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 860px;">
         <div class="page-header">
-            <h2>新增顾客</h2>
+            <h2>新增客户</h2>
             <p class="breadcrumb"><a href="customers.php">← 返回顾客列表</a></p>
         </div>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
@@ -174,9 +174,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label>联系电话</label>
                             <input name="phone" class="form-control" placeholder="CONTACT" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
                         </div>
-                    </div>
-                    <div class="form-section">
-                        <h4>Payment</h4>
                         <div class="form-group">
                             <label>银行资料</label>
                             <input name="bank_details" class="form-control" placeholder="例如 TNG 160402395453、PBB 8413574015" value="<?= htmlspecialchars($_POST['bank_details'] ?? '') ?>">
@@ -189,7 +186,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                             <label>备注</label>
                             <textarea name="remark" class="form-control" placeholder="REMARK"><?= htmlspecialchars($_POST['remark'] ?? '') ?></textarea>
                         </div>
-                        <p class="form-hint" style="margin: 0;">注册日期将按当前日期自动记录。</p>
                     </div>
                 </div>
                 <div class="form-actions">

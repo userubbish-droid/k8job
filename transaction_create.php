@@ -420,6 +420,48 @@ $ep = $expense_modal_should_open ? $_POST : [];
             display: grid;
             gap: 18px;
         }
+        .txn-modal {
+            background: rgba(255,255,255,0.9);
+            border: 1px solid rgba(152, 176, 242, 0.32);
+            border-radius: 14px;
+            box-shadow: var(--card-shadow);
+            padding: 18px 18px 16px;
+        }
+        .txn-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid rgba(140, 165, 235, 0.28);
+            margin-bottom: 14px;
+        }
+        .txn-modal-title { margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; }
+        .txn-modal-close {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            border: 1px solid rgba(148,163,184,0.55);
+            background: #fff;
+            color: #334155;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            text-decoration: none;
+            line-height: 1;
+            font-size: 18px;
+        }
+        .txn-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        @media (max-width: 720px) { .txn-grid-2 { grid-template-columns: 1fr; } }
+        .txn-actions {
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 14px;
+            padding-top: 14px;
+            border-top: 1px solid rgba(140, 165, 235, 0.22);
+        }
         .form-section {
             margin: 0;
             padding: 14px 14px 12px;
@@ -1080,8 +1122,12 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
         <?php endif; ?>
     <?php else: ?>
-    <div class="card txn-form-card">
-    <form method="post" class="txn-form">
+    <div class="txn-modal">
+    <div class="txn-modal-head">
+        <div class="txn-modal-title">Add Transaction</div>
+        <a class="txn-modal-close" href="transaction_list.php" aria-label="关闭">×</a>
+    </div>
+    <form method="post" class="txn-form" autocomplete="off">
         <?php if ($is_admin): ?>
         <div class="form-section">
             <div class="form-section-title">日期 / 时间</div>
@@ -1113,6 +1159,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
         <?php endif; ?>
 
+        <div class="txn-grid-2">
         <div class="form-section">
             <div class="form-section-title">基本信息</div>
             <div class="form-row-2">
@@ -1170,7 +1217,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
 
         <div class="form-section">
-            <div class="form-section-title">金额</div>
+            <div class="form-section-title">金额 / 备注</div>
             <div class="form-row-2">
                 <div class="form-group">
                     <label>金额 *</label>
@@ -1183,16 +1230,17 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 </div>
             </div>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
-        </div>
-
-        <div class="form-section">
             <div class="form-group">
                 <label>备注</label>
                 <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
             </div>
         </div>
+        </div>
 
-        <button type="submit" class="btn btn-primary txn-submit">保存</button>
+        <div class="txn-actions">
+            <a href="transaction_list.php" class="btn btn-outline">Cancel</a>
+            <button type="submit" class="btn btn-primary txn-submit" style="width:auto; min-width: 220px;">保存</button>
+        </div>
     </form>
     </div>
     <?php endif; ?>
