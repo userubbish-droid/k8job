@@ -9,23 +9,29 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 function get_permission_options(): array
 {
     return [
-        // 文案尽量与左侧侧栏一致（便于 admin 开关）
+        // 文案/顺序尽量与左侧侧栏一致（便于 admin 开关）
+        // Home
         'home_dashboard'     => 'Dashboard',
-        'transaction_create' => 'Add Transaction',
+        'statement_report'   => 'Report',
+        // Statement
+        'statement_balance'  => 'Statement',
+        // Expense
         'expense_statement'  => 'Expense Statement',
         'kiosk_expense_view' => 'Kiosk Expense',
+        'kiosk_statement'    => 'Kiosk Statement',
+        // Add / Transactions / Rebate / Customers
+        'transaction_create' => 'Add Transaction',
         'transaction_list'   => 'Transactions',
         'rebate'             => 'Rebate',
         'customers'          => 'Customers',
         'customer_create'    => 'New Customer',
         'customer_edit'      => 'Edit Customer (incl. Product Accounts)',
         'product_library'    => 'Product Accounts',
-        // 兼容：旧版只用 statement 一个开关；新版拆分为多个开关（statement_*）
-        'statement'          => 'Statement (legacy master)',
-        'statement_report'   => 'Report',
-        'statement_balance'  => 'Statement',
-        'kiosk_statement'    => 'Kiosk Statement',
+        // Agent
         'agent'              => 'Agent',
+
+        // 兼容：旧版只用 statement 一个开关；保留供旧账号继续生效（一般不需要再勾选）
+        'statement'          => 'Statement（legacy old switch）',
     ];
 }
 
