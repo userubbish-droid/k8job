@@ -83,7 +83,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $user = trim($_POST['user'] ?? '');
     $pass = (string) ($_POST['pass'] ?? '');
     $login_as = trim($_POST['login_as'] ?? 'admin'); // admin | member（含 agent 账号）
-    $company_id = (int)($_POST['company_id'] ?? 0);
+    $company_code = strtolower(trim((string)($_POST['company_code'] ?? '')));
     $remember = !empty($_POST['remember']);
 
     if ($user === '' || $pass === '') {
@@ -111,8 +111,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // - superadmin：可选任意 company（必须选择一个用于当前会话）
             // - admin/member/agent：必须绑定到自己的 company_id（忽略输入）
             if ($db_role === 'superadmin') {
-                // superadmin：允许不选公司，默认进入第一家（一般是 k8），之后可在侧栏一键切换
-                $use_company = $company_id > 0 ? $company_id : $default_company_id;
+                // superadmin：允许不填公司，默认进入第一家（一般是 k8）；填了则按 code 切换
+                $use_company = 0;
+                if ($company_code !== '') {
+                    try {
+                        $stmtC = $pdo->prepare("SELECT id FROM companies WHERE is_active = 1 AND LOWER(TRIM(code)) = ? LIMIT 1");
+                        $stmtC->execute([$company_code]);
+                        $use_company = (int)$stmtC->fetchColumn();
+                    } catch (Throwable $e) {}
+                }
+                if ($use_company <= 0) $use_company = $default_company_id;
                 if ($use_company <= 0) {
                     $error = '暂无可用公司，请先创建公司。';
                     session_destroy();
@@ -189,7 +197,6 @@ $login_as = $_POST['login_as'] ?? 'admin';
             body { padding: 16px; }
             .login-card { padding: 24px 20px; }
             .input-wrap input { min-height: 44px; font-size: 16px; }
-            .input-wrap select { min-height: 44px; font-size: 16px; }
             .btn-login { min-height: 48px; font-size: 16px; }
         }
         body::before {
@@ -363,14 +370,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
 
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <select name="company_id" class="login-input">
-                    <option value="">Company</option>
-                    <?php foreach ($companies as $c): ?>
-                        <option value="<?= (int)$c['id'] ?>" <?= ((int)($_POST['company_id'] ?? 0) === (int)($c['id'] ?? 0) ? 'selected' : '') ?>>
-                            <?= htmlspecialchars((string)$c['code']) ?> - <?= htmlspecialchars((string)$c['name']) ?>
-                        </option>
-                    <?php endforeach; ?>
-                </select>
+                <input type="text" name="company_code" placeholder="Company (k8 / k9)" value="<?= htmlspecialchars((string)($_POST['company_code'] ?? '')) ?>">
             </div>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
