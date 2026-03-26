@@ -56,6 +56,8 @@ try {
 // users.company_id（superadmin 可为空；其他必须有）
 try { $pdo->exec("ALTER TABLE users ADD COLUMN company_id INT UNSIGNED NULL AFTER avatar_url"); } catch (Throwable $e) {}
 try { $pdo->exec("CREATE INDEX idx_users_company_id ON users(company_id)"); } catch (Throwable $e) {}
+// 旧账号兜底：非 superadmin 默认归到 k8（company_id=1）
+try { $pdo->exec("UPDATE users SET company_id = 1 WHERE (company_id IS NULL OR company_id = 0) AND role IN ('admin','member','agent')"); } catch (Throwable $e) {}
 
 // 业务表 company_id（旧数据默认归到 1）
 foreach (['customers','transactions','banks','products','expenses','customer_product_accounts','balance_adjust','user_permissions','rebate_given','agent_rebate_settings'] as $__t) {
