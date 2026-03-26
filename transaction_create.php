@@ -23,6 +23,25 @@ function ensure_products_kiosk_columns(PDO $pdo) {
     }
 }
 
+/** Kiosk % 输入框展示：去掉多余尾随 0（如 15.0000 → 15） */
+function kiosk_format_pct_for_input($raw): string {
+    if ($raw === null || $raw === '') {
+        return '';
+    }
+    $s = str_replace(',', '', trim((string)$raw));
+    if ($s === '' || !is_numeric($s)) {
+        return trim((string)$raw);
+    }
+    $f = (float)$s;
+    $formatted = rtrim(rtrim(number_format($f, 4, '.', ''), '0'), '.');
+    return $formatted === '' ? '0' : $formatted;
+}
+
+/** 金额向上取整到分（两位小数） */
+function kiosk_ceil_money2(float $x): float {
+    return ceil(round($x * 100, 8)) / 100;
+}
+
 // 权限：
 // - Kiosk Expense（quick=expense&expense_kind=kiosk）：允许拥有 statement 权限的 member 查看（不含录入）。
 // - 其他 transaction_create 功能：需要 transaction_create 权限。
@@ -43,6 +62,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
         exit;
     }
     ensure_products_kiosk_columns($pdo);
+    $df = trim((string)($_POST['redirect_expense_day_from'] ?? ''));
+    $dt = trim((string)($_POST['redirect_expense_day_to'] ?? ''));
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $df)) {
+        $df = date('Y-m-01');
+    }
+    if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $dt)) {
+        $dt = date('Y-m-d');
+    }
+    if ($df > $dt) {
+        $tmp = $df;
+        $df = $dt;
+        $dt = $tmp;
+    }
+    $day_from = $df;
+    $day_to = $dt;
+    require_once __DIR__ . '/inc/game_platform_statement_compute.php';
+
     $pctArr = $_POST['kiosk_pct'] ?? [];
     if (is_array($pctArr)) {
         foreach ($pctArr as $name => $pctRaw) {
@@ -50,11 +86,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
             if ($name === '') {
                 continue;
             }
-            $paidRaw = $_POST['kiosk_paid'][$name] ?? '';
             $pct = str_replace(',', '', trim((string)$pctRaw));
-            $paid = str_replace(',', '', trim((string)$paidRaw));
             $pctVal = ($pct === '' || !is_numeric($pct)) ? null : round((float)$pct, 4);
-            $paidVal = ($paid === '' || !is_numeric($paid)) ? null : round((float)$paid, 2);
+            $gk = strtolower($name);
+            $kin = (float)($range_in_product[$gk] ?? 0);
+            $kout = (float)($range_out_product[$gk] ?? 0);
+            $knet = $kin - $kout;
+            $paidVal = null;
+            if ($pctVal !== null) {
+                $paidVal = round(kiosk_ceil_money2($knet * ((float)$pctVal) / 100), 2);
+            }
             try {
                 $stmt = $pdo->prepare('UPDATE products SET kiosk_fee_pct = ?, kiosk_paid_amount = ? WHERE name = ? AND is_active = 1');
                 $stmt->execute([$pctVal, $paidVal, $name]);
@@ -62,15 +103,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
             }
         }
     }
-    $q = ['expense_kind' => 'kiosk'];
-    $df = trim((string)($_POST['redirect_expense_day_from'] ?? ''));
-    $dt = trim((string)($_POST['redirect_expense_day_to'] ?? ''));
-    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $df)) {
-        $q['expense_day_from'] = $df;
-    }
-    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $dt)) {
-        $q['expense_day_to'] = $dt;
-    }
+    $q = [
+        'expense_kind' => 'kiosk',
+        'expense_day_from' => $df,
+        'expense_day_to' => $dt,
+    ];
     $eb = trim((string)($_POST['redirect_expense_bank'] ?? ''));
     $epr = trim((string)($_POST['redirect_expense_product'] ?? ''));
     if ($eb !== '') {
@@ -731,6 +768,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .kiosk-expense-filter-in-gp { margin-bottom: 14px; }
         .kiosk-gp-meta-form { margin: 0; }
         .kiosk-gp-meta-form .form-control.kiosk-gp-input { min-height: 36px; padding: 6px 8px; font-size: 13px; max-width: 120px; margin-left: auto; }
+        .kiosk-gp-meta-form .form-control.kiosk-gp-paid[readonly] { background: #f1f5f9; cursor: default; color: #334155; }
         .kiosk-gp-meta-actions { margin-top: 12px; }
         .kiosk-gp-filters input[type="checkbox"]:disabled { cursor: not-allowed; opacity: 0.55; }
         .kiosk-gp-filter-placeholder { cursor: not-allowed; color: #64748b; font-weight: 500; }
@@ -830,7 +868,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
                     <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">本月</button>
                     <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">上月</button>
-                    <span class="expense-quick-hint">「本周」「上周」为自然周：<strong>星期一</strong> 至 <strong>星期日</strong>。</span>
                 </div>
             </form>
             <div class="kiosk-gp-filters" role="group" aria-label="Game Platform filters">
@@ -871,8 +908,17 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             $kout = (float)($kiosk_gp_out[$gk] ?? 0);
                             $knet = $kin - $kout;
                             $meta = $kiosk_product_meta[$gk] ?? null;
-                            $mvPct = $meta && $meta['pct'] !== null && $meta['pct'] !== '' ? (string)$meta['pct'] : '';
-                            $mvPaid = $meta && $meta['paid'] !== null && $meta['paid'] !== '' ? (string)$meta['paid'] : '';
+                            $mvPctRaw = $meta && $meta['pct'] !== null && $meta['pct'] !== '' ? (string)$meta['pct'] : '';
+                            $mvPctDisplay = $mvPctRaw !== '' ? kiosk_format_pct_for_input($mvPctRaw) : '';
+                            $pctNum = null;
+                            if ($mvPctRaw !== '') {
+                                $pctClean = str_replace(',', '', trim($mvPctRaw));
+                                if ($pctClean !== '' && is_numeric($pctClean)) {
+                                    $pctNum = (float)$pctClean;
+                                }
+                            }
+                            $compPaid = $pctNum !== null ? kiosk_ceil_money2($knet * $pctNum / 100) : null;
+                            $mvPaidDisplay = $compPaid !== null ? number_format($compPaid, 2, '.', '') : '';
                             ?>
                         <tr class="kiosk-gp-row" data-in="<?= htmlspecialchars((string)$kin) ?>" data-out="<?= htmlspecialchars((string)$kout) ?>" data-net="<?= htmlspecialchars((string)$knet) ?>">
                             <td><?= htmlspecialchars($gpname) ?></td>
@@ -881,16 +927,16 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             <td class="num kiosk-io-net"><?= number_format($knet, 2) ?></td>
                             <td class="num">
                                 <?php if ($is_admin): ?>
-                                <input type="text" name="kiosk_pct[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input" inputmode="decimal" value="<?= htmlspecialchars($mvPct) ?>" placeholder="%" aria-label="%">
+                                <input type="text" name="kiosk_pct[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-pct" inputmode="decimal" value="<?= htmlspecialchars($mvPctDisplay) ?>" placeholder="%" aria-label="%">
                                 <?php else: ?>
-                                <span class="kiosk-gp-readonly"><?= $mvPct !== '' ? htmlspecialchars($mvPct) : '—' ?></span>
+                                <span class="kiosk-gp-readonly"><?= $mvPctDisplay !== '' ? htmlspecialchars($mvPctDisplay) : '—' ?></span>
                                 <?php endif; ?>
                             </td>
                             <td class="num">
                                 <?php if ($is_admin): ?>
-                                <input type="text" name="kiosk_paid[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input" inputmode="decimal" value="<?= htmlspecialchars($mvPaid) ?>" placeholder="0.00" aria-label="amount paid">
+                                <input type="text" name="kiosk_paid[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-paid" inputmode="decimal" value="<?= htmlspecialchars($mvPaidDisplay) ?>" placeholder="0.00" aria-label="amount paid" readonly tabindex="-1" title="由净额 × % 自动计算（分位向上取整）">
                                 <?php else: ?>
-                                <span class="kiosk-gp-readonly"><?= $mvPaid !== '' ? htmlspecialchars($mvPaid) : '—' ?></span>
+                                <span class="kiosk-gp-readonly"><?= $mvPaidDisplay !== '' ? htmlspecialchars($mvPaidDisplay) : '—' ?></span>
                                 <?php endif; ?>
                             </td>
                         </tr>
@@ -904,7 +950,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <?php if ($is_admin && !empty($kiosk_gp_products)): ?>
                 <div class="kiosk-gp-meta-actions">
                     <button type="submit" class="btn btn-primary btn-sm">保存 % / amount paid</button>
-                    <span class="form-hint" style="margin-left:10px;">写入各 Product 记录（kiosk_fee_pct、kiosk_paid_amount）。</span>
                 </div>
                 <?php endif; ?>
             <?php if ($is_admin): ?>
@@ -1113,10 +1158,9 @@ $ep = $expense_modal_should_open ? $_POST : [];
     </div>
     <?php endif; ?>
 
-    <?php if ($quick === 'expense'): ?>
+    <?php if ($quick === 'expense' && $expense_kind_ui !== 'kiosk'): ?>
     <div class="card expense-statement-wrap">
-        <h4 class="expense-statement-title"><?= $expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement' ?> · 明细与汇总</h4>
-        <?php if ($expense_kind_ui !== 'kiosk'): ?>
+        <h4 class="expense-statement-title">Expense Statement · 明细与汇总</h4>
         <form method="get" class="expense-filter-bar" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
             <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
             <div class="expense-filter-item">
@@ -1156,12 +1200,8 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
                 <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">本月</button>
                 <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">上月</button>
-                <span class="expense-quick-hint">「本周」「上周」为自然周：<strong>星期一</strong> 至 <strong>星期日</strong>。</span>
             </div>
         </form>
-        <?php else: ?>
-        <p class="form-hint" style="margin-bottom:12px;">筛选日期与 Bank/Product 已移至上方 <strong>Game Platform</strong> 区域。</p>
-        <?php endif; ?>
 
         <div class="expense-kpi-grid">
             <div class="expense-kpi-card">
@@ -1535,6 +1575,59 @@ $ep = $expense_modal_should_open ? $_POST : [];
             inoutEl.addEventListener('change', apply);
             apply();
         })();
+        <?php if ($is_admin): ?>
+        (function(){
+            function ceilMoney2(x) {
+                return Math.ceil((Number(x) + 1e-9) * 100) / 100;
+            }
+            function formatPctBlur(s) {
+                var v = parseFloat(String(s).replace(/,/g, '').trim());
+                if (isNaN(v)) {
+                    return String(s).trim();
+                }
+                var t = v.toFixed(4).replace(/\.?0+$/, '');
+                return t || '0';
+            }
+            function updatePaidRow(tr) {
+                var net = parseFloat(tr.getAttribute('data-net'), 10);
+                if (isNaN(net)) {
+                    net = 0;
+                }
+                var pctInp = tr.querySelector('.kiosk-gp-pct');
+                var paidInp = tr.querySelector('.kiosk-gp-paid');
+                if (!pctInp || !paidInp) {
+                    return;
+                }
+                var rawPct = String(pctInp.value).replace(/,/g, '').trim();
+                var p = parseFloat(rawPct, 10);
+                if (rawPct === '' || isNaN(p)) {
+                    paidInp.value = '0.00';
+                    return;
+                }
+                paidInp.value = ceilMoney2(net * p / 100).toFixed(2);
+            }
+            var rows = document.querySelectorAll('#kiosk-gp-tbody tr.kiosk-gp-row');
+            rows.forEach(function(tr) {
+                var pctInp = tr.querySelector('.kiosk-gp-pct');
+                if (!pctInp) {
+                    return;
+                }
+                pctInp.addEventListener('input', function() { updatePaidRow(tr); });
+                pctInp.addEventListener('change', function() { updatePaidRow(tr); });
+                pctInp.addEventListener('blur', function() {
+                    pctInp.value = formatPctBlur(pctInp.value);
+                    updatePaidRow(tr);
+                });
+                updatePaidRow(tr);
+            });
+            var metaForm = document.querySelector('form.kiosk-gp-meta-form');
+            if (metaForm) {
+                metaForm.addEventListener('submit', function() {
+                    rows.forEach(updatePaidRow);
+                });
+            }
+        })();
+        <?php endif; ?>
         <?php endif; ?>
     </script>
 </body>
