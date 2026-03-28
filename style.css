@@ -632,6 +632,13 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     padding: 0 0 24px;
     flex-shrink: 0;
     box-shadow: 12px 0 40px rgba(8, 12, 28, 0.45);
+    /* 菜单项多时在抽屉内滚动，避免底部「权限 / 退出」被裁切 */
+    max-height: 100vh;
+    max-height: 100dvh;
+    overflow-y: auto;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 .sidebar-profile {
     padding: 26px 20px 22px;
@@ -1006,6 +1013,12 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
         transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
         z-index: 1000;
         box-shadow: 4px 0 24px rgba(0,0,0,0.15);
+        max-height: 100vh;
+        max-height: 100dvh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior: contain;
     }
     body.sidebar-open .dashboard-sidebar {
         transform: translateX(0);
