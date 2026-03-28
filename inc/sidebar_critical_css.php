@@ -1,15 +1,19 @@
 <?php
-// 所有带侧栏的页面在 <head> 中引入，保证左侧竖排导航一致显示
+// 带侧栏的页面在 <head> 中引入：先加载 style.css，仅补充避免首屏布局错乱的规则。
+// 背景渐变、侧栏外观等全部由 style.css 统一，此处不再覆盖 body / .dashboard-sidebar（否则部分页面会一直显示旧灰底）。
 $__css_mtime = @filemtime(__DIR__ . '/../style.css') ?: 0;
 $__base = rtrim(dirname($_SERVER['SCRIPT_NAME'] ?? ''), '/');
 $__base_prefix = $__base !== '' ? $__base . '/' : '';
 ?>
 <link rel="icon" href="<?= $__base_prefix ?>favicon.ico" type="image/x-icon">
-<link rel="stylesheet" href="style.css?v=<?= $__css_mtime ?>">
+<link rel="stylesheet" href="<?= $__base_prefix ?>style.css?v=<?= $__css_mtime ?>">
 <style>
-body { background: linear-gradient(165deg, #e8ecf4 0%, #eef2f7 30%, #f1f5f9 60%, #eef2f7 100%); background-attachment: fixed; }
 .dashboard-layout { display: flex !important; flex-direction: row !important; min-height: 100vh; }
-.dashboard-sidebar { display: flex !important; flex-direction: column !important; flex-wrap: nowrap !important; width: 232px !important; min-width: 232px !important; background: linear-gradient(180deg, #1e3a5f 0%, #1a3352 50%, #152a45 100%); border-right: 1px solid rgba(0,0,0,0.2); padding: 0 0 20px; flex-shrink: 0; box-shadow: 4px 0 24px rgba(0,0,0,0.12); }
-.dashboard-sidebar .nav-item { display: flex !important; width: 100%; box-sizing: border-box; padding: 12px 20px; margin: 0 12px 6px 12px; color: rgba(255,255,255,0.92); text-decoration: none; border-radius: 10px; white-space: nowrap; align-items: center; }
-.dashboard-main { flex: 1; padding: 30px 36px; overflow: auto; background: transparent !important; min-width: 0; }
+.dashboard-main {
+    flex: 1;
+    padding: 28px 32px 40px;
+    overflow: auto;
+    background: transparent !important;
+    min-width: 0;
+}
 </style>
