@@ -84,8 +84,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin: 0;
             min-height: 100vh;
             background:
-                radial-gradient(900px 480px at 0% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 55%),
-                linear-gradient(165deg, #f0f2fa 0%, #f8fafc 100%);
+                radial-gradient(ellipse 120% 90% at 100% -25%, rgba(139, 92, 246, 0.42) 0%, transparent 52%),
+                radial-gradient(ellipse 100% 80% at -10% 50%, rgba(6, 182, 212, 0.35) 0%, transparent 48%),
+                linear-gradient(128deg, #dce4ff 0%, #c7d7ff 18%, #b8e8ff 42%, #ddd6fe 72%, #f0e7ff 100%);
             display: flex;
             align-items: center;
             justify-content: center;

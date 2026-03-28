@@ -147,9 +147,10 @@ $login_as = $_POST['login_as'] ?? 'admin';
             margin: 0;
             min-height: 100vh;
             background:
-                radial-gradient(900px 480px at 0% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 55%),
-                radial-gradient(800px 420px at 100% 100%, rgba(56, 189, 248, 0.08) 0%, transparent 50%),
-                linear-gradient(165deg, #f0f2fa 0%, #f8fafc 100%);
+                radial-gradient(ellipse 120% 90% at 100% -25%, rgba(139, 92, 246, 0.42) 0%, transparent 52%),
+                radial-gradient(ellipse 100% 80% at -10% 50%, rgba(6, 182, 212, 0.35) 0%, transparent 48%),
+                radial-gradient(ellipse 90% 70% at 90% 100%, rgba(236, 72, 153, 0.18) 0%, transparent 45%),
+                linear-gradient(128deg, #dce4ff 0%, #c7d7ff 18%, #b8e8ff 40%, #ddd6fe 68%, #f0e7ff 100%);
             background-size: 100% 100%;
             display: flex;
             align-items: center;
@@ -171,8 +172,10 @@ $login_as = $_POST['login_as'] ?? 'admin';
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
             background-image:
-                radial-gradient(circle at 20% 25%, rgba(77, 100, 248, 0.08) 0%, transparent 52%),
-                radial-gradient(circle at 85% 75%, rgba(99, 102, 241, 0.06) 0%, transparent 48%);
+                linear-gradient(rgba(99, 102, 241, 0.08) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(6, 182, 212, 0.06) 1px, transparent 1px);
+            background-size: 40px 40px;
+            opacity: 0.9;
             pointer-events: none;
         }
         .login-card {
