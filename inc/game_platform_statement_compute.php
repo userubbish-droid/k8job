@@ -14,6 +14,25 @@ if ($gpc_cid <= 0) {
 
 $gpc_gp_key_sql = require __DIR__ . '/gpc_effective_product_key_sql.php';
 
+/** 客户代号 → 游戏平台键（与 gpc 回推一致：该客户 id 最小的产品账号） */
+$gpc_code_to_gp = [];
+try {
+    $stc = $pdo->prepare("SELECT TRIM(c.code) AS cd,
+        (SELECT TRIM(a2.product_name) FROM customer_product_accounts a2
+         WHERE a2.customer_id = c.id AND a2.company_id = c.company_id
+         ORDER BY a2.id ASC LIMIT 1) AS pn
+        FROM customers c WHERE c.company_id = ? AND TRIM(c.code) <> ''");
+    $stc->execute([$gpc_cid]);
+    foreach ($stc->fetchAll(PDO::FETCH_ASSOC) as $rw) {
+        $cd = trim((string)($rw['cd'] ?? ''));
+        $pn = trim((string)($rw['pn'] ?? ''));
+        if ($cd !== '' && $pn !== '') {
+            $gpc_code_to_gp[strtolower($cd)] = strtolower($pn);
+        }
+    }
+} catch (Throwable $e) {
+}
+
 $cum_in_bank = [];
 $cum_out_bank = [];
 $cum_in_product = [];
@@ -50,6 +69,26 @@ try {
             $cum_topup_product[$p] = ($cum_topup_product[$p] ?? 0) + (float)($r['topup'] ?? 0);
             $cum_out_product[$p] = ($cum_out_product[$p] ?? 0) + (float)($r['tout'] ?? $r['to'] ?? 0);
         }
+    }
+} catch (Throwable $e) {
+}
+
+/** 返点页「已给」写入 rebate_given，非 transactions，需并入报表 Rebate / In */
+try {
+    $stmtRg = $pdo->prepare("SELECT TRIM(code) AS cd, COALESCE(SUM(rebate_amount), 0) AS s FROM rebate_given
+        WHERE company_id = ? AND rebate_amount IS NOT NULL AND day < ? GROUP BY TRIM(code)");
+    $stmtRg->execute([$gpc_cid, $day_from]);
+    foreach ($stmtRg->fetchAll(PDO::FETCH_ASSOC) as $rw) {
+        $cd = strtolower(trim((string)($rw['cd'] ?? '')));
+        $amt = (float)($rw['s'] ?? 0);
+        if ($cd === '' || $amt == 0.0) {
+            continue;
+        }
+        $gp = $gpc_code_to_gp[$cd] ?? '';
+        if ($gp === '') {
+            continue;
+        }
+        $cum_in_product[$gp] = ($cum_in_product[$gp] ?? 0) + $amt;
     }
 } catch (Throwable $e) {
 }
@@ -109,7 +148,8 @@ try {
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'REBATE' THEN $line ELSE 0 END), 0) AS reb,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE' THEN $line ELSE 0 END), 0) AS fr,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN $line ELSE 0 END), 0) AS fwd,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN COALESCE(t.bonus,0) ELSE 0 END), 0) AS bns
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW')
+            THEN COALESCE(t.bonus,0) + GREATEST(0, $line - t.amount - COALESCE(t.bonus,0)) ELSE 0 END), 0) AS bns
         FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
         GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from, $day_to]);
@@ -127,6 +167,35 @@ try {
     }
 } catch (Throwable $e) {
     $range_breakdown_product = [];
+}
+
+try {
+    $stmtRg2 = $pdo->prepare("SELECT TRIM(code) AS cd, COALESCE(SUM(rebate_amount), 0) AS s FROM rebate_given
+        WHERE company_id = ? AND rebate_amount IS NOT NULL AND day >= ? AND day <= ? GROUP BY TRIM(code)");
+    $stmtRg2->execute([$gpc_cid, $day_from, $day_to]);
+    foreach ($stmtRg2->fetchAll(PDO::FETCH_ASSOC) as $rw) {
+        $cd = strtolower(trim((string)($rw['cd'] ?? '')));
+        $amt = (float)($rw['s'] ?? 0);
+        if ($cd === '' || $amt == 0.0) {
+            continue;
+        }
+        $gp = $gpc_code_to_gp[$cd] ?? '';
+        if ($gp === '') {
+            continue;
+        }
+        $range_in_product[$gp] = ($range_in_product[$gp] ?? 0) + $amt;
+        if (!isset($range_breakdown_product[$gp])) {
+            $range_breakdown_product[$gp] = [
+                'dep' => 0.0,
+                'reb' => 0.0,
+                'fr' => 0.0,
+                'fwd' => 0.0,
+                'bns' => 0.0,
+            ];
+        }
+        $range_breakdown_product[$gp]['reb'] += $amt;
+    }
+} catch (Throwable $e) {
 }
 
 $all_banks = [];
