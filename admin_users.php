@@ -328,7 +328,10 @@ $role_opts_platform = ['superadmin', 'boss', 'admin', 'member', 'agent'];
 $companies_for_create = [];
 if ($actor_is_superadmin) {
     try {
-        $companies_for_create = $pdo->query('SELECT id, code, name FROM companies WHERE is_active = 1 ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+        $hqCode = defined('HEAD_OFFICE_COMPANY_CODE') ? HEAD_OFFICE_COMPANY_CODE : 'hq';
+        $st = $pdo->prepare('SELECT id, code, name FROM companies WHERE is_active = 1 ORDER BY (LOWER(TRIM(code)) = ?) DESC, id ASC');
+        $st->execute([strtolower($hqCode)]);
+        $companies_for_create = $st->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         $companies_for_create = [];
     }

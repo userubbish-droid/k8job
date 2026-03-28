@@ -65,6 +65,14 @@ try {
     // 默认公司：k8（id=1）
     $pdo->exec("INSERT IGNORE INTO companies (id, code, name, is_active) VALUES (1, 'k8', 'K8', 1)");
 } catch (Throwable $e) {}
+// 总公司实体（与侧栏 session「总公司」汇总不同）：总部人员绑定此 company_id，便于开 admin/boss/member
+if (!defined('HEAD_OFFICE_COMPANY_CODE')) {
+    define('HEAD_OFFICE_COMPANY_CODE', 'hq');
+}
+try {
+    $st = $pdo->prepare('INSERT IGNORE INTO companies (code, name, is_active) VALUES (?, ?, 1)');
+    $st->execute([HEAD_OFFICE_COMPANY_CODE, '总公司']);
+} catch (Throwable $e) {}
 
 // users.company_id（superadmin 可为空；其他必须有）
 try { $pdo->exec("ALTER TABLE users ADD COLUMN company_id INT UNSIGNED NULL AFTER avatar_url"); } catch (Throwable $e) {}

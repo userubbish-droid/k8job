@@ -225,8 +225,8 @@ function i18n_dictionary(): array
         'adm_users_ph_display_example' => ['zh' => '例如 小明', 'en' => 'e.g. John'],
         'adm_users_lbl_company_req' => ['zh' => '所属分公司 / 公司 *', 'en' => 'Branch / company *'],
         'adm_users_create_company_hint_sa' => [
-            'zh' => '新建账号必须归入上表中的一家公司（与侧栏「分公司 / 公司」一致）。侧栏「总公司」只是汇总视图，不会出现在此列表。若要总部人员，请先在「分公司 / 公司」新增一条（例如代码 HQ），再在此选择。',
-            'en' => 'New accounts must belong to one row from Companies (same list as sidebar “Companies”). Sidebar “Head office” is only an aggregate view and is not listed here. For HQ staff, add a HQ company first, then select it.',
+            'zh' => '新建账号须选一家公司。侧栏「总公司」是汇总视图；总部编制请选列表中的「hq — 总公司」（系统自动保留一条，与分公司并列）。',
+            'en' => 'Pick a company for each new account. Sidebar “Head office” is aggregate-only; for HQ staff choose “hq — 总公司” (auto-created, listed like any branch).',
         ],
         'adm_users_agent_pick_title' => ['zh' => '选择该 Agent 的客户', 'en' => 'Assign customers to this agent'],
         'adm_users_agent_pick_hint' => ['zh' => '当角色为 agent 时，创建成功后会把所选客户的推荐人自动设置为该 Agent 的用户名（即归属到此 Agent）。', 'en' => 'When role is agent, after creation the selected customers’ recommender will be set to this agent’s username.'],
