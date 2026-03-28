@@ -44,10 +44,9 @@ function kiosk_stmt_fmt_in(float $v): string {
     <style>
     .stmt-drill {
         background: none; border: none; padding: 0; margin: 0; font: inherit;
-        cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px;
-        color: inherit; text-align: right; width: 100%;
+        cursor: pointer; text-decoration: none; color: inherit; text-align: right; width: 100%;
     }
-    .stmt-drill:hover { text-decoration: underline solid; opacity: 0.92; }
+    .stmt-drill:hover { opacity: 0.88; }
     .stmt-drill:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
     .stmt-drill-mask {
         display: none; position: fixed; inset: 0; z-index: 1200;
@@ -176,10 +175,10 @@ function kiosk_stmt_fmt_in(float $v): string {
                             <strong>In 合计</strong> 与 statement 中 Game Platform 的 <strong>In</strong> 相同（DEPOSIT+REBATE+FREE+FREE WITHDRAW，按 total 或 amount+bonus；<code>mode</code> 会做 TRIM 以兼容旧数据）。
                             <strong>Out</strong> 为 <strong>WITHDRAW + EXPENSE</strong> 按平台汇总。
                             若流水未填产品但填了客户代号，会按该客户在「产品账号」里 <strong>最早一条</strong> 的产品名归入对应平台（REBATE/FREE 等常见）；无代号或账号表无记录则仍无法归类。
-                            <strong>Rebate</strong> 列含流水 <code>mode=REBATE</code> 与<strong>返点页「已给」</strong>（<code>rebate_given</code>，日期为返点页区间<strong>结束日</strong>、筛选须包含该日；按客户代号归到其首个产品账号）。返点页金额<strong>仅用于本列核对</strong>，<strong>不计入 In 合计与 Balance</strong>（与银行侧返点口径不同，避免把「已给」当平台入账重复扣账）。
+                            <strong>Rebate</strong> 列含流水 <code>mode=REBATE</code> 与<strong>返点页「已给」</strong>（<code>rebate_given</code>）。若同一客户、金额与返点页记录一致（±0.01）的 REBATE 流水已配对，则<strong>只计一次</strong>，弹窗中该流水也不在上方重复列出。返点页金额<strong>不计入 In 合计与 Balance</strong>。
                             <strong>Bonus</strong> 列为 <code>bonus</code> 字段加上「入账行 total/amount+bonus 与 amount、bonus 的差额」推导（兼容旧数据只写总额未填 bonus）。
                             未计入 In/Out 的模式：<strong>BANK / OTHER</strong> 等不会出现在本表，除非以后扩展规则。
-                            <strong>提示：</strong>带虚线下划线的数字可点击，弹出对应流水或返点页「已给」明细（管理员）。
+                            <strong>提示：</strong>数字可点击（手型光标），弹出对应流水或返点页「已给」明细（管理员）。
                         </p>
                     <?php endif; ?>
                 </div>

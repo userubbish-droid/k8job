@@ -149,14 +149,30 @@ try {
     $range_breakdown_product = [];
 }
 
-/** 返点页「已给」仅并入 Rebate 列展示，不计入 In 合计 / Starting / Balance（非 transactions 入账口径） */
+/** 返点页「已给」并入 Rebate 列；与同额 REBATE 流水配对后只算一次（见 inc/kiosk_rebate_given_dedup.php） */
+require_once __DIR__ . '/kiosk_rebate_given_dedup.php';
 try {
-    $stmtRg2 = $pdo->prepare("SELECT TRIM(code) AS cd, COALESCE(SUM(rebate_amount), 0) AS s FROM rebate_given
-        WHERE company_id = ? AND rebate_amount IS NOT NULL AND day >= ? AND day <= ? GROUP BY TRIM(code)");
+    $pair = gpc_rebate_pair_given_with_txns($pdo, $gpc_cid, $day_from, $day_to, $gpc_gp_key_sql, $gpc_code_to_gp);
+    foreach (($pair['subtract_line_by_gp'] ?? []) as $gpk => $sub) {
+        $gpk = strtolower((string)$gpk);
+        if ($gpk === '') {
+            continue;
+        }
+        if (!isset($range_breakdown_product[$gpk])) {
+            continue;
+        }
+        $range_breakdown_product[$gpk]['reb'] -= (float)$sub;
+    }
+} catch (Throwable $e) {
+}
+
+try {
+    $stmtRg2 = $pdo->prepare("SELECT TRIM(code) AS cd, rebate_amount FROM rebate_given
+        WHERE company_id = ? AND rebate_amount IS NOT NULL AND day >= ? AND day <= ?");
     $stmtRg2->execute([$gpc_cid, $day_from, $day_to]);
     foreach ($stmtRg2->fetchAll(PDO::FETCH_ASSOC) as $rw) {
         $cd = strtolower(trim((string)($rw['cd'] ?? '')));
-        $amt = (float)($rw['s'] ?? 0);
+        $amt = (float)($rw['rebate_amount'] ?? 0);
         if ($cd === '' || $amt == 0.0) {
             continue;
         }

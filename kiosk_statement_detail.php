@@ -132,13 +132,22 @@ try {
     }
 
     if ($bucket === 'reb') {
+        require_once __DIR__ . '/inc/kiosk_rebate_given_dedup.php';
+        $codeToGpPair = ksd_build_code_to_gp($pdo, $company_id);
+        $pairInfo = gpc_rebate_pair_given_with_txns($pdo, $company_id, $day_from, $day_to, $gpc_gp_key_sql, $codeToGpPair);
+        $pairedTxnSet = array_flip(array_map('intval', $pairInfo['paired_txn_ids'] ?? []));
+
         $rows = ksd_fetch_txn_for_bucket($pdo, $gpc_gp_key_sql, $company_id, $day_from, $day_to, $gp_key, $modeCond, $limit);
         if (count($rows) > $limit) {
             $trunc = true;
             $rows = array_slice($rows, 0, $limit);
         }
-        $sec1 = ['label' => '流水（mode = REBATE）', 'columns' => ['日期', '时间', '代号', '产品', '银行', '金额', '奖励', '合计', '备注'], 'rows' => []];
+        $sec1 = ['label' => '流水（mode = REBATE；已与返点页「已给」同客户+同金额配对的单据不重复列出）', 'columns' => ['日期', '时间', '代号', '产品', '银行', '金额', '奖励', '合计', '备注'], 'rows' => []];
         foreach ($rows as $r) {
+            $tid = (int)($r['id'] ?? 0);
+            if ($tid > 0 && isset($pairedTxnSet[$tid])) {
+                continue;
+            }
             $line = ksd_txn_line($r);
             $sec1['rows'][] = [
                 'cells' => [
@@ -157,7 +166,7 @@ try {
         }
         $out['sections'][] = $sec1;
 
-        $codeToGp = ksd_build_code_to_gp($pdo, $company_id);
+        $codeToGp = $codeToGpPair;
         $sec2 = ['label' => '返点页「已给」（rebate_given）', 'columns' => ['记录日', '客户代号', '返点%', '金额', '标记时间'], 'rows' => []];
         try {
             $st = $pdo->prepare("SELECT day, code, rebate_pct, rebate_amount, given_at FROM rebate_given
