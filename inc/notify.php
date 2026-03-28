@@ -38,14 +38,23 @@ function send_telegram_message($bot_token, $chat_id, $text) {
     return @file_get_contents($url, false, $ctx);
 }
 
-function send_pending_approval_notify(PDO $pdo) {
+function send_pending_approval_notify(PDO $pdo, int $company_id = 0) {
     global $NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $NOTIFY_BASE_URL;
+
+    if ($company_id <= 0 && function_exists('current_company_id')) {
+        $company_id = current_company_id();
+    }
+    if ($company_id <= 0) {
+        return;
+    }
 
     try {
         $has_deleted_at = true;
         try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
-        $sql = "SELECT COUNT(*) FROM transactions WHERE status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
-        $cnt = (int) $pdo->query($sql)->fetchColumn();
+        $sql = "SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
+        $st = $pdo->prepare($sql);
+        $st->execute([$company_id]);
+        $cnt = (int) $st->fetchColumn();
     } catch (Throwable $e) {
         return;
     }

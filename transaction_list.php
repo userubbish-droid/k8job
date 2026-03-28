@@ -4,6 +4,8 @@ require 'auth.php';
 require_permission('transaction_list');
 $sidebar_current = 'transaction_list';
 
+$company_id = current_company_id();
+
 $day_from_raw = $_GET['day_from'] ?? date('Y-m-d');
 $day_to_raw   = $_GET['day_to'] ?? date('Y-m-d');
 $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : date('Y-m-d');
@@ -17,10 +19,11 @@ $export   = ($_GET['export'] ?? '') === 'csv';
 $per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
 
 $params = [];
-$where  = ['1=1'];
+$where  = ['1=1', 'company_id = ?'];
+$params[] = $company_id;
 
 // 软删除：隐藏已删除流水（保留 2 个月后物理删除）
 try {
@@ -132,9 +135,15 @@ try {
 } catch (Throwable $e) {
     if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
 }
-$banks = $pdo->query("SELECT DISTINCT bank $distinct_base bank IS NOT NULL AND bank <> '' ORDER BY bank ASC")->fetchAll(PDO::FETCH_COLUMN);
-$products = $pdo->query("SELECT DISTINCT product $distinct_base product IS NOT NULL AND product <> '' ORDER BY product ASC")->fetchAll(PDO::FETCH_COLUMN);
-$codes = $pdo->query("SELECT DISTINCT code $distinct_base code IS NOT NULL AND code <> '' ORDER BY code ASC")->fetchAll(PDO::FETCH_COLUMN);
+$stB = $pdo->prepare("SELECT DISTINCT bank $distinct_base company_id = ? AND bank IS NOT NULL AND bank <> '' ORDER BY bank ASC");
+$stB->execute([$company_id]);
+$banks = $stB->fetchAll(PDO::FETCH_COLUMN);
+$stP = $pdo->prepare("SELECT DISTINCT product $distinct_base company_id = ? AND product IS NOT NULL AND product <> '' ORDER BY product ASC");
+$stP->execute([$company_id]);
+$products = $stP->fetchAll(PDO::FETCH_COLUMN);
+$stC = $pdo->prepare("SELECT DISTINCT code $distinct_base company_id = ? AND code IS NOT NULL AND code <> '' ORDER BY code ASC");
+$stC->execute([$company_id]);
+$codes = $stC->fetchAll(PDO::FETCH_COLUMN);
 
 // 当前筛选下的总入、总出、利润
 $sum_sql = "SELECT

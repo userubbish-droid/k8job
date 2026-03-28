@@ -1,11 +1,15 @@
 <?php
 /**
  * Game Platform / statement 产品维度数据（与 balance_summary 同源）。
- * 依赖：$pdo, $day_from, $day_to（Y-m-d）
+ * 依赖：$pdo, $day_from, $day_to（Y-m-d）；$company_id 可选，缺省用 current_company_id()
  * 产出：$cum_*、$range_*、$all_banks、$all_products、$initial_*、$range_breakdown_product
  */
 if (!isset($pdo, $day_from, $day_to)) {
     return;
+}
+$gpc_cid = isset($company_id) ? (int)$company_id : (function_exists('current_company_id') ? (int)current_company_id() : -1);
+if ($gpc_cid <= 0) {
+    $gpc_cid = -1;
 }
 
 $cum_in_bank = [];
@@ -18,8 +22,8 @@ try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE day < ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
-    $stmt->execute([$day_from]);
+        FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
+    $stmt->execute([$gpc_cid, $day_from]);
     foreach ($stmt->fetchAll() as $r) {
         $b = strtolower(trim((string)$r['bank']));
         if ($b !== '') {
@@ -35,8 +39,8 @@ try {
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE day < ? AND status = 'approved' AND deleted_at IS NULL GROUP BY product");
-    $stmt->execute([$day_from]);
+        FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved' AND deleted_at IS NULL GROUP BY product");
+    $stmt->execute([$gpc_cid, $day_from]);
     foreach ($stmt->fetchAll() as $r) {
         $p = strtolower(trim((string)($r['product'] ?? '')));
         if ($p !== '' && $p !== '—') {
@@ -52,9 +56,9 @@ try {
     $stmt = $pdo->prepare("SELECT bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != ''
+        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != ''
         GROUP BY bank");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$gpc_cid, $day_from, $day_to]);
     $range_in_bank = [];
     $range_out_bank = [];
     foreach ($stmt->fetchAll() as $r) {
@@ -74,9 +78,9 @@ try {
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
+        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
         GROUP BY product");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$gpc_cid, $day_from, $day_to]);
     $range_in_product = [];
     $range_topup_product = [];
     $range_out_product = [];
@@ -104,9 +108,9 @@ try {
         COALESCE(SUM(CASE WHEN mode = 'FREE' THEN $line ELSE 0 END), 0) AS fr,
         COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN $line ELSE 0 END), 0) AS fwd,
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN COALESCE(bonus,0) ELSE 0 END), 0) AS bns
-        FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
+        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
         GROUP BY product");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$gpc_cid, $day_from, $day_to]);
     foreach ($stmt->fetchAll() as $r) {
         $p = strtolower(trim((string)($r['product'] ?? '')));
         if ($p !== '' && $p !== '—') {
@@ -126,18 +130,24 @@ try {
 $all_banks = [];
 $all_products = [];
 try {
-    $all_banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $st = $pdo->prepare("SELECT name FROM banks WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $st->execute([$gpc_cid]);
+    $all_banks = $st->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
 }
 try {
-    $all_products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $st = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $st->execute([$gpc_cid]);
+    $all_products = $st->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
 }
 
 $initial_bank = [];
 $initial_product = [];
 try {
-    $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
+    $st = $pdo->prepare("SELECT adjust_type, name, initial_balance FROM balance_adjust WHERE company_id = ?");
+    $st->execute([$gpc_cid]);
+    $rows = $st->fetchAll();
     foreach ($rows as $r) {
         $base = (float)$r['initial_balance'];
         $name = trim((string)$r['name']);

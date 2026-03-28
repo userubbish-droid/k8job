@@ -4,6 +4,8 @@ require 'auth.php';
 require_permission('customer_edit');
 $sidebar_current = 'customers';
 
+$company_id = current_company_id();
+
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
     header('Location: customers.php');
@@ -11,12 +13,12 @@ if ($id <= 0) {
 }
 
 try {
-    $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ?");
-    $row->execute([$id]);
+    $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
+    $row->execute([$id, $company_id]);
     $row = $row->fetch();
 } catch (Throwable $e) {
-    $stmt = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ?");
-    $stmt->execute([$id]);
+    $stmt = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ? AND company_id = ?");
+    $stmt->execute([$id, $company_id]);
     $row = $stmt->fetch();
     if ($row) $row['recommend'] = '';
 }
@@ -28,7 +30,9 @@ if (!$row) {
 // 产品列表（来自 product 管理）
 $products = [];
 try {
-    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $stp = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stp->execute([$company_id]);
+    $products = $stp->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $products = [];
 }
@@ -54,7 +58,7 @@ if (isset($_GET['del_account']) || (isset($_POST['action']) && $_POST['action'] 
     $aid = (int)($_GET['del_account'] ?? $_POST['account_id'] ?? 0);
     if ($aid > 0) {
         try {
-            $pdo->prepare("DELETE FROM customer_product_accounts WHERE id = ? AND customer_id = ?")->execute([$aid, $id]);
+            $pdo->prepare("DELETE FROM customer_product_accounts WHERE id = ? AND customer_id = ? AND company_id = ?")->execute([$aid, $id, $company_id]);
             header("Location: customer_edit.php?id=$id&deleted=1");
             exit;
         } catch (Throwable $e) {
@@ -73,8 +77,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $err = '请选择产品。';
     } else {
         try {
-            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (customer_id, product_name, account, password) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$id, $product_name, $account ?: null, $password]);
+            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (company_id, customer_id, product_name, account, password) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$company_id, $id, $product_name, $account ?: null, $password]);
             $msg = '已添加产品账号。';
             header("Location: customer_edit.php?id=$id&msg=1");
             exit;
@@ -112,11 +116,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
         $err = '客户代码不能为空。';
     } else {
         try {
-            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, recommend=? WHERE id=?");
-            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $recommend !== '' ? $recommend : null, $id]);
+            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, recommend=? WHERE id=? AND company_id=?");
+            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $recommend !== '' ? $recommend : null, $id, $company_id]);
             $msg = '已保存。';
-            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ?");
-            $row->execute([$id]);
+            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
+            $row->execute([$id, $company_id]);
             $row = $row->fetch();
         } catch (Throwable $e) {
             $err = (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : $e->getMessage());

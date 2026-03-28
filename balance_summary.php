@@ -21,6 +21,7 @@ $is_range = ($day_from !== $day_to);
 $msg = '';
 $err = '';
 
+$company_id = current_company_id();
 require_once __DIR__ . '/inc/game_platform_statement_compute.php';
 ?>
 <!DOCTYPE html>

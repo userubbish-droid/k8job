@@ -2,12 +2,17 @@
 // 固定侧栏，各选项页共用。使用前需定义 $sidebar_current（当前页标识，用于高亮）
 if (!isset($sidebar_current)) $sidebar_current = '';
 $sidebar_pending = 0;
-if (($_SESSION['user_role'] ?? '') === 'admin' && !empty($pdo)) {
+if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true) && !empty($pdo) && function_exists('current_company_id')) {
     try {
-        $has_deleted_at = true;
-        try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
-        $sql = "SELECT COUNT(*) FROM transactions WHERE status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
-        $sidebar_pending = (int) $pdo->query($sql)->fetchColumn();
+        $cid = current_company_id();
+        if ($cid > 0) {
+            $has_deleted_at = true;
+            try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
+            $sql = "SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
+            $st = $pdo->prepare($sql);
+            $st->execute([$cid]);
+            $sidebar_pending = (int) $st->fetchColumn();
+        }
     } catch (Throwable $e) {}
 }
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';

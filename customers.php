@@ -15,7 +15,7 @@ if ($filter_recommend !== '') {
 }
 $sidebar_current = 'customers';
 
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
 $company_id = current_company_id();
 $has_customer_status = false;
 try {
@@ -38,8 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$agent_view) {
         if ($action === 'toggle' && $is_admin) {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
-            $stmt = $pdo->prepare("UPDATE customers SET is_active = IF(is_active=1,0,1) WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt = $pdo->prepare("UPDATE customers SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt->execute([$id, $company_id]);
             $msg = '已更新状态。';
         }
     } catch (Throwable $e) {
@@ -103,10 +103,11 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
-    $stmt = $pdo->query("SELECT code,
+    $stmt = $pdo->prepare("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
-        FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
         GROUP BY code");
+    $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $balance_by_code[$r['code']] = (float) $r['balance'];
     }
@@ -114,27 +115,32 @@ try {
     $all_withdraw_by_code = [];
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
-    $stmt = $pdo->query("SELECT code,
+    $stmt = $pdo->prepare("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
-        FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+    $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_deposit_by_code[$r['code']] = (float)$r['ad'];
         $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
     }
-    $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
+    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
+    $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_rebate_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE' GROUP BY code");
+    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE' GROUP BY code");
+    $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_free_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->query("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+    $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->query("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
+    $stmt = $pdo->prepare("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
+    $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_bonus_by_code[$r['code']] = (float)$r['total'];
     }
@@ -143,8 +149,8 @@ try {
     $stmt = $pdo->prepare("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
-        FROM transactions WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
-    $stmt->execute([$month_start, $month_end]);
+        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
+    $stmt->execute([$company_id, $month_start, $month_end]);
     foreach ($stmt->fetchAll() as $r) {
         $month_deposit_by_code[$r['code']] = (float)$r['md'];
         $month_withdraw_by_code[$r['code']] = (float)$r['mw'];

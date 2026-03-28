@@ -3,6 +3,7 @@ require 'config.php';
 require 'auth.php';
 require_permission('agent');
 $sidebar_current = 'agents';
+$company_id = current_company_id();
 
 $err = '';
 $msg = '';
@@ -21,13 +22,15 @@ if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 
 function ensure_agent_rebate_table(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS agent_rebate_settings (
-        agent_code VARCHAR(80) NOT NULL PRIMARY KEY,
+        company_id INT UNSIGNED NOT NULL DEFAULT 1,
+        agent_code VARCHAR(80) NOT NULL,
         rebate_pct DECIMAL(10,2) NOT NULL DEFAULT 0,
         rebate_enabled TINYINT(1) NOT NULL DEFAULT 1,
         is_paid TINYINT(1) NOT NULL DEFAULT 0,
         paid_at DATETIME NULL,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
-        updated_by INT UNSIGNED NULL
+        updated_by INT UNSIGNED NULL,
+        PRIMARY KEY (company_id, agent_code)
     )");
     try {
         $c0 = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'agent_rebate_settings' AND COLUMN_NAME = 'rebate_enabled'")->fetchColumn();
@@ -49,7 +52,7 @@ function ensure_agent_rebate_table(PDO $pdo): void {
     } catch (Throwable $e) {}
 }
 
-function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $day_to): float {
+function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $day_to, int $company_id): float {
     $agent = trim($agent);
     if ($agent === '') return 0.0;
     $sql = "SELECT COALESCE(SUM(sub.pnl), 0) AS win_loss
@@ -58,12 +61,12 @@ function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $d
                 SELECT TRIM(code) AS code,
                        SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
             FROM transactions
-            WHERE status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
+            WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
                 GROUP BY TRIM(code)
             ) sub ON TRIM(c.code) = sub.code
-            WHERE c.recommend IS NOT NULL AND TRIM(c.recommend) != '' AND TRIM(c.recommend) = ?";
+            WHERE c.company_id = ? AND c.recommend IS NOT NULL AND TRIM(c.recommend) != '' AND TRIM(c.recommend) = ?";
     $stmt = $pdo->prepare($sql);
-    $stmt->execute([$day_from, $day_to, $agent]);
+    $stmt->execute([$company_id, $day_from, $day_to, $company_id, $agent]);
     return (float)$stmt->fetchColumn();
 }
 
@@ -88,16 +91,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
             }
             $post_day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_from'] ?? ''))) ? substr(trim((string)$_POST['day_from']), 0, 10) : $day_from;
             $post_day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_to'] ?? ''))) ? substr(trim((string)$_POST['day_to']), 0, 10) : $day_to;
-            $current_win_loss = get_agent_win_loss($pdo, $agent, $post_day_from, $post_day_to);
+            $current_win_loss = get_agent_win_loss($pdo, $agent, $post_day_from, $post_day_to, $company_id);
             if ($current_win_loss >= 0) {
                 // 仅负数可给：正数或 0 一律不可标记已给
                 $is_paid = 0;
             }
             ensure_agent_rebate_table($pdo);
-            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (agent_code, rebate_pct, is_paid, paid_at, updated_by) VALUES (?, ?, ?, ?, ?)
+            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_pct, is_paid, paid_at, updated_by) VALUES (?, ?, ?, ?, ?, ?)
                                    ON DUPLICATE KEY UPDATE rebate_pct = VALUES(rebate_pct), is_paid = VALUES(is_paid), paid_at = VALUES(paid_at), updated_by = VALUES(updated_by)");
             $paid_at = $is_paid ? date('Y-m-d H:i:s') : null;
-            $stmt->execute([$agent, $pct, $is_paid, $paid_at, (int)($_SESSION['user_id'] ?? 0)]);
+            $stmt->execute([$company_id, $agent, $pct, $is_paid, $paid_at, (int)($_SESSION['user_id'] ?? 0)]);
             $msg = '返水比例/状态已保存。';
         } catch (Throwable $e) {
             $err = $e->getMessage();
@@ -113,13 +116,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
                 throw new RuntimeException('你只能操作自己的开关。');
             }
             ensure_agent_rebate_table($pdo);
-            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (agent_code, rebate_enabled, updated_by) VALUES (?, ?, ?)
+            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_enabled, updated_by) VALUES (?, ?, ?, ?)
                                    ON DUPLICATE KEY UPDATE rebate_enabled = VALUES(rebate_enabled), updated_by = VALUES(updated_by)");
-            $stmt->execute([$agent, $enabled, (int)($_SESSION['user_id'] ?? 0)]);
+            $stmt->execute([$company_id, $agent, $enabled, (int)($_SESSION['user_id'] ?? 0)]);
             if ($enabled === 0) {
                 // 暂停反水时，顺便清除已给状态，避免误会
-                $stmt2 = $pdo->prepare("UPDATE agent_rebate_settings SET is_paid = 0, paid_at = NULL WHERE agent_code = ?");
-                $stmt2->execute([$agent]);
+                $stmt2 = $pdo->prepare("UPDATE agent_rebate_settings SET is_paid = 0, paid_at = NULL WHERE company_id = ? AND agent_code = ?");
+                $stmt2->execute([$company_id, $agent]);
             }
             $msg = $enabled ? '已启用该 Agent 的反水。' : '已暂停该 Agent 的反水。';
         } catch (Throwable $e) {
@@ -137,30 +140,28 @@ try {
         LEFT JOIN (
             SELECT TRIM(code) AS code,
                    SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
-            FROM transactions WHERE status = 'approved' AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
             GROUP BY TRIM(code)
         ) sub ON TRIM(c.code) = sub.code
-        WHERE c.recommend IS NOT NULL AND TRIM(c.recommend) != ''
+        WHERE c.company_id = ? AND c.recommend IS NOT NULL AND TRIM(c.recommend) != ''
     ";
-    $params = [$day_from, $day_to];
+    $params = [$company_id, $day_from, $day_to, $company_id];
     if ($is_agent_user && $agent_code !== '') {
         $sql .= " AND TRIM(c.recommend) = ?";
         $params[] = $agent_code;
     }
     $sql .= " GROUP BY TRIM(c.recommend) ORDER BY agent ASC";
-    if ($params) {
-        $stmt = $pdo->prepare($sql);
-        $stmt->execute($params);
-        $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    } else {
-        $agents = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
-    }
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
     if ($is_agent_user && $agent_code !== '' && empty($agents)) {
         $agents = [['agent' => $agent_code, 'cnt' => 0, 'win_loss' => 0]];
     }
     try {
         ensure_agent_rebate_table($pdo);
-        $rows = $pdo->query("SELECT agent_code, rebate_pct, rebate_enabled, is_paid, paid_at FROM agent_rebate_settings")->fetchAll(PDO::FETCH_ASSOC);
+        $st = $pdo->prepare("SELECT agent_code, rebate_pct, rebate_enabled, is_paid, paid_at FROM agent_rebate_settings WHERE company_id = ?");
+        $st->execute([$company_id]);
+        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $r) {
             $k = strtolower(trim((string)($r['agent_code'] ?? '')));
             if ($k === '') continue;

@@ -3,6 +3,7 @@
 
 CREATE TABLE IF NOT EXISTS customer_product_accounts (
   id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  company_id INT UNSIGNED NOT NULL DEFAULT 1,
   customer_id INT UNSIGNED NOT NULL,
   product_name VARCHAR(80) NOT NULL,
   account VARCHAR(255) NULL,

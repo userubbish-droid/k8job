@@ -33,7 +33,14 @@ ensure_users_login_meta($pdo);
 
 try {
     // Agent 绑定下线用：客户列表（显示 code + name）
-    $customers_for_agent = $pdo->query("SELECT code, name, COALESCE(recommend,'') AS recommend FROM customers WHERE code IS NOT NULL AND TRIM(code) != '' ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $cid_agent_pick = current_company_id();
+    if ($cid_agent_pick > 0) {
+        $stmtCa = $pdo->prepare("SELECT code, name, COALESCE(recommend,'') AS recommend FROM customers WHERE company_id = ? AND code IS NOT NULL AND TRIM(code) != '' ORDER BY code ASC");
+        $stmtCa->execute([$cid_agent_pick]);
+        $customers_for_agent = $stmtCa->fetchAll(PDO::FETCH_ASSOC);
+    } else {
+        $customers_for_agent = [];
+    }
 } catch (Throwable $e) {
     $customers_for_agent = [];
 }

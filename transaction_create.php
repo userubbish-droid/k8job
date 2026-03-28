@@ -99,8 +99,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
                 $paidVal = round(kiosk_ceil_money2($knet * ((float)$pctVal) / 100), 2);
             }
             try {
-                $stmt = $pdo->prepare('UPDATE products SET kiosk_fee_pct = ?, kiosk_paid_amount = ? WHERE name = ? AND is_active = 1');
-                $stmt->execute([$pctVal, $paidVal, $name]);
+                $stmt = $pdo->prepare('UPDATE products SET kiosk_fee_pct = ?, kiosk_paid_amount = ? WHERE company_id = ? AND name = ? AND is_active = 1');
+                $stmt->execute([$pctVal, $paidVal, $company_id, $name]);
             } catch (Throwable $e) {
             }
         }
@@ -143,7 +143,7 @@ $expense_day_to = preg_match('/^\d{4}-\d{2}-\d{2}$/', $expense_day_to_raw) ? $ex
 if ($expense_day_from > $expense_day_to) { $tmp = $expense_day_from; $expense_day_from = $expense_day_to; $expense_day_to = $tmp; }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+    $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
     // member：未点击「+」修改日期时间则用当前时间且自动通过审核
     $member_use_current = isset($_POST['member_use_current_time']) && (string)$_POST['member_use_current_time'] === '1';
     if ($quick === 'expense') {
@@ -243,7 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($status === 'pending') {
                 if (file_exists(__DIR__ . '/inc/notify.php')) {
                     require_once __DIR__ . '/inc/notify.php';
-                    send_pending_approval_notify($pdo);
+                    send_pending_approval_notify($pdo, $company_id);
                 }
             }
             $saved_mode = $mode;
@@ -258,8 +258,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved_customer_bank = '';
         if ($code !== '' && $product !== '') {
             try {
-                $acc = $pdo->prepare("SELECT a.account FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.code = ? AND a.product_name = ? LIMIT 1");
-                $acc->execute([$code, $product]);
+                $acc = $pdo->prepare("SELECT a.account FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? LIMIT 1");
+                $acc->execute([$company_id, $code, $product]);
                 $row = $acc->fetch();
                 $saved_account = $row ? (trim($row['account'] ?? '') ?: '—') : '—';
             } catch (Throwable $e) {
@@ -270,8 +270,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($mode === 'WITHDRAW' && $code !== '') {
             try {
-                $cust = $pdo->prepare("SELECT name, bank_details FROM customers WHERE code = ? LIMIT 1");
-                $cust->execute([$code]);
+                $cust = $pdo->prepare("SELECT name, bank_details FROM customers WHERE company_id = ? AND code = ? LIMIT 1");
+                $cust->execute([$company_id, $code]);
                 $crow = $cust->fetch();
                 $saved_customer_name = $crow ? trim($crow['name'] ?? '') : '';
                 $saved_customer_bank = $crow ? trim($crow['bank_details'] ?? '') : '';
@@ -285,8 +285,8 @@ $today = date('Y-m-d');
 $now   = date('H:i');
 $selected_mode = trim((string)($_POST['mode'] ?? ($quick === 'expense' ? 'EXPENSE' : '')));
 
-// 银行/产品：仅 admin 可“设置”（在 admin_banks / admin_products 管理）；员工只能从已设置的选项中选择
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+// 银行/产品：仅 admin / superadmin 可“设置”（在 Banks & Products 管理）；员工只能从已设置的选项中选择
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
 $banks = [];
 $products = [];
 $expenses = [];
@@ -299,22 +299,30 @@ $expense_filter_products = [];
 // 客户代码下拉选项（含 name、bank_details 供 WITHDRAW 时显示）
 $customers = [];
 try {
-    $customers = $pdo->query("SELECT code, name, bank_details FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll();
+    $stmtCu = $pdo->prepare("SELECT code, name, bank_details FROM customers WHERE company_id = ? AND is_active = 1 ORDER BY code ASC");
+    $stmtCu->execute([$company_id]);
+    $customers = $stmtCu->fetchAll();
 } catch (Throwable $e) {
     $customers = [];
 }
 try {
-    $banks = $pdo->query("SELECT name FROM banks WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $stmtBk = $pdo->prepare("SELECT name FROM banks WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stmtBk->execute([$company_id]);
+    $banks = $stmtBk->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $banks = [];
 }
 try {
-    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $stmtPr = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stmtPr->execute([$company_id]);
+    $products = $stmtPr->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $products = [];
 }
 try {
-    $expenses = $pdo->query("SELECT name FROM expenses WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $stmtEx = $pdo->prepare("SELECT name FROM expenses WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stmtEx->execute([$company_id]);
+    $expenses = $stmtEx->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $expenses = [];
 }
@@ -335,11 +343,15 @@ if ($quick === 'expense') {
         }
         $delSql = $has_deleted_at ? " AND deleted_at IS NULL" : "";
         $ekSql = " AND COALESCE(expense_kind, 'statement') = " . $pdo->quote($expense_kind_ui);
-        $expense_filter_banks = $pdo->query("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC")->fetchAll(PDO::FETCH_COLUMN);
-        $expense_filter_products = $pdo->query("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC")->fetchAll(PDO::FETCH_COLUMN);
+        $stmtEfb = $pdo->prepare("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE company_id = ? AND mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC");
+        $stmtEfb->execute([$company_id]);
+        $expense_filter_banks = $stmtEfb->fetchAll(PDO::FETCH_COLUMN);
+        $stmtEfp = $pdo->prepare("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE company_id = ? AND mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC");
+        $stmtEfp->execute([$company_id]);
+        $expense_filter_products = $stmtEfp->fetchAll(PDO::FETCH_COLUMN);
 
-        $where = "status = 'approved' AND mode = 'EXPENSE' AND COALESCE(expense_kind, 'statement') = ? AND day >= ? AND day <= ?";
-        $params = [$expense_kind_ui, $expense_day_from, $expense_day_to];
+        $where = "company_id = ? AND status = 'approved' AND mode = 'EXPENSE' AND COALESCE(expense_kind, 'statement') = ? AND day >= ? AND day <= ?";
+        $params = [$company_id, $expense_kind_ui, $expense_day_from, $expense_day_to];
         if ($expense_bank_filter !== '') {
             $where .= " AND bank = ?";
             $params[] = $expense_bank_filter;
@@ -385,7 +397,8 @@ if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
     $kiosk_gp_out = $range_out_product;
     ensure_products_kiosk_columns($pdo);
     try {
-        $km = $pdo->query('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE is_active = 1');
+        $km = $pdo->prepare('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE company_id = ? AND is_active = 1');
+        $km->execute([$company_id]);
         foreach ($km->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $k = strtolower(trim((string)$r['name']));
             if ($k !== '') {

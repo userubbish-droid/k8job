@@ -4,6 +4,7 @@ require 'auth.php';
 require_permission('product_library');
 $sidebar_current = 'product_library';
 
+$company_id = current_company_id();
 $is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
 
 $products = [];
@@ -15,11 +16,15 @@ $msg = '';
 // 顾客列表（用于 add 表单下拉）
 $customers_list = [];
 try {
-    $customers_list = $pdo->query("SELECT id, code FROM customers WHERE is_active = 1 ORDER BY code ASC")->fetchAll(PDO::FETCH_ASSOC);
+    $st = $pdo->prepare("SELECT id, code FROM customers WHERE company_id = ? AND is_active = 1 ORDER BY code ASC");
+    $st->execute([$company_id]);
+    $customers_list = $st->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {}
 
 try {
-    $products = $pdo->query("SELECT name FROM products WHERE is_active = 1 ORDER BY sort_order ASC, name ASC")->fetchAll(PDO::FETCH_COLUMN);
+    $st = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $st->execute([$company_id]);
+    $products = $st->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $products = [];
 }
@@ -35,8 +40,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $err = '请选择顾客和产品。';
     } else {
         try {
-            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (customer_id, product_name, account, password) VALUES (?, ?, ?, ?)");
-            $stmt->execute([$customer_id, $product_name, $account ?: null, $password]);
+            $chk = $pdo->prepare("SELECT id FROM customers WHERE id = ? AND company_id = ? LIMIT 1");
+            $chk->execute([$customer_id, $company_id]);
+            if (!$chk->fetch()) {
+                throw new RuntimeException('顾客不属于当前分公司。');
+            }
+            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (company_id, customer_id, product_name, account, password) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$company_id, $customer_id, $product_name, $account ?: null, $password]);
             $msg = '已添加。';
             header("Location: product_library.php?msg=1");
             exit;
@@ -51,10 +61,13 @@ if (isset($_GET['msg'])) {
 $show_add_box = !empty($err) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product';
 
 try {
-    $rows = $pdo->query("SELECT a.customer_id, a.product_name, a.account, a.password, c.code
+    $st = $pdo->prepare("SELECT a.customer_id, a.product_name, a.account, a.password, c.code
             FROM customer_product_accounts a
-            LEFT JOIN customers c ON c.id = a.customer_id
-            ORDER BY c.code ASC, a.product_name ASC, a.id ASC")->fetchAll();
+            INNER JOIN customers c ON c.id = a.customer_id AND c.company_id = ?
+            WHERE a.company_id = ?
+            ORDER BY c.code ASC, a.product_name ASC, a.id ASC");
+    $st->execute([$company_id, $company_id]);
+    $rows = $st->fetchAll();
     foreach ($rows as $r) {
         $code = $r['code'] ?? '';
         if ($code === '') continue;

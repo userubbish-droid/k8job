@@ -3,16 +3,18 @@ require 'config.php';
 require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_banks_products';
+$company_id = current_company_id();
 
 function _ensure_balance_adjust_table(PDO $pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS balance_adjust (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        company_id INT UNSIGNED NOT NULL DEFAULT 1,
         adjust_type ENUM('bank','product','expense') NOT NULL,
         name VARCHAR(80) NOT NULL,
         initial_balance DECIMAL(12,2) NOT NULL DEFAULT 0,
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL,
-        UNIQUE KEY (adjust_type, name)
+        UNIQUE KEY uq_balance_adjust_company (company_id, adjust_type, name)
     )");
     try {
         // 兼容旧库：补 expense 枚举值
@@ -23,10 +25,12 @@ function _ensure_balance_adjust_table(PDO $pdo) {
 function _ensure_expenses_table(PDO $pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS expenses (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
-        name VARCHAR(80) NOT NULL UNIQUE,
+        company_id INT UNSIGNED NOT NULL DEFAULT 1,
+        name VARCHAR(80) NOT NULL,
         is_active TINYINT(1) NOT NULL DEFAULT 1,
         sort_order INT NOT NULL DEFAULT 0,
-        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        UNIQUE KEY uq_expenses_company_name (company_id, name)
     )");
 }
 
@@ -48,8 +52,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException('请输入银行/渠道名称。');
             try {
-                $stmt = $pdo->prepare("INSERT INTO banks (name, sort_order) VALUES (?, ?)");
-                $stmt->execute([$name, $sort]);
+                $stmt = $pdo->prepare("INSERT INTO banks (company_id, name, sort_order) VALUES (?, ?, ?)");
+                $stmt->execute([$company_id, $name, $sort]);
                 $msg = '已添加银行/渠道。';
             } catch (Throwable $e) {
                 if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
@@ -62,8 +66,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException('请输入产品名称。');
             try {
-                $stmt = $pdo->prepare("INSERT INTO products (name, sort_order) VALUES (?, ?)");
-                $stmt->execute([$name, $sort]);
+                $stmt = $pdo->prepare("INSERT INTO products (company_id, name, sort_order) VALUES (?, ?, ?)");
+                $stmt->execute([$company_id, $name, $sort]);
                 $msg = '已添加产品。';
             } catch (Throwable $e) {
                 if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
@@ -77,8 +81,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($name === '') throw new RuntimeException('请输入 Expense 名称。');
             try {
                 _ensure_expenses_table($pdo);
-                $stmt = $pdo->prepare("INSERT INTO expenses (name, sort_order) VALUES (?, ?)");
-                $stmt->execute([$name, $sort]);
+                $stmt = $pdo->prepare("INSERT INTO expenses (company_id, name, sort_order) VALUES (?, ?, ?)");
+                $stmt->execute([$company_id, $name, $sort]);
                 $msg = '已添加 Expense。';
             } catch (Throwable $e) {
                 if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
@@ -89,21 +93,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'toggle_bank') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
-            $stmt = $pdo->prepare("UPDATE banks SET is_active = IF(is_active=1,0,1) WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt = $pdo->prepare("UPDATE banks SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt->execute([$id, $company_id]);
             $msg = '已更新状态。';
         } elseif ($action === 'toggle_product') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
-            $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt->execute([$id, $company_id]);
             $msg = '已更新状态。';
         } elseif ($action === 'toggle_expense') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
             _ensure_expenses_table($pdo);
-            $stmt = $pdo->prepare("UPDATE expenses SET is_active = IF(is_active=1,0,1) WHERE id = ?");
-            $stmt->execute([$id]);
+            $stmt = $pdo->prepare("UPDATE expenses SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt->execute([$id, $company_id]);
             $msg = '已更新状态。';
         } elseif ($action === 'do_transfer') {
             if (empty($_POST['confirm_submit'])) throw new RuntimeException('请勾选「确认提交」后再提交。');
@@ -122,14 +126,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $remark_out = $remark !== '' ? '转至 ' . $to_bank . ' ' . $remark : '转至 ' . $to_bank;
             $remark_in  = $remark !== '' ? '来自 ' . $from_bank . ' ' . $remark : '来自 ' . $from_bank;
             try {
-                $cols = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
-                $vals = "?, ?, 'WITHDRAW', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
+                $cols = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
+                $vals = "?, ?, ?, 'WITHDRAW', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
                 $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
-                $stmt->execute([$day, $time, $from_bank, $amount, $amount, $staff, $remark_out, $uid, $uid]);
-                $cols2 = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
-                $vals2 = "?, ?, 'DEPOSIT', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
+                $stmt->execute([$company_id, $day, $time, $from_bank, $amount, $amount, $staff, $remark_out, $uid, $uid]);
+                $cols2 = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
+                $vals2 = "?, ?, ?, 'DEPOSIT', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
                 $stmt2 = $pdo->prepare("INSERT INTO transactions ($cols2) VALUES ($vals2)");
-                $stmt2->execute([$day, $time, $to_bank, $amount, $amount, $staff, $remark_in, $uid, $uid]);
+                $stmt2->execute([$company_id, $day, $time, $to_bank, $amount, $amount, $staff, $remark_in, $uid, $uid]);
                 $msg = $from_bank . ' 转 ' . number_format($amount, 2) . ' 至 ' . $to_bank . ' 已记录，可在流水记录中查看（member 不可见）。';
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
@@ -148,10 +152,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $uid = (int)($_SESSION['user_id'] ?? 0);
             $staff = (string)($_SESSION['user_name'] ?? $uid);
             try {
-                $cols = "day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
-                $vals = "?, ?, 'TOPUP', NULL, NULL, ?, ?, 0, ?, ?, '产品加额', 'approved', ?, ?, NOW(), 1";
+                $cols = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
+                $vals = "?, ?, ?, 'TOPUP', NULL, NULL, ?, ?, 0, ?, ?, '产品加额', 'approved', ?, ?, NOW(), 1";
                 $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
-                $stmt->execute([$day, $time, $product, $amount, $amount, $staff, $uid, $uid]);
+                $stmt->execute([$company_id, $day, $time, $product, $amount, $amount, $staff, $uid, $uid]);
                 $msg = $product . ' 已加额 ' . number_format($amount, 2) . '，Balance 已更新。';
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
@@ -191,17 +195,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $val = str_replace(',', '', trim($_POST['balance'] ?? '0'));
             if ($name === '' || !in_array($type, ['bank', 'product', 'expense'], true) || !is_numeric($val)) throw new RuntimeException('参数错误。');
             try {
-                $stmt = $pdo->prepare("INSERT INTO balance_adjust (adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)
+                $stmt = $pdo->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
                     ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
-                $stmt->execute([$type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
+                $stmt->execute([$company_id, $type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
                 $msg = '已更新为更改余额。';
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'balance_adjust') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
                     _ensure_balance_adjust_table($pdo);
                     try {
-                        $stmt = $pdo->prepare("INSERT INTO balance_adjust (adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, NOW(), ?)
+                        $stmt = $pdo->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
                             ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
-                        $stmt->execute([$type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
+                        $stmt->execute([$company_id, $type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
                         $msg = '已更新为更改余额。';
                     } catch (Throwable $e2) {
                         throw new RuntimeException('无法创建 balance_adjust 表，请检查数据库用户是否有建表权限，或在 phpMyAdmin 执行 migrate_balance_adjust.sql。');
@@ -236,32 +240,40 @@ $balance_product = [];
 $balance_expense = [];
 $balance_adjust_ok = false;
 try {
-    $sql = "SELECT id, name, is_active, sort_order, created_at FROM banks";
-    if ($bank_status_filter === 'active') $sql .= " WHERE is_active = 1";
-    elseif ($bank_status_filter === 'inactive') $sql .= " WHERE is_active = 0";
+    $sql = "SELECT id, name, is_active, sort_order, created_at FROM banks WHERE company_id = ?";
+    if ($bank_status_filter === 'active') $sql .= " AND is_active = 1";
+    elseif ($bank_status_filter === 'inactive') $sql .= " AND is_active = 0";
     $sql .= " ORDER BY sort_order ASC, name ASC";
-    $banks = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$company_id]);
+    $banks = $stmt->fetchAll();
 } catch (Throwable $e) {}
 try {
-    $sql = "SELECT id, name, is_active, sort_order, created_at FROM products";
-    if ($product_status_filter === 'active') $sql .= " WHERE is_active = 1";
-    elseif ($product_status_filter === 'inactive') $sql .= " WHERE is_active = 0";
+    $sql = "SELECT id, name, is_active, sort_order, created_at FROM products WHERE company_id = ?";
+    if ($product_status_filter === 'active') $sql .= " AND is_active = 1";
+    elseif ($product_status_filter === 'inactive') $sql .= " AND is_active = 0";
     $sql .= " ORDER BY sort_order ASC, name ASC";
-    $products = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$company_id]);
+    $products = $stmt->fetchAll();
 } catch (Throwable $e) {}
 try {
     _ensure_expenses_table($pdo);
-    $sql = "SELECT id, name, is_active, sort_order, created_at FROM expenses";
-    if ($expense_status_filter === 'active') $sql .= " WHERE is_active = 1";
-    elseif ($expense_status_filter === 'inactive') $sql .= " WHERE is_active = 0";
+    $sql = "SELECT id, name, is_active, sort_order, created_at FROM expenses WHERE company_id = ?";
+    if ($expense_status_filter === 'active') $sql .= " AND is_active = 1";
+    elseif ($expense_status_filter === 'inactive') $sql .= " AND is_active = 0";
     $sql .= " ORDER BY sort_order ASC, name ASC";
-    $expenses = $pdo->query($sql)->fetchAll();
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$company_id]);
+    $expenses = $stmt->fetchAll();
 } catch (Throwable $e) {}
 try {
     _ensure_balance_adjust_table($pdo);
 } catch (Throwable $e) {}
 try {
-    $rows = $pdo->query("SELECT adjust_type, name, initial_balance FROM balance_adjust")->fetchAll();
+    $stmtBa = $pdo->prepare("SELECT adjust_type, name, initial_balance FROM balance_adjust WHERE company_id = ?");
+    $stmtBa->execute([$company_id]);
+    $rows = $stmtBa->fetchAll();
     $balance_adjust_ok = true;
     foreach ($rows as $r) {
         $k = strtolower(trim((string)$r['name']));
@@ -288,10 +300,11 @@ $diag_bank_rows = [];
 $diag_product_rows = [];
 $diag_error = '';
 try {
-    $stmt = $pdo->query("SELECT COALESCE(bank, '') AS bank,
+    $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE status = 'approved' GROUP BY COALESCE(bank, '')");
+        FROM transactions WHERE status = 'approved' AND company_id = ? GROUP BY COALESCE(bank, '')");
+    $stmt->execute([$company_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
         $bankVal = $r['bank'] ?? $r['Bank'] ?? '';
@@ -307,11 +320,12 @@ try {
     $diag_error = $e->getMessage();
 }
 try {
-    $stmt = $pdo->query("SELECT COALESCE(product, '') AS product,
+    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE status = 'approved' GROUP BY COALESCE(product, '')");
+        FROM transactions WHERE status = 'approved' AND company_id = ? GROUP BY COALESCE(product, '')");
+    $stmt->execute([$company_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
         $prodVal = $r['product'] ?? $r['Product'] ?? '';
@@ -329,11 +343,12 @@ try {
     if (empty($diag_error)) $diag_error = $e->getMessage();
 }
 try {
-    $stmt = $pdo->query("SELECT COALESCE(product, '') AS expense_name,
+    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS expense_name,
         COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions
-        WHERE status = 'approved'
+        WHERE status = 'approved' AND company_id = ?
         GROUP BY COALESCE(product, '')");
+    $stmt->execute([$company_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
         $nameVal = $r['expense_name'] ?? '';
@@ -375,7 +390,9 @@ $balance_notify_cfg = balance_notify_get_config();
 // 仅当有待审核流水时显示提示
 $cnt_pending = 0;
 try {
-    $cnt_pending = (int)$pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'")->fetchColumn();
+    $stmtP = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE status = 'pending' AND company_id = ?");
+    $stmtP->execute([$company_id]);
+    $cnt_pending = (int)$stmtP->fetchColumn();
 } catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>

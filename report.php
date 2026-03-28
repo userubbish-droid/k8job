@@ -127,11 +127,11 @@ try {
             COALESCE(SUM(amount), 0) AS total_amount,
             GROUP_CONCAT(DISTINCT NULLIF(TRIM(bank), '') ORDER BY bank SEPARATOR ', ') AS bank_list
         FROM transactions
-        WHERE status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
+        WHERE company_id = ? AND status = 'approved' AND day >= ? AND day <= ? AND mode = 'EXPENSE'
         GROUP BY COALESCE(NULLIF(TRIM(product), ''), '未填写产品')
         ORDER BY total_amount DESC
     ");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt->execute([$company_id, $day_from, $day_to]);
     $expense_product_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $err = '报表加载失败：' . $e->getMessage();

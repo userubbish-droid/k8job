@@ -4,6 +4,8 @@ require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_approvals';
 
+$company_id = current_company_id();
+
 $msg = '';
 $err = '';
 
@@ -13,12 +15,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($id > 0) {
         try {
             if ($action === 'approve') {
-                $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
-                $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id]);
+                $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
+                $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
                 $msg = '已批准。';
             } elseif ($action === 'reject') {
-                $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
-                $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id]);
+                $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
+                $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
                 $msg = '已拒绝。';
             }
         } catch (Throwable $e) {
@@ -33,9 +35,11 @@ try {
                    t.created_at, u.username AS created_by_name
             FROM transactions t
             LEFT JOIN users u ON u.id = t.created_by
-            WHERE t.status = 'pending'
+            WHERE t.status = 'pending' AND t.company_id = ?
             ORDER BY t.created_at ASC";
-    $rows = $pdo->query($sql)->fetchAll();
+    $st = $pdo->prepare($sql);
+    $st->execute([$company_id]);
+    $rows = $st->fetchAll();
 } catch (Throwable $e) {
     $err = $err ?: $e->getMessage();
 }

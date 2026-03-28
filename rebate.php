@@ -4,7 +4,8 @@ require 'auth.php';
 require_permission('rebate');
 $sidebar_current = 'rebate';
 
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$company_id = current_company_id();
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
 $msg = '';
 $err = '';
 
@@ -32,27 +33,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uid = (int)($_SESSION['user_id'] ?? 0);
                 if (!empty($given)) {
                     $placeholders = implode(',', array_fill(0, count($given), '?'));
-                    $stmt_bal = $pdo->prepare("SELECT code, COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance FROM transactions WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY code");
-                    $stmt_bal->execute(array_merge([$post_day_from, $post_day_to], $given));
+                    $stmt_bal = $pdo->prepare("SELECT code, COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY code");
+                    $stmt_bal->execute(array_merge([$company_id, $post_day_from, $post_day_to], $given));
                     $balances = [];
                     while ($row = $stmt_bal->fetch(PDO::FETCH_ASSOC)) {
                         $balances[$row['code']] = (float)$row['balance'];
                     }
-                    $stmt = $pdo->prepare("INSERT INTO rebate_given (day, code, given_at, given_by, rebate_pct, rebate_amount) VALUES (?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by), rebate_pct = VALUES(rebate_pct), rebate_amount = VALUES(rebate_amount)");
+                    $stmt = $pdo->prepare("INSERT INTO rebate_given (company_id, day, code, given_at, given_by, rebate_pct, rebate_amount) VALUES (?, ?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by), rebate_pct = VALUES(rebate_pct), rebate_amount = VALUES(rebate_amount)");
                     foreach ($given as $code) {
                         if ($code === '') continue;
                         $balance = $balances[$code] ?? 0;
                         $pct_val = isset($pct[$code]) ? (float)str_replace(',', '.', trim($pct[$code])) : 0;
                         $rebate_amount = $pct_val > 0 ? round($balance * $pct_val / 100, 2) : 0;
-                        $stmt->execute([$post_day_to, $code, $uid, $pct_val ?: null, $rebate_amount]);
+                        $stmt->execute([$company_id, $post_day_to, $code, $uid, $pct_val ?: null, $rebate_amount]);
                     }
                 }
                 $msg = count($given) ? '已标记所选客户为「已给」，返点金额已保存。' : '请勾选「已给了」再提交。';
             } elseif ($action === 'cancel' && $is_admin) {
                 $code = trim($_POST['code'] ?? '');
                 if ($code !== '') {
-                    $stmt = $pdo->prepare("DELETE FROM rebate_given WHERE day >= ? AND day <= ? AND code = ?");
-                    $stmt->execute([$post_day_from, $post_day_to, $code]);
+                    $stmt = $pdo->prepare("DELETE FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? AND code = ?");
+                    $stmt->execute([$company_id, $post_day_from, $post_day_to, $code]);
                     $msg = '已取消该客户「已给」状态。';
                 }
             } elseif ($action === 'cancel' && !$is_admin) {
@@ -81,8 +82,8 @@ unset($_SESSION['rebate_msg'], $_SESSION['rebate_err']);
 $given_codes = [];
 $given_info = [];
 try {
-    $stmt = $pdo->prepare("SELECT code, rebate_pct, rebate_amount, day FROM rebate_given WHERE day >= ? AND day <= ? ORDER BY day DESC");
-    $stmt->execute([$day_from, $day_to]);
+    $stmt = $pdo->prepare("SELECT code, rebate_pct, rebate_amount, day FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? ORDER BY day DESC");
+    $stmt->execute([$company_id, $day_from, $day_to]);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $c = $row['code'];
         if (!in_array($c, $given_codes, true)) $given_codes[] = $c;
@@ -90,8 +91,8 @@ try {
     }
 } catch (Throwable $e) {
     try {
-        $stmt = $pdo->prepare("SELECT DISTINCT code FROM rebate_given WHERE day >= ? AND day <= ?");
-        $stmt->execute([$day_from, $day_to]);
+        $stmt = $pdo->prepare("SELECT DISTINCT code FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ?");
+        $stmt->execute([$company_id, $day_from, $day_to]);
         $given_codes = $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e2) {}
 }
@@ -102,11 +103,11 @@ $stmt = $pdo->prepare("
            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
     FROM transactions
-    WHERE day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) <> ''
+    WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) <> ''
     GROUP BY code
     ORDER BY code ASC
 ");
-$stmt->execute([$day_from, $day_to]);
+$stmt->execute([$company_id, $day_from, $day_to]);
 $all_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 // member 只显示还没给的；admin 显示全部（先显示未给的，再显示已给的绿色）

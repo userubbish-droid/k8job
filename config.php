@@ -83,6 +83,30 @@ foreach (['customers','transactions','banks','products','expenses','customer_pro
     try { $pdo->exec("CREATE INDEX idx_{$__t}_company_id ON {$__t}(company_id)"); } catch (Throwable $e) {}
 }
 
+// 银行/产品/Expense：名称改为「分区内唯一」
+foreach ([['banks', 'uq_banks_company_name'], ['products', 'uq_products_company_name'], ['expenses', 'uq_expenses_company_name']] as $__pair) {
+    $__t = $__pair[0];
+    $__uq = $__pair[1];
+    foreach (['name', "{$__t}_name_unique", 'name_2'] as $__idx) {
+        try { $pdo->exec("ALTER TABLE `{$__t}` DROP INDEX `{$__idx}`"); } catch (Throwable $e) {}
+    }
+    try { $pdo->exec("ALTER TABLE `{$__t}` ADD UNIQUE KEY `{$__uq}` (company_id, name)"); } catch (Throwable $e) {}
+}
+
+// agent_rebate_settings：主键 (company_id, agent_code)，各分公司返水设置互不干扰
+try { $pdo->exec('ALTER TABLE agent_rebate_settings DROP PRIMARY KEY'); } catch (Throwable $e) {}
+try { $pdo->exec('ALTER TABLE agent_rebate_settings ADD PRIMARY KEY (company_id, agent_code)'); } catch (Throwable $e) {}
+
+// rebate_given：主键含 company_id，避免不同分公司同日同客户代号冲突
+try { $pdo->exec('ALTER TABLE rebate_given DROP PRIMARY KEY'); } catch (Throwable $e) {}
+try { $pdo->exec('ALTER TABLE rebate_given ADD PRIMARY KEY (company_id, day, code)'); } catch (Throwable $e) {}
+
+// balance_adjust：期初余额按分公司区分
+foreach (['adjust_type', 'uq_balance_adjust_legacy', 'balance_adjust_adjust_type_name_unique'] as $__idx) {
+    try { $pdo->exec("ALTER TABLE balance_adjust DROP INDEX `{$__idx}`"); } catch (Throwable $e) {}
+}
+try { $pdo->exec('ALTER TABLE balance_adjust ADD UNIQUE KEY uq_balance_adjust_company (company_id, adjust_type, name)'); } catch (Throwable $e) {}
+
 // customers 审核支持：status（默认 approved）
 try { $pdo->exec("ALTER TABLE customers ADD COLUMN status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'approved' AFTER is_active"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_by INT UNSIGNED NULL AFTER status"); } catch (Throwable $e) {}

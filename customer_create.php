@@ -13,7 +13,8 @@ $company_id = current_company_id();
 // 建议下一个客户代码：按现有 C001、C009 等递增，下一个为 C010
 $suggested_code = 'C001';
 try {
-    $stmt = $pdo->query("SELECT code FROM customers");
+    $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ?");
+    $stmt->execute([$company_id]);
     $max_num = 0;
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $c = trim($row['code'] ?? '');
