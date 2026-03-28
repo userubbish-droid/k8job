@@ -7,6 +7,7 @@ function choose_landing_url_for_role(string $role): string {
     $role = strtolower(trim($role));
     if ($role === 'agent') return 'agents.php';
     if ($role === 'superadmin') return 'dashboard.php';
+    if ($role === 'boss') return 'dashboard.php';
     if ($role === 'admin') return 'dashboard.php';
 
     // member：不强制 Dashboard；按权限优先跳到可用页面
@@ -80,10 +81,11 @@ foreach ($companies as $c) {
     if ($default_company_id > 0) break;
 }
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $user = trim($_POST['user'] ?? '');
+    $user = mb_strtoupper(trim((string)($_POST['user'] ?? '')), 'UTF-8');
     $pass = (string) ($_POST['pass'] ?? '');
     $login_as = trim($_POST['login_as'] ?? 'admin'); // admin | member（含 agent 账号）
-    $company_code = strtolower(trim((string)($_POST['company_code'] ?? '')));
+    $company_code_in = mb_strtoupper(trim((string)($_POST['company_code'] ?? '')), 'UTF-8');
+    $company_code = $company_code_in === '' ? '' : mb_strtolower($company_code_in, 'UTF-8');
     $remember = !empty($_POST['remember']);
 
     if ($user === '' || $pass === '') {
@@ -100,13 +102,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cid_for_branch = $default_company_id;
         }
 
-        $stmt_sa = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE username = ? AND company_id IS NULL LIMIT 1");
+        $stmt_sa = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND company_id IS NULL LIMIT 1");
         $stmt_sa->execute([$user]);
         $u_sa = $stmt_sa->fetch(PDO::FETCH_ASSOC);
 
         $u_br = null;
         if ($cid_for_branch > 0) {
-            $stmt_br = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE username = ? AND company_id = ? LIMIT 1");
+            $stmt_br = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND company_id = ? LIMIT 1");
             $stmt_br->execute([$user, $cid_for_branch]);
             $u_br = $stmt_br->fetch(PDO::FETCH_ASSOC);
         }
@@ -126,12 +128,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $error = '用户名或密码错误';
         } elseif ((int)$u['is_active'] !== 1) {
             $error = '该账号已禁用';
-        } elseif ($login_as === 'admin' && !in_array($db_role, ['admin', 'superadmin'], true)) {
+        } elseif ($login_as === 'admin' && !in_array($db_role, ['admin', 'superadmin', 'boss'], true)) {
             $error = '请使用 Admin 登录入口，或该账号不是管理员';
         } elseif ($login_as === 'member' && !in_array($db_role, ['member', 'agent'], true)) {
             $error = '当前账号角色为 ' . ($db_role !== '' ? $db_role : '未设置') . '，Member / Agent 入口仅允许 member 或 agent。请到「用户管理」修改角色。';
         } elseif ($login_as !== 'admin' && $db_role === 'superadmin') {
-            $error = '平台 superadmin 请使用 Admin 登录入口。';
+            $error = '平台 big boss 请使用 Admin 登录入口。';
         } else {
             $_SESSION['user_id'] = (int)$u['id'];
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
@@ -140,10 +142,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db_company_id = (int)($u['company_id'] ?? 0);
 
             // company 绑定规则：
-            // - superadmin：可选任意 company（必须选择一个用于当前会话）
+            // - superadmin：可选公司代码；不填则默认「总公司」汇总（company_id=0）；填了则进入该分公司
             // - admin/member/agent：必须绑定到自己的 company_id（忽略输入）
             if ($db_role === 'superadmin') {
-                // superadmin：允许不填公司，默认进入第一家（一般是 k8）；填了则按 code 切换
+                // superadmin：填公司代码则进入该公司；不填且库里有公司则 session=0 表示总公司合计视图
                 $use_company = 0;
                 if ($company_code !== '') {
                     try {
@@ -152,12 +154,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $use_company = (int)$stmtC->fetchColumn();
                     } catch (Throwable $e) {}
                 }
-                if ($use_company <= 0) $use_company = $default_company_id;
-                if ($use_company <= 0) {
+                // 未指定公司代码时默认「总公司」汇总视图（0）；指定了有效公司则用该公司
+                if ($use_company <= 0 && $default_company_id > 0) {
+                    $_SESSION['company_id'] = 0;
+                } elseif ($use_company > 0) {
+                    $_SESSION['company_id'] = $use_company;
+                } else {
                     $error = '暂无可用公司，请先创建公司。';
                     session_destroy();
-                } else {
-                    $_SESSION['company_id'] = $use_company;
                 }
             } else {
                 if ($db_company_id <= 0) {
@@ -300,6 +304,9 @@ $login_as = $_POST['login_as'] ?? 'admin';
             border-color: #3b82f6;
         }
         .input-wrap input::placeholder { color: #94a3b8; }
+        .input-wrap input.login-field-upper {
+            text-transform: uppercase;
+        }
         .input-wrap select {
             width: 100%;
             padding: 12px 12px 12px 42px;
@@ -402,12 +409,11 @@ $login_as = $_POST['login_as'] ?? 'admin';
 
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <input type="text" name="company_code" placeholder="Company（分公司代码）" value="<?= htmlspecialchars((string)($_POST['company_code'] ?? '')) ?>" autocomplete="organization">
+                <input type="text" name="company_code" class="login-field-upper" placeholder="Company" value="<?= htmlspecialchars(mb_strtoupper(trim((string)($_POST['company_code'] ?? '')), 'UTF-8')) ?>" autocomplete="organization">
             </div>
-            <p style="margin:-4px 0 12px 44px;font-size:12px;color:#64748b;line-height:1.45;">多分公司时必填或建议填写，与「分公司管理」中的代码一致；各分公司可有相同用户名。留空则按默认第一家匹配。</p>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                <input type="text" name="user" placeholder="Username" required value="<?= htmlspecialchars($_POST['user'] ?? '') ?>">
+                <input type="text" name="user" class="login-field-upper" placeholder="Username" required value="<?= htmlspecialchars(mb_strtoupper(trim((string)($_POST['user'] ?? '')), 'UTF-8')) ?>">
             </div>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
@@ -456,6 +462,16 @@ $login_as = $_POST['login_as'] ?? 'admin';
         document.querySelector('.forget').addEventListener('click', function(e) {
             e.preventDefault();
             showLoginModal('请联系管理员重置密码。');
+        });
+        document.querySelectorAll('input.login-field-upper').forEach(function(el) {
+            el.addEventListener('input', function() {
+                var start = this.selectionStart;
+                var end = this.selectionEnd;
+                this.value = this.value.toUpperCase();
+                if (start !== null && end !== null) {
+                    this.setSelectionRange(start, end);
+                }
+            });
         });
         (function(){
             var mask = document.getElementById('login-modal-mask');

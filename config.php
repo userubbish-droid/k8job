@@ -57,7 +57,9 @@ try {
 try { $pdo->exec("ALTER TABLE users ADD COLUMN company_id INT UNSIGNED NULL AFTER avatar_url"); } catch (Throwable $e) {}
 try { $pdo->exec("CREATE INDEX idx_users_company_id ON users(company_id)"); } catch (Throwable $e) {}
 // 旧账号兜底：非 superadmin 默认归到 k8（company_id=1）
-try { $pdo->exec("UPDATE users SET company_id = 1 WHERE (company_id IS NULL OR company_id = 0) AND role IN ('admin','member','agent')"); } catch (Throwable $e) {}
+try { $pdo->exec("UPDATE users SET company_id = 1 WHERE (company_id IS NULL OR company_id = 0) AND role IN ('boss','admin','member','agent')"); } catch (Throwable $e) {}
+// 角色枚举含分公司老板 boss（与 superadmin / admin 等并列）
+try { $pdo->exec("ALTER TABLE users MODIFY role ENUM('superadmin','boss','admin','member','agent') NOT NULL DEFAULT 'member'"); } catch (Throwable $e) {}
 
 // users：同一用户名可在不同分公司各有一条；平台 superadmin 仍为 company_id IS NULL（login_scope_key = SA:用户名）
 try {

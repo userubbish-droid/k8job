@@ -2,27 +2,58 @@
 // 固定侧栏，各选项页共用。使用前需定义 $sidebar_current（当前页标识，用于高亮）
 if (!isset($sidebar_current)) $sidebar_current = '';
 $sidebar_pending = 0;
-if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true) && !empty($pdo) && function_exists('current_company_id')) {
+$sidebar_pending_customers = 0;
+if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true) && !empty($pdo) && function_exists('current_company_id')) {
     try {
         $cid = current_company_id();
-        if ($cid > 0) {
-            $has_deleted_at = true;
-            try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
-            $sql = "SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'" . ($has_deleted_at ? " AND deleted_at IS NULL" : "");
-            $st = $pdo->prepare($sql);
+        $has_deleted_at = true;
+        try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
+        $del = $has_deleted_at ? " AND deleted_at IS NULL" : "";
+        if ($cid === 0 && (($_SESSION['user_role'] ?? '') === 'superadmin')) {
+            $sidebar_pending = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'{$del}")->fetchColumn();
+            try {
+                $sidebar_pending_customers = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE status = 'pending'")->fetchColumn();
+            } catch (Throwable $e) {
+                $sidebar_pending_customers = 0;
+            }
+        } elseif ($cid > 0) {
+            $st = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
             $st->execute([$cid]);
             $sidebar_pending = (int) $st->fetchColumn();
+            try {
+                $stc = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND status = 'pending'");
+                $stc->execute([$cid]);
+                $sidebar_pending_customers = (int) $stc->fetchColumn();
+            } catch (Throwable $e) {
+                $sidebar_pending_customers = 0;
+            }
         }
     } catch (Throwable $e) {}
 }
+$sidebar_pending_total = $sidebar_pending + $sidebar_pending_customers;
+if ($sidebar_pending > 0 && $sidebar_pending_customers > 0) {
+    $sidebar_bell_href = 'admin_pending_hub.php';
+} elseif ($sidebar_pending_customers > 0) {
+    $sidebar_bell_href = 'admin_customer_approvals.php';
+} else {
+    $sidebar_bell_href = 'admin_approvals.php';
+}
+$sidebar_bell_title = '待处理';
+if ($sidebar_pending > 0 || $sidebar_pending_customers > 0) {
+    $sidebar_bell_title = '待处理：流水 ' . $sidebar_pending . '，客户 ' . $sidebar_pending_customers;
+}
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
-$sidebar_user_role = ($_SESSION['user_role'] ?? '') === 'admin' ? 'Admin' : (($_SESSION['user_role'] ?? '') === 'agent' ? 'Agent' : 'Staff');
+$__ur = $_SESSION['user_role'] ?? '';
+$sidebar_user_role = $__ur === 'superadmin' ? 'Big Boss' : ($__ur === 'boss' ? 'Boss' : ($__ur === 'admin' ? 'Admin' : ($__ur === 'agent' ? 'Agent' : 'Staff')));
 $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
 $sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
 $sidebar_company_id = (int)($_SESSION['company_id'] ?? 0);
+$sidebar_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $sidebar_company_label = '';
 try {
-    if (!empty($pdo) && $sidebar_company_id > 0) {
+    if (!empty($pdo) && $sidebar_company_id === 0 && $sidebar_is_superadmin) {
+        $sidebar_company_label = '总公司（全部分公司合计）';
+    } elseif (!empty($pdo) && $sidebar_company_id > 0) {
         $stmt = $pdo->prepare("SELECT code, name FROM companies WHERE id = ? LIMIT 1");
         $stmt->execute([$sidebar_company_id]);
         $r = $stmt->fetch(PDO::FETCH_ASSOC) ?: null;
@@ -31,7 +62,6 @@ try {
         }
     }
 } catch (Throwable $e) {}
-$sidebar_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $sidebar_companies = [];
 if ($sidebar_is_superadmin) {
     try {
@@ -64,6 +94,7 @@ if ($sidebar_is_superadmin) {
             <form method="post" action="switch_company.php" style="width:100%; margin-top: 8px;">
                 <input type="hidden" name="return_to" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'dashboard.php') ?>">
                 <select name="company_id" class="form-control" onchange="this.form.submit()" style="width:100%; min-height:40px; border-radius:12px; border:1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.12); color:#fff;">
+                    <option value="0" <?= $sidebar_company_id === 0 ? 'selected' : '' ?> style="color:#0f172a;">总公司（全部分公司合计）</option>
                     <?php foreach ($sidebar_companies as $c): ?>
                         <option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === $sidebar_company_id ? 'selected' : '' ?> style="color:#0f172a;">
                             <?= htmlspecialchars((string)$c['code']) ?> - <?= htmlspecialchars((string)$c['name']) ?>
@@ -144,20 +175,19 @@ if ($sidebar_is_superadmin) {
     </div>
     <?php endif; ?>
     <?php endif; ?>
-    <?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true)): ?>
+    <?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true)): ?>
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>User Management</a>
         <?php if ($sidebar_is_superadmin): ?>
         <a href="admin_companies.php" class="nav-item <?= $sidebar_current === 'admin_companies' ? 'primary' : '' ?>"><span class="nav-icon"></span>分公司 / Companies</a>
         <?php endif; ?>
         <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>Banks & Products</a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span>Permissions</a>
-        <a href="admin_customer_approvals.php" class="nav-item <?= $sidebar_current === 'admin_customer_approvals' ? 'primary' : '' ?>"><span class="nav-icon"></span>Customer Approvals</a>
     <?php endif; ?>
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>Logout</a>
 </aside>
 <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开导航"><span class="sidebar-toggle-icon">☰</span> MENU</button>
-<?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true) && $sidebar_pending > 0): ?>
-<a href="admin_approvals.php" class="sidebar-bell" title="Pending <?= $sidebar_pending ?>" aria-label="Pending approvals"><span class="sidebar-bell-icon">🔔</span><span class="sidebar-bell-badge"><?= $sidebar_pending ?></span></a>
+<?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true) && $sidebar_pending_total > 0): ?>
+<a href="<?= htmlspecialchars($sidebar_bell_href) ?>" class="sidebar-bell" title="<?= htmlspecialchars($sidebar_bell_title) ?>" aria-label="待处理 <?= (int)$sidebar_pending_total ?>"><span class="sidebar-bell-icon">🔔</span><span class="sidebar-bell-badge"><?= (int)$sidebar_pending_total ?></span></a>
 <?php endif; ?>
 <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 <style>

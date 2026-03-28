@@ -15,7 +15,7 @@ if ($filter_recommend !== '') {
 }
 $sidebar_current = 'customers';
 
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $company_id = current_company_id();
 $has_customer_status = false;
 try {

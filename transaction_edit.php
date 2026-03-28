@@ -31,7 +31,7 @@ if (!$row) {
     exit;
 }
 
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 // member 只能编辑自己 pending 的记录
 if (!$is_admin) {
     if (($row['status'] ?? '') !== 'pending') {

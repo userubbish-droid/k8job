@@ -118,7 +118,7 @@ if (!user_is_manageable_by_current_actor($pdo, $id)) {
                         <div class="form-row-2">
                             <div class="form-group">
                                 <label>角色</label>
-                                <input class="form-control" value="<?= htmlspecialchars((string)($u['role'] ?? '')) ?>" disabled>
+                                <input class="form-control" value="<?= htmlspecialchars(function_exists('role_label') ? role_label((string)($u['role'] ?? '')) : (string)($u['role'] ?? '')) ?>" disabled>
                                 <p class="form-hint">角色请回到列表页用「改角色」。</p>
                             </div>
                             <div class="form-group">

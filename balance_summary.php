@@ -5,7 +5,7 @@ require_login();
 require_permission('statement_balance');
 
 $sidebar_current = 'balance_summary';
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss'], true);
 
 $day_from = isset($_GET['day_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_from']) ? $_GET['day_from'] : null;
 $day_to   = isset($_GET['day_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_to']) ? $_GET['day_to'] : null;

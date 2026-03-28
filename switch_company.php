@@ -5,7 +5,7 @@ require_login();
 
 if (($_SESSION['user_role'] ?? '') !== 'superadmin') {
     http_response_code(403);
-    echo '无权限（仅 superadmin 可切换公司）。';
+    echo '无权限（仅平台 big boss 可切换公司）。';
     exit;
 }
 
@@ -15,7 +15,14 @@ if ($return_to === '' || strpos($return_to, 'http') === 0 || strpos($return_to, 
     $return_to = 'dashboard.php';
 }
 
-if ($cid <= 0) {
+// 总公司：全部分公司数据合计（仅 superadmin）
+if ($cid === 0) {
+    $_SESSION['company_id'] = 0;
+    header('Location: ' . $return_to);
+    exit;
+}
+
+if ($cid < 0) {
     header('Location: ' . $return_to);
     exit;
 }

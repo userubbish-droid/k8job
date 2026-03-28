@@ -19,9 +19,11 @@ function redirect_self(): void {
     exit;
 }
 
-function ensure_users_role_supports_agent(PDO $pdo): void {
-    $sql = "ALTER TABLE users MODIFY role ENUM('superadmin','admin','member','agent') NOT NULL DEFAULT 'member'";
-    $pdo->exec($sql);
+function ensure_users_role_enum(PDO $pdo): void {
+    try {
+        $pdo->exec("ALTER TABLE users MODIFY role ENUM('superadmin','boss','admin','member','agent') NOT NULL DEFAULT 'member'");
+    } catch (Throwable $e) {
+    }
 }
 
 function ensure_users_login_meta(PDO $pdo): void {
@@ -59,16 +61,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($username === '' || $password === '') {
                 throw new RuntimeException('请填写用户名和密码。');
             }
-            if (!in_array($role, ['superadmin', 'admin', 'member', 'agent'], true)) {
+            if (!in_array($role, ['superadmin', 'boss', 'admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
             }
             if ($role === 'superadmin' && !$actor_is_superadmin) {
-                throw new RuntimeException('仅平台管理员可创建 superadmin 账号。');
+                throw new RuntimeException('仅平台 big boss 可创建该角色。');
             }
-
-            if (in_array($role, ['agent', 'superadmin'], true)) {
-                // 兼容旧库：旧版本 users.role 仅支持 admin/member
-                ensure_users_role_supports_agent($pdo);
+            if ($role === 'boss' && !$actor_is_superadmin) {
+                throw new RuntimeException('仅平台 big boss 可创建 boss（分公司老板）。');
+            }
+            ensure_users_role_enum($pdo);
+            if (in_array($role, ['agent', 'superadmin', 'boss'], true)) {
                 if (!is_array($agent_customers) || empty($agent_customers)) {
                     if ($role === 'agent') {
                         throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
@@ -94,6 +97,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 $company_id = $pick;
             } else {
+                if (in_array($role, ['superadmin', 'boss'], true)) {
+                    throw new RuntimeException('无权限创建该角色。');
+                }
                 $cid_new = current_company_id();
                 if ($cid_new <= 0) {
                     throw new RuntimeException('无法确定所属公司，请重新登录。');
@@ -128,27 +134,35 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!user_is_manageable_by_current_actor($pdo, $id)) {
                 throw new RuntimeException('无权限操作该账号。');
             }
-            if (!in_array($role, ['superadmin', 'admin', 'member', 'agent'], true)) {
+            if (!in_array($role, ['superadmin', 'boss', 'admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
             }
             if ($role === 'superadmin' && !$actor_is_superadmin) {
-                throw new RuntimeException('仅平台管理员可将账号设为 superadmin。');
+                throw new RuntimeException('仅平台 big boss 可将账号设为 superadmin。');
             }
-            if (in_array($role, ['agent', 'superadmin'], true)) {
-                // 兼容旧库：旧版本 users.role 仅支持 admin/member
-                ensure_users_role_supports_agent($pdo);
+            if ($role === 'boss' && !$actor_is_superadmin) {
+                throw new RuntimeException('仅平台 big boss 可将账号设为 boss。');
+            }
+            if (in_array($role, ['agent', 'superadmin', 'boss'], true)) {
+                ensure_users_role_enum($pdo);
             }
             $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
             $stmt->execute([$id]);
             $oldRole = (string)($stmt->fetchColumn() ?: '');
+            if (!$actor_is_superadmin && $oldRole === 'boss') {
+                throw new RuntimeException('Boss 账号的角色仅可由平台 big boss 修改。');
+            }
             $self = ($id === (int)($_SESSION['user_id'] ?? 0));
             $curActorRole = (string)($_SESSION['user_role'] ?? '');
             if ($self) {
                 if ($curActorRole === 'admin' && $role !== 'admin') {
                     throw new RuntimeException('不能把当前登录账号改为非 admin。');
                 }
-                if ($curActorRole === 'superadmin' && !in_array($role, ['superadmin', 'admin'], true)) {
+                if ($curActorRole === 'superadmin' && !in_array($role, ['superadmin', 'boss', 'admin'], true)) {
                     throw new RuntimeException('不能把当前账号改为该角色。');
+                }
+                if ($curActorRole === 'boss' && $role !== 'boss') {
+                    throw new RuntimeException('Boss 角色仅可由平台 big boss 修改。');
                 }
             }
             if ($role === 'superadmin') {
@@ -285,8 +299,12 @@ $users_primary_list = $actor_is_superadmin ? $all_company_users : $company_users
 $users_primary_show_company_col = $actor_is_superadmin;
 $users_primary_colspan = $users_primary_show_company_col ? 10 : 9;
 
+/** 分公司管理员改角色：不可设 boss / superadmin */
 $role_opts_company = ['admin', 'member', 'agent'];
-$role_opts_platform = ['superadmin', 'admin', 'member', 'agent'];
+/** 平台 big boss 改分公司账号角色（顺序：boss → admin → member → agent） */
+$role_opts_company_sa = ['boss', 'admin', 'member', 'agent'];
+/** 平台 big boss 改平台账号角色（顺序：big boss → boss → admin → member → agent） */
+$role_opts_platform = ['superadmin', 'boss', 'admin', 'member', 'agent'];
 
 $companies_for_create = [];
 if ($actor_is_superadmin) {
@@ -376,7 +394,7 @@ if ($actor_is_superadmin) {
     <div class="page-wrap">
         <div class="page-header">
             <h2><?= $actor_is_superadmin ? '用户管理（全平台）' : '用户管理（本公司）' ?></h2>
-            <p class="breadcrumb">当前：<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>（<?= htmlspecialchars($_SESSION['user_role'] ?? '') ?>）<?= $actor_is_superadmin ? ' · 可查看所有分公司账号与平台管理员' : ' · 仅本公司账号，无平台 superadmin' ?></p>
+            <p class="breadcrumb">当前：<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>（<?= htmlspecialchars(role_label((string)($_SESSION['user_role'] ?? ''))) ?>）<?= $actor_is_superadmin ? ' · 可查看所有分公司账号与平台 big boss' : ' · 仅本公司账号，无平台 big boss' ?></p>
             <?php if ($actor_is_superadmin): ?>
             <p class="agent-customer-hint" style="margin-top:10px;">新增或停用<strong>分公司</strong>（公司代码、登录可选公司）请到 <a href="admin_companies.php">分公司管理</a>。</p>
             <?php endif; ?>
@@ -388,12 +406,12 @@ if ($actor_is_superadmin) {
         <div class="card">
             <h3>创建账号</h3>
             <?php if ($actor_is_superadmin): ?>
-            <p class="agent-customer-hint" style="margin-top:-6px;">新建 admin / member / agent 时请在下方选择<strong>所属分公司</strong>（与「分公司管理」里的代码对应）；创建平台 <strong>superadmin</strong> 时不选公司。分公司管理员登录请在登录页 Company 填该公司代码。</p>
+            <p class="agent-customer-hint" style="margin-top:-6px;">新建 <strong>boss / admin / member / agent</strong> 时请选<strong>所属分公司</strong>；创建平台 <strong>big boss（superadmin）</strong> 时不选公司。分公司老板（boss）与 admin 权限相同且不受权限表限制。</p>
             <?php if (!$companies_for_create): ?>
             <div class="alert alert-error" role="status">当前没有「启用」的分公司，请先到 <a href="admin_companies.php">分公司管理</a> 新增。</div>
             <?php endif; ?>
             <?php else: ?>
-            <p class="agent-customer-hint" style="margin-top:-6px;">新账号仅可创建在本公司；平台 superadmin 仅平台总管理员可见与创建。</p>
+            <p class="agent-customer-hint" style="margin-top:-6px;">新账号仅可创建在本公司（admin / member / agent）；平台 big boss 与 boss 仅可由平台创建。</p>
             <?php endif; ?>
             <form method="post">
                 <input type="hidden" name="action" value="create">
@@ -411,11 +429,16 @@ if ($actor_is_superadmin) {
                     <div class="form-group">
                         <label>角色 *</label>
                         <select class="form-control" name="role" id="create_role" required>
-                            <option value="member" selected>member</option>
-                            <option value="admin">admin</option>
-                            <option value="agent">agent</option>
                             <?php if ($actor_is_superadmin): ?>
-                            <option value="superadmin">superadmin</option>
+                            <option value="superadmin"><?= htmlspecialchars(role_label('superadmin')) ?></option>
+                            <option value="boss"><?= htmlspecialchars(role_label('boss')) ?></option>
+                            <option value="admin"><?= htmlspecialchars(role_label('admin')) ?></option>
+                            <option value="member" selected><?= htmlspecialchars(role_label('member')) ?></option>
+                            <option value="agent"><?= htmlspecialchars(role_label('agent')) ?></option>
+                            <?php else: ?>
+                            <option value="admin"><?= htmlspecialchars(role_label('admin')) ?></option>
+                            <option value="member" selected><?= htmlspecialchars(role_label('member')) ?></option>
+                            <option value="agent"><?= htmlspecialchars(role_label('agent')) ?></option>
                             <?php endif; ?>
                         </select>
                     </div>
@@ -480,8 +503,8 @@ if ($actor_is_superadmin) {
         <div class="card">
             <h3><?= $actor_is_superadmin ? '全部分公司账号' : '本公司账号' ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
             <p class="agent-customer-hint" style="margin-top:-6px;"><?= $actor_is_superadmin
-                ? '汇总所有公司的 admin / member / agent；平台 superadmin 仅在下方单独列表。本表仅 superadmin 登录后可见。<strong>左侧色条与浅底色按分公司区分</strong>，便于扫读。'
-                : '不含平台 superadmin；与当前侧栏所选公司一致。分公司管理员无法查看其他公司或平台管理员。' ?></p>
+                ? '汇总各分公司的 boss / admin / member / agent；平台 big boss（superadmin）仅在下方单独列表。<strong>左侧色条按分公司区分</strong>。'
+                : '不含平台 big boss；与当前侧栏所选公司一致。' ?></p>
             <?= $filter_links ?>
             <?php if (!$actor_is_superadmin && $view_company_id <= 0): ?>
                 <div class="alert alert-error" role="status">无法加载本公司账号（缺少公司上下文），请重新登录。</div>
@@ -518,16 +541,20 @@ if ($actor_is_superadmin) {
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['display_name'] ?? '') ?></td>
                         <td>
+                            <?php if (!$actor_is_superadmin && ($u['role'] ?? '') === 'boss'): ?>
+                                <span class="form-hint" style="margin:0;"><?= htmlspecialchars(role_label('boss')) ?>（仅平台 big boss 可改）</span>
+                            <?php else: ?>
                             <form method="post" class="admin-users-role-form">
                                 <input type="hidden" name="action" value="change_role">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                                 <select name="role" class="form-control">
-                                    <?php foreach ($role_opts_company as $opt): ?>
-                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars($opt) ?></option>
+                                    <?php foreach (($actor_is_superadmin ? $role_opts_company_sa : $role_opts_company) as $opt): ?>
+                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars(role_label($opt)) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 <button type="submit" class="btn btn-gray btn-sm">改角色</button>
                             </form>
+                            <?php endif; ?>
                         </td>
                         <td><?= ((int)$u['is_active'] === 1) ? '启用' : '禁用' ?></td>
                         <td><?= htmlspecialchars((string)($u['last_login_ip'] ?? '')) ?></td>
@@ -563,8 +590,8 @@ if ($actor_is_superadmin) {
         </div>
         <?php if ($actor_is_superadmin): ?>
         <div class="card">
-            <h3>平台管理员（superadmin）</h3>
-            <p class="agent-customer-hint" style="margin-top:-6px;">不归属任何公司；与上方各分公司账号分开。<strong>仅 superadmin 登录后显示本区块</strong>；将账号降级为分公司角色时，将归入侧栏当前所选公司。</p>
+            <h3>平台 big boss（superadmin）</h3>
+            <p class="agent-customer-hint" style="margin-top:-6px;">不归属任何公司；与上方各分公司账号分开。将账号改为分公司角色时，将归入侧栏当前所选公司。</p>
             <?= $filter_links ?>
             <div style="overflow-x:auto;">
             <table class="data-table">
@@ -593,7 +620,7 @@ if ($actor_is_superadmin) {
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                                 <select name="role" class="form-control">
                                     <?php foreach ($role_opts_platform as $opt): ?>
-                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars($opt) ?></option>
+                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars(role_label($opt)) ?></option>
                                     <?php endforeach; ?>
                                 </select>
                                 <button type="submit" class="btn btn-gray btn-sm">改角色</button>
@@ -625,7 +652,7 @@ if ($actor_is_superadmin) {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$superadmin_users): ?>
-                    <tr><td colspan="9" class="admin-users-center">暂无 superadmin 账号</td></tr>
+                    <tr><td colspan="9" class="admin-users-center">暂无平台 big boss 账号</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

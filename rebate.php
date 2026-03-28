@@ -5,7 +5,7 @@ require_permission('rebate');
 $sidebar_current = 'rebate';
 
 $company_id = current_company_id();
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $msg = '';
 $err = '';
 

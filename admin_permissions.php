@@ -5,6 +5,7 @@ require_admin();
 $sidebar_current = 'admin_permissions';
 
 $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+$actor_can_set_admin_month = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 
 $msg = '';
 $err = '';
@@ -27,12 +28,69 @@ try {
     $members = [];
 }
 
+$admins_for_month = [];
+if ($actor_can_set_admin_month) {
+    try {
+        if ($actor_is_superadmin) {
+            $admins_for_month = $pdo->query("SELECT u.id, u.username, u.display_name, u.company_id, COALESCE(c.code, '') AS company_code
+                FROM users u
+                LEFT JOIN companies c ON c.id = u.company_id
+                WHERE u.role = 'admin'
+                ORDER BY u.company_id ASC, u.username ASC")->fetchAll();
+        } else {
+            $cid = current_company_id();
+            $stmt = $pdo->prepare("SELECT id, username, display_name, company_id FROM users WHERE role = 'admin' AND company_id = ? ORDER BY username ASC");
+            $stmt->execute([$cid]);
+            $admins_for_month = $stmt->fetchAll();
+        }
+    } catch (Throwable $e) {
+        $admins_for_month = [];
+    }
+}
+
 $selected_id = (int)($_REQUEST['user_id'] ?? $_POST['user_id'] ?? 0);
 if ($selected_id > 0 && !in_array($selected_id, array_column($members, 'id'), true)) {
     $selected_id = 0;
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0) {
+$selected_admin_id = (int)($_REQUEST['admin_user_id'] ?? $_POST['admin_user_id'] ?? 0);
+if ($selected_admin_id > 0 && !in_array($selected_admin_id, array_column($admins_for_month, 'id'), true)) {
+    $selected_admin_id = 0;
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_admin_month') {
+    if (!$actor_can_set_admin_month) {
+        $err = '仅 Boss 或平台 big boss 可设置 Admin 的首页本月数据权限。';
+    } elseif ($selected_admin_id <= 0) {
+        $err = '请选择有效的 Admin。';
+    } elseif (!user_is_manageable_by_current_actor($pdo, $selected_admin_id)) {
+        $err = '无权限保存该用户的设置。';
+    } else {
+        try {
+            $chk = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
+            $chk->execute([$selected_admin_id]);
+            $rrow = $chk->fetch(PDO::FETCH_ASSOC);
+            if (($rrow['role'] ?? '') !== 'admin') {
+                $err = '仅可为角色为 Admin 的用户设置此项。';
+            } else {
+                $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
+                if (!empty($_POST['dashboard_month_data'])) {
+                    $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
+                }
+                $msg = '已更新该 Admin 的首页「本月数据」权限。';
+            }
+        } catch (Throwable $e) {
+            $em = $e->getMessage();
+            if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
+                $err = '保存失败：尚未创建权限表。请执行 migrate_user_permissions.sql 中的 SQL 后重试。';
+            } else {
+                $err = '保存失败：' . htmlspecialchars($em);
+            }
+        }
+    }
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && ($_POST['action'] ?? '') !== 'save_admin_month') {
     if (!user_is_manageable_by_current_actor($pdo, $selected_id)) {
         $err = '无权限保存该员工的权限（仅可管理本公司 Member；平台总管理员可管理全部）。';
     } else {
@@ -59,6 +117,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0) {
                 $err = '保存失败：' . htmlspecialchars($msg);
             }
         }
+    }
+}
+
+$admin_has_month = false;
+if ($actor_can_set_admin_month && $selected_admin_id > 0) {
+    try {
+        $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+        $stmt->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
+        $admin_has_month = (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        $admin_has_month = false;
     }
 }
 
@@ -128,7 +197,7 @@ if ($selected_id > 0) {
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 560px;">
         <div class="page-header">
-            <h2>Member 权限设置<?= $actor_is_superadmin ? '（全平台）' : '（本公司）' ?></h2>
+            <h2>权限设置<?= $actor_is_superadmin ? '（全平台）' : '（本公司）' ?></h2>
             <p class="breadcrumb">
                 <a href="dashboard.php">首页</a><span>·</span>
                 <a href="admin_users.php">用户管理</a>
@@ -140,7 +209,9 @@ if ($selected_id > 0) {
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
+            <h3 style="margin-top:0;">Member 权限</h3>
             <form method="get" class="member-select">
+                <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
                 <div class="form-group">
                     <label>选择 Member</label>
                     <select name="user_id" class="form-control" onchange="this.form.submit()">
@@ -210,6 +281,45 @@ if ($selected_id > 0) {
             <?php else: ?>
             <?php endif; ?>
         </div>
+
+        <?php if ($actor_can_set_admin_month): ?>
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="margin-top:0;">Admin · 首页本月数据</h3>
+            <p class="form-hint" style="margin-bottom:16px;">默认 Admin 看不到首页「显示本月数据」及本月汇总；勾选并保存后，该 Admin 即可查看。仅 Boss / 平台 big boss 可设置。</p>
+            <form method="get" class="member-select">
+                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
+                <div class="form-group">
+                    <label>选择 Admin</label>
+                    <select name="admin_user_id" class="form-control" onchange="this.form.submit()">
+                        <option value="">-- 请选 --</option>
+                        <?php foreach ($admins_for_month as $a):
+                            $a_cc = trim((string)($a['company_code'] ?? ''));
+                            $co_tag = ($actor_is_superadmin && $a_cc !== '') ? (' [' . $a_cc . ']') : '';
+                        ?>
+                            <option value="<?= (int)$a['id'] ?>" <?= $selected_admin_id === (int)$a['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($a['username']) ?>
+                                <?= $a['display_name'] ? '（' . htmlspecialchars($a['display_name']) . '）' : '' ?><?= htmlspecialchars($co_tag) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </form>
+            <?php if ($selected_admin_id > 0): ?>
+            <form method="post">
+                <input type="hidden" name="action" value="save_admin_month">
+                <input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>">
+                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
+                <div class="perm-item" style="border:none; padding-left:0;">
+                    <input type="checkbox" name="dashboard_month_data" value="1" id="admin_dash_month" <?= $admin_has_month ? 'checked' : '' ?>>
+                    <label class="perm-label" for="admin_dash_month">允许查看首页本月数据</label>
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 12px;">保存</button>
+            </form>
+            <?php elseif (empty($admins_for_month)): ?>
+            <p class="form-hint">当前范围内没有 Admin 账号。</p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
     </div>
         </main>
     </div>

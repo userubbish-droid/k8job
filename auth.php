@@ -35,8 +35,11 @@ function get_permission_options(): array
     ];
 }
 
+/** Admin 专属：首页「本月数据」须由 Boss / 平台 big boss 在权限页勾选后才有 */
+const PERM_DASHBOARD_MONTH_DATA = 'dashboard_month_data';
+
 /**
- * 当前用户是否拥有某权限。admin 默认全部允许；member 查 user_permissions 表（按用户）。
+ * 当前用户是否拥有某权限。boss / superadmin 全允许；admin 除「本月数据」外全允许；member 查 user_permissions。
  */
 function has_permission(string $key): bool
 {
@@ -44,7 +47,27 @@ function has_permission(string $key): bool
     if ($role === 'superadmin') {
         return true;
     }
+    if ($role === 'boss') {
+        return true;
+    }
     if ($role === 'admin') {
+        if ($key === PERM_DASHBOARD_MONTH_DATA) {
+            $uid = (int)($_SESSION['user_id'] ?? 0);
+            if ($uid <= 0) {
+                return false;
+            }
+            global $pdo;
+            if (!isset($pdo)) {
+                return false;
+            }
+            try {
+                $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+                $stmt->execute([$uid, PERM_DASHBOARD_MONTH_DATA]);
+                return (bool) $stmt->fetch();
+            } catch (Throwable $e) {
+                return false;
+            }
+        }
         return true;
     }
     if ($role === 'agent') {
@@ -98,7 +121,7 @@ function require_login(): void
         exit;
     }
     $role = $_SESSION['user_role'] ?? '';
-    // 多公司：除 superadmin 外必须绑定 company_id
+    // 多公司：除平台 superadmin 外必须绑定 company_id（含 boss / admin / member / agent）
     if ($role !== 'superadmin') {
         $cid = (int)($_SESSION['company_id'] ?? 0);
         if ($cid <= 0) {
@@ -124,9 +147,9 @@ function require_login(): void
 function require_admin(): void
 {
     require_login();
-    if (!in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true)) {
+    if (!in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true)) {
         http_response_code(403);
-        echo '无权限（仅 admin 可访问）';
+        echo '无权限（仅管理员或老板可访问）';
         exit;
     }
 }
@@ -136,20 +159,44 @@ function require_superadmin(): void
     require_login();
     if (($_SESSION['user_role'] ?? '') !== 'superadmin') {
         http_response_code(403);
-        echo '无权限（仅平台 superadmin 可访问）';
+        echo '无权限（仅平台 big boss 可访问）';
         exit;
     }
 }
 
-/** 当前公司 ID（superadmin 也会有：用于切换查看） */
+/** superadmin 在侧栏选择「总公司」时 session 为 0，表示全部分公司合计（仅部分页面如 Dashboard 做汇总） */
+function is_superadmin_all_companies_scope(): bool {
+    return ($_SESSION['user_role'] ?? '') === 'superadmin'
+        && (int)($_SESSION['company_id'] ?? 0) === 0;
+}
+
+/** 当前公司 ID（superadmin 也会有：用于切换查看；0 表示总公司/全部分公司汇总视图） */
 function current_company_id(): int {
-    $cid = (int)($_SESSION['company_id'] ?? 0);
-    return $cid > 0 ? $cid : 0;
+    return (int)($_SESSION['company_id'] ?? 0);
+}
+
+/** 界面展示用：数据库存英文 role，superadmin 显示为 big boss */
+function role_label(string $role): string
+{
+    switch (strtolower(trim($role))) {
+        case 'superadmin':
+            return 'big boss';
+        case 'boss':
+            return 'boss';
+        case 'admin':
+            return 'admin';
+        case 'member':
+            return 'member';
+        case 'agent':
+            return 'agent';
+        default:
+            return $role;
+    }
 }
 
 /**
  * 当前登录者是否可管理目标用户：平台 superadmin 仅由 superadmin 管理；superadmin 可管理任意分公司的账号；
- * 分公司 admin 仅可管理本公司且非 superadmin 的用户。
+ * 分公司 admin / boss 仅可管理本公司且非 superadmin 的用户。
  */
 function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
 {
@@ -163,16 +210,17 @@ function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
         return false;
     }
     $role = (string)($row['role'] ?? '');
-    $actor_sa = (($_SESSION['user_role'] ?? '') === 'superadmin');
+    $actor_role = (string)($_SESSION['user_role'] ?? '');
+    $actor_sa = $actor_role === 'superadmin';
+    $actor_company_mgr = in_array($actor_role, ['admin', 'boss'], true);
     if ($role === 'superadmin') {
         return $actor_sa;
     }
-    // 分公司账号：仅本公司 admin 可管；平台 superadmin 可管任意公司
     if ($actor_sa) {
         return true;
     }
     $cid = current_company_id();
-    if ($cid <= 0) {
+    if ($cid <= 0 || !$actor_company_mgr) {
         return false;
     }
     return (int)($row['company_id'] ?? 0) === $cid;

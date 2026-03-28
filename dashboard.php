@@ -8,10 +8,13 @@ if (($_SESSION['user_role'] ?? '') === 'agent') {
 }
 require_permission('home_dashboard');
 
+$show_dashboard_month = (($_SESSION['user_role'] ?? '') !== 'admin') || has_permission(PERM_DASHBOARD_MONTH_DATA);
+
 $today = date('Y-m-d');
 $month_start = date('Y-m-01');
 $month_end   = date('Y-m-t');
 $company_id = current_company_id();
+$dashboard_all_companies = function_exists('is_superadmin_all_companies_scope') && is_superadmin_all_companies_scope();
 
 $sidebar_current = 'dashboard';
 $db_error = '';
@@ -35,15 +38,19 @@ try {
     $customer_day_filter = $has_register_date ? "DATE(register_date) = ?" : "DATE(created_at) = ?";
     $customer_day_filter_alias = $has_register_date ? "DATE(c.register_date) = ?" : "DATE(c.created_at) = ?";
 
-    // 今日统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
+    $tx_day_where = $dashboard_all_companies ? "day = ? AND status = 'approved' AND deleted_at IS NULL" : "company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL";
+    $tx_month_where = $dashboard_all_companies ? "day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL" : "company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL";
+
+    $sum_line = "COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
                                   COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
                                   COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
-                                  COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus
-                           FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
-    $stmt->execute([$company_id, $today]);
+                                  COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus";
+
+    // 今日统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
+    $stmt = $pdo->prepare("SELECT {$sum_line} FROM transactions WHERE {$tx_day_where}");
+    $stmt->execute($dashboard_all_companies ? [$today] : [$company_id, $today]);
     $day = $stmt->fetch();
     $day_in   = (float)($day['total_in'] ?? 0);
     $day_out  = (float)($day['total_out'] ?? 0);
@@ -53,43 +60,66 @@ try {
     $day_rebate = (float)($day['rebate'] ?? 0);
     $day_bonus = (float)($day['bonus'] ?? 0);
 
-    // 本月统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
-    $stmt = $pdo->prepare("SELECT COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
-                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
-                                  COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
-                                  COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
-                                  COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
-                                  COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
-                                  COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus
-                           FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL");
-    $stmt->execute([$company_id, $month_start, $month_end]);
-    $month = $stmt->fetch();
-    $month_in       = (float)($month['total_in'] ?? 0);
-    $month_out      = (float)($month['total_out'] ?? 0);
-    $month_expenses = (float)($month['total_expenses'] ?? 0);
-    $month_profit   = $month_in - $month_out - $month_expenses;
-    $month_free = (float)($month['free'] ?? 0);
-    $month_free_withdraw = (float)($month['free_withdraw'] ?? 0);
-    $month_rebate = (float)($month['rebate'] ?? 0);
-    $month_bonus = (float)($month['bonus'] ?? 0);
+    if ($show_dashboard_month) {
+        // 本月统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
+        $sum_line_month = "COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
+                                      COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
+                                      COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
+                                      COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
+                                      COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
+                                      COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
+                                      COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus";
+        $stmt = $pdo->prepare("SELECT {$sum_line_month} FROM transactions WHERE {$tx_month_where}");
+        $stmt->execute($dashboard_all_companies ? [$month_start, $month_end] : [$company_id, $month_start, $month_end]);
+        $month = $stmt->fetch();
+        $month_in       = (float)($month['total_in'] ?? 0);
+        $month_out      = (float)($month['total_out'] ?? 0);
+        $month_expenses = (float)($month['total_expenses'] ?? 0);
+        $month_profit   = $month_in - $month_out - $month_expenses;
+        $month_free = (float)($month['free'] ?? 0);
+        $month_free_withdraw = (float)($month['free_withdraw'] ?? 0);
+        $month_rebate = (float)($month['rebate'] ?? 0);
+        $month_bonus = (float)($month['bonus'] ?? 0);
+    }
 
-    // 今日上线客户数（今日已批准流水中不重复的顾客 code 数）
-    $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND code != ''");
-    $stmt->execute([$company_id, $today]);
+    // 今日上线客户数（分公司内不重复 code；总公司视图按 company_id+code 区分不同分公司同名客户）
+    if ($dashboard_all_companies) {
+        $stmt = $pdo->prepare("SELECT COUNT(DISTINCT CONCAT(company_id, ':', TRIM(code))) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''");
+        $stmt->execute([$today]);
+    } else {
+        $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND code != ''");
+        $stmt->execute([$company_id, $today]);
+    }
     $day_customers_count = (int) $stmt->fetchColumn();
+
     // 今日单数（今日已批准流水条数）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
-    $stmt->execute([$company_id, $today]);
+    if ($dashboard_all_companies) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL");
+        $stmt->execute([$today]);
+    } else {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
+        $stmt->execute([$company_id, $today]);
+    }
     $day_orders_count = (int) $stmt->fetchColumn();
 
-    // 几个新顾客（今日新增的顾客数，按 customers 表 created_at）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE {$customer_day_filter}");
-    $stmt->execute([$today]);
+    // 几个新顾客（今日新增的顾客数）
+    if ($dashboard_all_companies) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE {$customer_day_filter}");
+        $stmt->execute([$today]);
+    } else {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND {$customer_day_filter}");
+        $stmt->execute([$company_id, $today]);
+    }
     $day_new_customers = (int) $stmt->fetchColumn();
 
-    // 新客户进多少单（今日已批准流水中，顾客代码属于「今日新增顾客」的条数）
-    $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND {$customer_day_filter_alias} WHERE t.company_id = ? AND c.company_id = ? AND t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
-    $stmt->execute([$company_id, $company_id, $today, $today]);
+    // 新客户进多少单（今日已批准流水中，顾客与本公司「今日注册」顾客一致；占位符顺序与 JOIN/WHERE 一致）
+    if ($dashboard_all_companies) {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND c.company_id = t.company_id AND {$customer_day_filter_alias} WHERE t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
+        $stmt->execute([$today, $today]);
+    } else {
+        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND c.company_id = t.company_id AND {$customer_day_filter_alias} WHERE t.company_id = ? AND c.company_id = ? AND t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
+        $stmt->execute([$today, $company_id, $company_id, $today]);
+    }
     $day_new_customer_orders = (int) $stmt->fetchColumn();
 } catch (Throwable $e) {
     $db_error = $e->getMessage();
@@ -121,8 +151,15 @@ try {
                 <h1>K8 欢迎（<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>）</h1>
                 <p class="welcome-role">
                     欢迎，<strong><?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></strong>
-                    <span class="role-badge"><?= ($_SESSION['user_role'] ?? '') === 'admin' ? '管理员' : '员工' ?></span>
+                    <?php
+                    $__r = $_SESSION['user_role'] ?? '';
+                    $__badge = $__r === 'superadmin' ? 'Big Boss' : ($__r === 'boss' ? 'Boss' : ($__r === 'admin' ? '管理员' : '员工'));
+                    ?>
+                    <span class="role-badge"><?= htmlspecialchars($__badge) ?></span>
                 </p>
+                <?php if (!empty($dashboard_all_companies)): ?>
+                    <p class="form-hint" style="margin-top:8px;">当前为<strong>总公司</strong>视图：下方统计为<strong>全部分公司数据加总</strong>。录入流水、查看客户等请在侧栏选择具体分公司。</p>
+                <?php endif; ?>
             </div>
 
             <?php if ($db_error): ?>
@@ -205,6 +242,7 @@ try {
                 </div>
             </div>
 
+            <?php if ($show_dashboard_month): ?>
             <label class="month-toggle">
                 <input type="checkbox" id="show_month" onchange="document.getElementById('month-card').classList.toggle('visible', this.checked)">
                 显示本月数据
@@ -249,6 +287,7 @@ try {
                 </div>
                 <p class="form-hint" style="margin-top:8px; margin-bottom:0;">本月利润 = 入账 − 出账 − 开销</p>
             </div>
+            <?php endif; ?>
         </main>
     </div>
 </body>

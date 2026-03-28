@@ -59,7 +59,7 @@ if ($quick === 'expense' && $expense_kind_ui_pre === 'kiosk') {
 $company_id = current_company_id();
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']) && trim((string)($_POST['expense_kind'] ?? '')) === 'kiosk') {
-    if (($_SESSION['user_role'] ?? '') !== 'admin') {
+    if (!in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss'], true)) {
         header('Location: kiosk_expense.php');
         exit;
     }
@@ -143,7 +143,7 @@ $expense_day_to = preg_match('/^\d{4}-\d{2}-\d{2}$/', $expense_day_to_raw) ? $ex
 if ($expense_day_from > $expense_day_to) { $tmp = $expense_day_from; $expense_day_from = $expense_day_to; $expense_day_to = $tmp; }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-    $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
+    $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
     // member：未点击「+」修改日期时间则用当前时间且自动通过审核
     $member_use_current = isset($_POST['member_use_current_time']) && (string)$_POST['member_use_current_time'] === '1';
     if ($quick === 'expense') {
@@ -286,7 +286,7 @@ $now   = date('H:i');
 $selected_mode = trim((string)($_POST['mode'] ?? ($quick === 'expense' ? 'EXPENSE' : '')));
 
 // 银行/产品：仅 admin / superadmin 可“设置”（在 Banks & Products 管理）；员工只能从已设置的选项中选择
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $banks = [];
 $products = [];
 $expenses = [];

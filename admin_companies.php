@@ -142,7 +142,7 @@ try {
                     <p class="breadcrumb">
                         <a href="dashboard.php">首页</a><span>·</span>
                         <a href="admin_users.php">用户管理</a><span>·</span>
-                        <span>分公司（仅 superadmin）</span>
+                        <span>分公司（仅平台 big boss）</span>
                     </p>
                 </div>
 

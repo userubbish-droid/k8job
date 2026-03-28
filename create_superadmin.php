@@ -8,7 +8,7 @@ $err = '';
 
 function ensure_users_role_supports_superadmin(PDO $pdo): void {
     try {
-        $pdo->exec("ALTER TABLE users MODIFY role ENUM('superadmin','admin','member','agent') NOT NULL DEFAULT 'member'");
+        $pdo->exec("ALTER TABLE users MODIFY role ENUM('superadmin','boss','admin','member','agent') NOT NULL DEFAULT 'member'");
     } catch (Throwable $e) {}
     try {
         $pdo->exec("ALTER TABLE users ADD COLUMN company_id INT UNSIGNED NULL AFTER avatar_url");

@@ -5,7 +5,7 @@ require_permission('product_library');
 $sidebar_current = 'product_library';
 
 $company_id = current_company_id();
-$is_admin = ($_SESSION['user_role'] ?? '') === 'admin';
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss'], true);
 
 $products = [];
 $by_code = [];

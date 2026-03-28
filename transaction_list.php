@@ -19,7 +19,7 @@ $export   = ($_GET['export'] ?? '') === 'csv';
 $per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true);
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 
 $params = [];
 $where  = ['1=1', 'company_id = ?'];
