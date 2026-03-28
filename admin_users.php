@@ -60,22 +60,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $agent_customers = $_POST['agent_customers'] ?? [];
 
             if ($username === '' || $password === '') {
-                throw new RuntimeException('请填写用户名和密码。');
+                throw new RuntimeException(__('adm_users_err_fill_user_pass'));
             }
             if (!in_array($role, ['superadmin', 'boss', 'admin', 'member', 'agent'], true)) {
-                throw new RuntimeException('角色不正确。');
+                throw new RuntimeException(__('adm_users_err_invalid_role'));
             }
             if ($role === 'superadmin' && !$actor_is_superadmin) {
-                throw new RuntimeException('仅平台 big boss 可创建该角色。');
+                throw new RuntimeException(__('adm_users_err_sa_only_create'));
             }
             if ($role === 'boss' && !$actor_is_superadmin) {
-                throw new RuntimeException('仅平台 big boss 可创建 boss（分公司老板）。');
+                throw new RuntimeException(__('adm_users_err_boss_only'));
             }
             ensure_users_role_enum($pdo);
             if (in_array($role, ['agent', 'superadmin', 'boss'], true)) {
                 if (!is_array($agent_customers) || empty($agent_customers)) {
                     if ($role === 'agent') {
-                        throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
+                        throw new RuntimeException(__('adm_users_err_agent_customers'));
                     }
                 }
             }
@@ -89,21 +89,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($actor_is_superadmin) {
                 $pick = (int)($_POST['create_company_id'] ?? 0);
                 if ($pick <= 0) {
-                    throw new RuntimeException('请选择该账号所属的分公司。');
+                    throw new RuntimeException(__('adm_users_err_pick_company'));
                 }
                 $stmtC = $pdo->prepare('SELECT id FROM companies WHERE id = ? AND is_active = 1 LIMIT 1');
                 $stmtC->execute([$pick]);
                 if (!$stmtC->fetch()) {
-                    throw new RuntimeException('所选分公司无效或已停用。');
+                    throw new RuntimeException(__('adm_users_err_company_bad'));
                 }
                 $company_id = $pick;
             } else {
                 if (in_array($role, ['superadmin', 'boss'], true)) {
-                    throw new RuntimeException('无权限创建该角色。');
+                    throw new RuntimeException(__('adm_users_err_no_perm_role'));
                 }
                 $cid_new = current_company_id();
                 if ($cid_new <= 0) {
-                    throw new RuntimeException('无法确定所属公司，请重新登录。');
+                    throw new RuntimeException(__('adm_users_err_company_unknown'));
                 }
                 $company_id = $cid_new;
             }
@@ -115,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }, $agent_customers), function($x){ return $x !== ''; }));
                     $codes = array_values(array_unique($codes));
                     if (empty($codes)) {
-                        throw new RuntimeException('请选择至少 1 个客户（该客户将归属此 Agent）。');
+                        throw new RuntimeException(__('adm_users_err_agent_customers'));
                     }
                     $placeholders = implode(',', array_fill(0, count($codes), '?'));
                     $params = array_merge([$username], $codes);
@@ -127,22 +127,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
-            $msg = "已创建账号：{$username}（{$role}）";
+            $msg = __f('adm_users_msg_created', $username, role_label($role));
         } elseif ($action === 'change_role') {
             $id = (int)($_POST['id'] ?? 0);
             $role = trim($_POST['role'] ?? 'member');
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('adm_users_err_param'));
             if (!user_is_manageable_by_current_actor($pdo, $id)) {
-                throw new RuntimeException('无权限操作该账号。');
+                throw new RuntimeException(__('adm_users_err_no_perm_account'));
             }
             if (!in_array($role, ['superadmin', 'boss', 'admin', 'member', 'agent'], true)) {
-                throw new RuntimeException('角色不正确。');
+                throw new RuntimeException(__('adm_users_err_invalid_role'));
             }
             if ($role === 'superadmin' && !$actor_is_superadmin) {
-                throw new RuntimeException('仅平台 big boss 可将账号设为 superadmin。');
+                throw new RuntimeException(__('adm_users_err_sa_set_sa'));
             }
             if ($role === 'boss' && !$actor_is_superadmin) {
-                throw new RuntimeException('仅平台 big boss 可将账号设为 boss。');
+                throw new RuntimeException(__('adm_users_err_sa_set_boss'));
             }
             if (in_array($role, ['agent', 'superadmin', 'boss'], true)) {
                 ensure_users_role_enum($pdo);
@@ -151,19 +151,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmt->execute([$id]);
             $oldRole = (string)($stmt->fetchColumn() ?: '');
             if (!$actor_is_superadmin && $oldRole === 'boss') {
-                throw new RuntimeException('Boss 账号的角色仅可由平台 big boss 修改。');
+                throw new RuntimeException(__('adm_users_err_boss_locked_edit'));
             }
             $self = ($id === (int)($_SESSION['user_id'] ?? 0));
             $curActorRole = (string)($_SESSION['user_role'] ?? '');
             if ($self) {
                 if ($curActorRole === 'admin' && $role !== 'admin') {
-                    throw new RuntimeException('不能把当前登录账号改为非 admin。');
+                    throw new RuntimeException(__('adm_users_err_self_not_admin'));
                 }
                 if ($curActorRole === 'superadmin' && !in_array($role, ['superadmin', 'boss', 'admin'], true)) {
-                    throw new RuntimeException('不能把当前账号改为该角色。');
+                    throw new RuntimeException(__('adm_users_err_self_bad_role'));
                 }
                 if ($curActorRole === 'boss' && $role !== 'boss') {
-                    throw new RuntimeException('Boss 角色仅可由平台 big boss 修改。');
+                    throw new RuntimeException(__('adm_users_err_boss_self'));
                 }
             }
             if ($role === 'superadmin') {
@@ -172,7 +172,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($oldRole === 'superadmin' && $role !== 'superadmin') {
                 $ncid = current_company_id();
                 if ($ncid <= 0) {
-                    throw new RuntimeException('请先在侧栏选择公司，以便将该账号归入该公司。');
+                    throw new RuntimeException(__('adm_users_err_pick_company_sidebar'));
                 }
                 $stmt = $pdo->prepare("UPDATE users SET role = ?, company_id = ? WHERE id = ?");
                 $stmt->execute([$role, $ncid, $id]);
@@ -180,25 +180,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $stmt = $pdo->prepare("UPDATE users SET role = ? WHERE id = ?");
                 $stmt->execute([$role, $id]);
             }
-            $msg = '角色已更新。';
+            $msg = __('adm_users_msg_role_ok');
         } elseif ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('adm_users_err_param'));
             if (!user_is_manageable_by_current_actor($pdo, $id)) {
-                throw new RuntimeException('无权限操作该账号。');
+                throw new RuntimeException(__('adm_users_err_no_perm_account'));
             }
-            if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException('不能禁用自己。');
+            if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException(__('adm_users_err_disable_self'));
 
             $stmt = $pdo->prepare("UPDATE users SET is_active = IF(is_active=1,0,1) WHERE id = ?");
             $stmt->execute([$id]);
-            $msg = '已更新账号状态。';
+            $msg = __('adm_users_msg_toggle_ok');
         } elseif ($action === 'delete_user') {
             $id = (int)($_POST['id'] ?? 0);
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('adm_users_err_param'));
             if (!user_is_manageable_by_current_actor($pdo, $id)) {
-                throw new RuntimeException('无权限操作该账号。');
+                throw new RuntimeException(__('adm_users_err_no_perm_account'));
             }
-            if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException('不能删除自己。');
+            if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException(__('adm_users_err_delete_self'));
 
             // 删除账号同时清理权限表（若表不存在则忽略）
             $pdo->beginTransaction();
@@ -215,31 +215,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 if ($pdo->inTransaction()) $pdo->rollBack();
                 throw $e;
             }
-            $msg = '账号已删除。';
+            $msg = __('adm_users_msg_deleted');
         } elseif ($action === 'reset_password') {
             $id = (int)($_POST['id'] ?? 0);
             $new_password = (string) ($_POST['new_password'] ?? '');
-            if ($id <= 0 || $new_password === '') throw new RuntimeException('请填写新密码。');
+            if ($id <= 0 || $new_password === '') throw new RuntimeException(__('adm_users_err_fill_new_pass'));
             if (!user_is_manageable_by_current_actor($pdo, $id)) {
-                throw new RuntimeException('无权限操作该账号。');
+                throw new RuntimeException(__('adm_users_err_no_perm_account'));
             }
 
             $hash = password_hash($new_password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
             $stmt->execute([$hash, $id]);
-            $msg = '密码已重置。';
+            $msg = __('adm_users_msg_pass_reset');
         } else {
-            throw new RuntimeException('未知操作。');
+            throw new RuntimeException(__('adm_users_err_unknown_action'));
         }
     } catch (Throwable $e) {
         $raw = (string)$e->getMessage();
         if (strpos($raw, 'Duplicate entry') !== false) {
             if (strpos($raw, 'login_scope_key') !== false || strpos($raw, 'uq_users_login_scope') !== false) {
-                $err = '创建失败：该分公司下此用户名已存在；其他分公司可使用相同用户名。';
+                $err = __('adm_users_err_dup_branch');
             } elseif (strpos($raw, "for key 'username'") !== false) {
-                $err = '创建失败：用户名已存在，请直接在下方账号列表修改角色或重置密码。';
+                $err = __('adm_users_err_dup_username');
             } else {
-                $err = '创建失败：数据冲突（可能为重复用户名），请检查分公司与用户名组合。';
+                $err = __('adm_users_err_dup_generic');
             }
         } else {
             $err = $raw;
@@ -335,11 +335,11 @@ if ($actor_is_superadmin) {
 }
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>用户管理 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__f('adm_users_page_title', defined('SITE_TITLE') ? SITE_TITLE : 'K8'), ENT_QUOTES, 'UTF-8') ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -541,29 +541,29 @@ if ($actor_is_superadmin) {
         <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
-            <h2><?= $actor_is_superadmin ? '用户管理（全平台）' : '用户管理（本公司）' ?></h2>
-            <p class="breadcrumb">当前：<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>（<?= htmlspecialchars(role_label((string)($_SESSION['user_role'] ?? ''))) ?>）<?= $actor_is_superadmin ? ' · 可查看所有分公司账号与平台 big boss' : ' · 仅本公司账号，无平台 big boss' ?></p>
+            <h2><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_title_sa') : __('adm_users_title_co'), ENT_QUOTES, 'UTF-8') ?></h2>
+            <p class="breadcrumb"><?= htmlspecialchars(__f('adm_users_breadcrumb', $_SESSION['user_name'] ?? '', role_label((string)($_SESSION['user_role'] ?? '')), $actor_is_superadmin ? __('adm_users_breadcrumb_sa_extra') : __('adm_users_breadcrumb_co_extra')), ENT_QUOTES, 'UTF-8') ?></p>
             <?php if ($actor_is_superadmin): ?>
-            <p class="agent-customer-hint" style="margin-top:10px;">新增或停用<strong>分公司</strong>（公司代码、登录可选公司）请到 <a href="admin_companies.php">分公司管理</a>。</p>
+            <p class="agent-customer-hint" style="margin-top:10px;"><?= htmlspecialchars(__('adm_users_hint_companies'), ENT_QUOTES, 'UTF-8') ?> <a href="admin_companies.php"><?= htmlspecialchars(__('adm_users_companies_link'), ENT_QUOTES, 'UTF-8') ?></a><?= app_lang() === 'en' ? '.' : '。' ?></p>
             <?php endif; ?>
         </div>
 
         <form method="get" action="admin_users.php" class="admin-users-toolbar" id="admin-users-toolbar-form" autocomplete="off">
             <input type="hidden" name="status_filter" id="toolbar_status_filter" value="<?= htmlspecialchars($status_filter, ENT_QUOTES, 'UTF-8') ?>">
-            <button type="button" class="btn btn-primary btn-add-user" id="btn-add-user">添加用户</button>
+            <button type="button" class="btn btn-primary btn-add-user" id="btn-add-user"><?= htmlspecialchars(__('adm_users_btn_add'), ENT_QUOTES, 'UTF-8') ?></button>
             <div class="toolbar-search-wrap">
                 <span class="toolbar-search-icon" aria-hidden="true">🔍</span>
-                <input type="search" name="q" class="toolbar-search-input" placeholder="按用户名或显示名搜索" value="<?= htmlspecialchars($search_q, ENT_QUOTES, 'UTF-8') ?>">
+                <input type="search" name="q" class="toolbar-search-input" placeholder="<?= htmlspecialchars(__('adm_users_search_ph'), ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars($search_q, ENT_QUOTES, 'UTF-8') ?>">
             </div>
             <label class="toolbar-check">
                 <input type="checkbox" id="toolbar_cb_all" <?= $status_filter === 'all' ? 'checked' : '' ?>>
-                显示全部
+                <?= htmlspecialchars(__('adm_users_show_all'), ENT_QUOTES, 'UTF-8') ?>
             </label>
             <label class="toolbar-check">
                 <input type="checkbox" id="toolbar_cb_inactive" <?= $status_filter === 'inactive' ? 'checked' : '' ?>>
-                显示已禁用
+                <?= htmlspecialchars(__('adm_users_show_inactive'), ENT_QUOTES, 'UTF-8') ?>
             </label>
-            <button type="submit" class="btn btn-outline btn-sm" style="margin-left:auto;">搜索</button>
+            <button type="submit" class="btn btn-outline btn-sm" style="margin-left:auto;"><?= htmlspecialchars(__('btn_search'), ENT_QUOTES, 'UTF-8') ?></button>
         </form>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -573,8 +573,8 @@ if ($actor_is_superadmin) {
             <div class="admin-users-modal-backdrop" id="create-account-modal-backdrop" tabindex="-1"></div>
             <div class="admin-users-modal-panel" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
                 <div class="admin-users-modal-head">
-                    <h3 id="create-account-title">创建账号</h3>
-                    <button type="button" class="admin-users-modal-x" id="create-account-modal-close" aria-label="关闭">×</button>
+                    <h3 id="create-account-title"><?= htmlspecialchars(__('adm_users_create_title'), ENT_QUOTES, 'UTF-8') ?></h3>
+                    <button type="button" class="admin-users-modal-x" id="create-account-modal-close" aria-label="<?= htmlspecialchars(__('aria_close'), ENT_QUOTES, 'UTF-8') ?>">×</button>
                 </div>
                 <div class="admin-users-modal-body">
             <?php if ($show_create_modal_on_load ?? false): ?>
@@ -582,24 +582,24 @@ if ($actor_is_superadmin) {
             <?php endif; ?>
             <?php if ($actor_is_superadmin): ?>
             <?php if (!$companies_for_create): ?>
-            <div class="alert alert-error" role="status">当前没有「启用」的分公司，请先到 <a href="admin_companies.php">分公司管理</a> 新增。</div>
+            <div class="alert alert-error" role="status"><?= htmlspecialchars(__('adm_users_no_active_company'), ENT_QUOTES, 'UTF-8') ?> <a href="admin_companies.php"><?= htmlspecialchars(__('adm_users_companies_link'), ENT_QUOTES, 'UTF-8') ?></a><?= htmlspecialchars(__('adm_users_no_active_company_tail'), ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
             <?php endif; ?>
             <form method="post" id="create-account-form">
                 <input type="hidden" name="action" value="create">
                 <div class="admin-users-grid">
                     <div class="form-group">
-                        <label>用户名 *</label>
+                        <label><?= htmlspecialchars(__('adm_users_lbl_username_req'), ENT_QUOTES, 'UTF-8') ?></label>
                         <input class="form-control" name="username" required>
                     </div>
                     <div class="form-group">
-                        <label>密码 *</label>
+                        <label><?= htmlspecialchars(__('adm_users_lbl_password_req'), ENT_QUOTES, 'UTF-8') ?></label>
                         <input class="form-control" name="password" type="password" required>
                     </div>
                 </div>
                 <div class="admin-users-grid">
                     <div class="form-group">
-                        <label>角色 *</label>
+                        <label><?= htmlspecialchars(__('adm_users_lbl_role_req'), ENT_QUOTES, 'UTF-8') ?></label>
                         <select class="form-control" name="role" id="create_role" required>
                             <?php if ($actor_is_superadmin): ?>
                             <option value="superadmin"><?= htmlspecialchars(role_label('superadmin')) ?></option>
@@ -615,13 +615,13 @@ if ($actor_is_superadmin) {
                         </select>
                     </div>
                     <div class="form-group">
-                        <label>显示名称（可选）</label>
-                        <input class="form-control" name="display_name" placeholder="例如 小明">
+                        <label><?= htmlspecialchars(__('adm_users_lbl_display_opt'), ENT_QUOTES, 'UTF-8') ?></label>
+                        <input class="form-control" name="display_name" placeholder="<?= htmlspecialchars(__('adm_users_ph_display_example'), ENT_QUOTES, 'UTF-8') ?>">
                     </div>
                 </div>
                 <?php if ($actor_is_superadmin && $companies_for_create): ?>
                 <div class="form-group" id="create_company_wrap">
-                    <label>所属分公司 *</label>
+                    <label><?= htmlspecialchars(__('adm_users_lbl_company_req'), ENT_QUOTES, 'UTF-8') ?></label>
                     <select class="form-control" name="create_company_id" id="create_company_id" required>
                         <?php
                         $sess_cid = current_company_id();
@@ -637,9 +637,9 @@ if ($actor_is_superadmin) {
                 </div>
                 <?php endif; ?>
                 <div class="agent-customer-box" id="agent_customer_box" style="display:none;">
-                    <h4>选择该 Agent 的客户</h4>
-                    <p class="agent-customer-hint">当角色为 agent 时，创建成功后会把所选客户的 Recommend 自动设置为该 Agent 的用户名（即归属到此 Agent）。</p>
-                    <div class="agent-customer-list" role="group" aria-label="Agent customers">
+                    <h4><?= htmlspecialchars(__('adm_users_agent_pick_title'), ENT_QUOTES, 'UTF-8') ?></h4>
+                    <p class="agent-customer-hint"><?= htmlspecialchars(__('adm_users_agent_pick_hint'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <div class="agent-customer-list" role="group" aria-label="<?= htmlspecialchars(__('adm_users_agent_pick_title'), ENT_QUOTES, 'UTF-8') ?>">
                         <?php foreach ($customers_for_agent as $c):
                             $ccode = trim((string)($c['code'] ?? ''));
                             if ($ccode === '') continue;
@@ -650,17 +650,17 @@ if ($actor_is_superadmin) {
                             <input type="checkbox" name="agent_customers[]" value="<?= htmlspecialchars($ccode, ENT_QUOTES) ?>">
                             <span class="agent-customer-code"><?= htmlspecialchars($ccode) ?></span>
                             <span class="agent-customer-name"><?= htmlspecialchars($cname !== '' ? $cname : '—') ?></span>
-                            <span class="agent-customer-meta"><?= $crec !== '' ? ('当前 Recommend：' . htmlspecialchars($crec)) : '当前 Recommend：—' ?></span>
+                            <span class="agent-customer-meta"><?= $crec !== '' ? (htmlspecialchars(__('adm_users_cur_referrer'), ENT_QUOTES, 'UTF-8') . htmlspecialchars($crec)) : (htmlspecialchars(__('adm_users_cur_referrer'), ENT_QUOTES, 'UTF-8') . '—') ?></span>
                         </label>
                         <?php endforeach; ?>
                         <?php if (!$customers_for_agent): ?>
-                            <div style="color:var(--muted); padding:6px 2px;">暂无客户数据，无法绑定。请先创建 Customer。</div>
+                            <div style="color:var(--muted); padding:6px 2px;"><?= htmlspecialchars(__('adm_users_no_customers_bind'), ENT_QUOTES, 'UTF-8') ?></div>
                         <?php endif; ?>
                     </div>
                 </div>
                 <div class="admin-users-actions" style="margin-top: 12px;">
-                    <button type="submit" class="btn btn-primary">创建</button>
-                    <button type="button" class="btn btn-outline" id="create-account-cancel">取消</button>
+                    <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('btn_create'), ENT_QUOTES, 'UTF-8') ?></button>
+                    <button type="button" class="btn btn-outline" id="create-account-cancel"><?= htmlspecialchars(__('btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                 </div>
             </form>
                 </div>
@@ -668,24 +668,24 @@ if ($actor_is_superadmin) {
         </div>
 
         <div class="card">
-            <h3><?= $actor_is_superadmin ? '全部分公司账号' : '本公司账号' ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
+            <h3><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_card_users_sa') : __('adm_users_card_users_co'), ENT_QUOTES, 'UTF-8') ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
             <?php if (!$actor_is_superadmin && $view_company_id <= 0): ?>
-                <div class="alert alert-error" role="status">无法加载本公司账号（缺少公司上下文），请重新登录。</div>
+                <div class="alert alert-error" role="status"><?= htmlspecialchars(__('adm_users_err_context'), ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
             <div style="overflow-x:auto;">
             <table class="data-table<?= $users_primary_show_company_col ? ' admin-users-by-company' : '' ?>">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <?php if ($users_primary_show_company_col): ?><th>公司</th><?php endif; ?>
-                        <th>用户名</th>
-                        <th>显示名</th>
-                        <th>角色</th>
-                        <th>状态</th>
-                        <th>Login IP</th>
-                        <th>Last Login</th>
-                        <th>创建时间</th>
-                        <th>操作</th>
+                        <th><?= htmlspecialchars(__('lbl_id'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <?php if ($users_primary_show_company_col): ?><th><?= htmlspecialchars(__('lbl_company'), ENT_QUOTES, 'UTF-8') ?></th><?php endif; ?>
+                        <th><?= htmlspecialchars(__('lbl_username'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_display_name'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_role'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_status'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_login_ip'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_last_login'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_created_at'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_actions'), ENT_QUOTES, 'UTF-8') ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -705,7 +705,7 @@ if ($actor_is_superadmin) {
                         <td><?= htmlspecialchars($u['display_name'] ?? '') ?></td>
                         <td>
                             <?php if (!$actor_is_superadmin && ($u['role'] ?? '') === 'boss'): ?>
-                                <span class="form-hint" style="margin:0;"><?= htmlspecialchars(role_label('boss')) ?>（仅平台 big boss 可改）</span>
+                                <span class="form-hint" style="margin:0;"><?= htmlspecialchars(role_label('boss') . __('adm_users_boss_locked'), ENT_QUOTES, 'UTF-8') ?></span>
                             <?php else: ?>
                             <form method="post" class="admin-users-role-form">
                                 <input type="hidden" name="action" value="change_role">
@@ -715,37 +715,37 @@ if ($actor_is_superadmin) {
                                     <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars(role_label($opt)) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button type="submit" class="btn btn-gray btn-sm">改角色</button>
+                                <button type="submit" class="btn btn-gray btn-sm"><?= htmlspecialchars(__('btn_change_role'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                             <?php endif; ?>
                         </td>
-                        <td><?= ((int)$u['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                        <td><?= ((int)$u['is_active'] === 1) ? htmlspecialchars(__('status_enabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('status_disabled'), ENT_QUOTES, 'UTF-8') ?></td>
                         <td><?= htmlspecialchars((string)($u['last_login_ip'] ?? '')) ?></td>
                         <td><?= htmlspecialchars((string)($u['last_login_at'] ?? '')) ?></td>
                         <td><?= htmlspecialchars($u['created_at']) ?></td>
                         <td>
-                            <a class="btn btn-outline btn-sm inline" href="admin_user_edit.php?id=<?= (int)$u['id'] ?>">编辑</a>
+                            <a class="btn btn-outline btn-sm inline" href="admin_user_edit.php?id=<?= (int)$u['id'] ?>"><?= htmlspecialchars(__('btn_edit'), ENT_QUOTES, 'UTF-8') ?></a>
                             <form method="post" class="inline">
                                 <input type="hidden" name="action" value="toggle_active">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <button type="submit" class="btn btn-gray btn-sm"><?= ((int)$u['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                <button type="submit" class="btn btn-gray btn-sm"><?= ((int)$u['is_active'] === 1) ? htmlspecialchars(__('btn_disable'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('btn_enable'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
-                            <form method="post" class="inline" data-confirm="确定删除该账号？删除后不可恢复。">
+                            <form method="post" class="inline" data-confirm="<?= htmlspecialchars(__('adm_users_confirm_delete'), ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="action" value="delete_user">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <button type="submit" class="btn btn-sm btn-danger" <?= ((int)$u['id'] === (int)($_SESSION['user_id'] ?? 0)) ? 'disabled' : '' ?>>删除</button>
+                                <button type="submit" class="btn btn-sm btn-danger" <?= ((int)$u['id'] === (int)($_SESSION['user_id'] ?? 0)) ? 'disabled' : '' ?>><?= htmlspecialchars(__('btn_delete'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                             <form method="post" class="admin-users-reset-form inline">
                                 <input type="hidden" name="action" value="reset_password">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <input name="new_password" type="password" placeholder="新密码" class="form-control">
-                                <button type="submit" class="btn btn-primary btn-sm">重置密码</button>
+                                <input name="new_password" type="password" placeholder="<?= htmlspecialchars(__('ph_new_password'), ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                                <button type="submit" class="btn btn-primary btn-sm"><?= htmlspecialchars(__('btn_reset_password'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$users_primary_list): ?>
-                    <tr><td colspan="<?= (int)$users_primary_colspan ?>" class="admin-users-center"><?= $actor_is_superadmin ? '暂无各分公司账号' : ($view_company_id > 0 ? '暂无本公司账号' : '未选择公司') ?></td></tr>
+                    <tr><td colspan="<?= (int)$users_primary_colspan ?>" class="admin-users-center"><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_empty_sa') : ($view_company_id > 0 ? __('adm_users_empty_co') : __('adm_users_empty_no_co')), ENT_QUOTES, 'UTF-8') ?></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
@@ -753,20 +753,20 @@ if ($actor_is_superadmin) {
         </div>
         <?php if ($actor_is_superadmin): ?>
         <div class="card">
-            <h3>平台 big boss（superadmin）</h3>
+            <h3><?= htmlspecialchars(__('adm_users_sa_section'), ENT_QUOTES, 'UTF-8') ?></h3>
             <div style="overflow-x:auto;">
             <table class="data-table">
                 <thead>
                     <tr>
-                        <th>ID</th>
-                        <th>用户名</th>
-                        <th>显示名</th>
-                        <th>角色</th>
-                        <th>状态</th>
-                        <th>Login IP</th>
-                        <th>Last Login</th>
-                        <th>创建时间</th>
-                        <th>操作</th>
+                        <th><?= htmlspecialchars(__('lbl_id'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_username'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_display_name'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_role'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_status'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_login_ip'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_last_login'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_created_at'), ENT_QUOTES, 'UTF-8') ?></th>
+                        <th><?= htmlspecialchars(__('lbl_actions'), ENT_QUOTES, 'UTF-8') ?></th>
                     </tr>
                 </thead>
                 <tbody>
@@ -784,36 +784,36 @@ if ($actor_is_superadmin) {
                                     <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars(role_label($opt)) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <button type="submit" class="btn btn-gray btn-sm">改角色</button>
+                                <button type="submit" class="btn btn-gray btn-sm"><?= htmlspecialchars(__('btn_change_role'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                         </td>
-                        <td><?= ((int)$u['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                        <td><?= ((int)$u['is_active'] === 1) ? htmlspecialchars(__('status_enabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('status_disabled'), ENT_QUOTES, 'UTF-8') ?></td>
                         <td><?= htmlspecialchars((string)($u['last_login_ip'] ?? '')) ?></td>
                         <td><?= htmlspecialchars((string)($u['last_login_at'] ?? '')) ?></td>
                         <td><?= htmlspecialchars($u['created_at']) ?></td>
                         <td>
-                            <a class="btn btn-outline btn-sm inline" href="admin_user_edit.php?id=<?= (int)$u['id'] ?>">编辑</a>
+                            <a class="btn btn-outline btn-sm inline" href="admin_user_edit.php?id=<?= (int)$u['id'] ?>"><?= htmlspecialchars(__('btn_edit'), ENT_QUOTES, 'UTF-8') ?></a>
                             <form method="post" class="inline">
                                 <input type="hidden" name="action" value="toggle_active">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <button type="submit" class="btn btn-gray btn-sm"><?= ((int)$u['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                <button type="submit" class="btn btn-gray btn-sm"><?= ((int)$u['is_active'] === 1) ? htmlspecialchars(__('btn_disable'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('btn_enable'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
-                            <form method="post" class="inline" data-confirm="确定删除该账号？删除后不可恢复。">
+                            <form method="post" class="inline" data-confirm="<?= htmlspecialchars(__('adm_users_confirm_delete'), ENT_QUOTES, 'UTF-8') ?>">
                                 <input type="hidden" name="action" value="delete_user">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <button type="submit" class="btn btn-sm btn-danger" <?= ((int)$u['id'] === (int)($_SESSION['user_id'] ?? 0)) ? 'disabled' : '' ?>>删除</button>
+                                <button type="submit" class="btn btn-sm btn-danger" <?= ((int)$u['id'] === (int)($_SESSION['user_id'] ?? 0)) ? 'disabled' : '' ?>><?= htmlspecialchars(__('btn_delete'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                             <form method="post" class="admin-users-reset-form inline">
                                 <input type="hidden" name="action" value="reset_password">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
-                                <input name="new_password" type="password" placeholder="新密码" class="form-control">
-                                <button type="submit" class="btn btn-primary btn-sm">重置密码</button>
+                                <input name="new_password" type="password" placeholder="<?= htmlspecialchars(__('ph_new_password'), ENT_QUOTES, 'UTF-8') ?>" class="form-control">
+                                <button type="submit" class="btn btn-primary btn-sm"><?= htmlspecialchars(__('btn_reset_password'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                         </td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$superadmin_users): ?>
-                    <tr><td colspan="9" class="admin-users-center">暂无平台 big boss 账号</td></tr>
+                    <tr><td colspan="9" class="admin-users-center"><?= htmlspecialchars(__('adm_users_empty_sa_list'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>

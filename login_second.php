@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     $h2 = trim((string)($u['second_password_hash'] ?? ''));
     if ($h2 === '' || !password_verify($pass2, $h2)) {
-        $error = '二级密码错误';
+        $error = __('login2_err_wrong');
     } else {
         $remember = !empty($pend['remember']);
         $result = auth_commit_login_session($pdo, $u, $remember, '', $default_company_id);
@@ -71,11 +71,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>二级密码 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__f('login2_page_title', defined('SITE_TITLE') ? SITE_TITLE : 'K8'), ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
         * { box-sizing: border-box; }
@@ -133,15 +133,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </style>
 </head>
 <body>
+    <?php $login2_lang_to = rawurlencode('login_second.php'); ?>
+    <div style="position:fixed; top:14px; right:16px; z-index:2; font-size:13px; font-weight:600;">
+        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none;">Eng</a>
+        <span style="color:#94a3b8; margin:0 8px;">|</span>
+        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none;">中文</a>
+    </div>
     <div class="card">
-        <h1>二级密码</h1>
+        <h1><?= htmlspecialchars(__('login2_title'), ENT_QUOTES, 'UTF-8') ?></h1>
         <?php if ($error): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
         <form method="post" autocomplete="off">
-            <label for="second_pass">二级密码</label>
-            <input type="password" name="second_pass" id="second_pass" required autofocus placeholder="Second password">
-            <button type="submit" class="btn">继续登录</button>
+            <label for="second_pass"><?= htmlspecialchars(__('login2_label'), ENT_QUOTES, 'UTF-8') ?></label>
+            <input type="password" name="second_pass" id="second_pass" required autofocus placeholder="<?= htmlspecialchars(__('login2_ph'), ENT_QUOTES, 'UTF-8') ?>">
+            <button type="submit" class="btn"><?= htmlspecialchars(__('login2_submit'), ENT_QUOTES, 'UTF-8') ?></button>
         </form>
-        <a class="back" href="login.php?abandon_second=1">返回重新登录</a>
+        <a class="back" href="login.php?abandon_second=1"><?= htmlspecialchars(__('login2_back'), ENT_QUOTES, 'UTF-8') ?></a>
     </div>
 </body>
 </html>

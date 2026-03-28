@@ -41,6 +41,16 @@ try {
 } catch (Throwable $e) {
 }
 
+// 代理账号：Agent 页是否显示「期/周」与「月」日期快捷（由管理员在用户编辑中勾选）
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN agent_ui_show_week TINYINT(1) NOT NULL DEFAULT 1");
+} catch (Throwable $e) {
+}
+try {
+    $pdo->exec("ALTER TABLE users ADD COLUMN agent_ui_show_month TINYINT(1) NOT NULL DEFAULT 1");
+} catch (Throwable $e) {
+}
+
 // 多公司（多租户）支持：companies + company_id
 try {
     $pdo->exec("CREATE TABLE IF NOT EXISTS companies (

@@ -23,13 +23,13 @@ if (isset($_SESSION['user_id'])) {
 
 $error = '';
 if (!empty($_GET['no_perm'])) {
-    $error = '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。';
+    $error = __('login_err_no_perm');
 }
 if (!empty($_GET['need_company'])) {
-    $error = '请先选择公司再登录。';
+    $error = __('login_err_need_company');
 }
 if (!empty($_GET['second_expired'])) {
-    $error = '二级验证已超时，请重新登录。';
+    $error = __('login_err_second_expired');
 }
 if (!empty($_GET['login_err'])) {
     $le = urldecode((string)$_GET['login_err']);
@@ -59,7 +59,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $remember = !empty($_POST['remember']);
 
     if ($user === '' || $pass === '') {
-        $error = '请输入用户名和密码';
+        $error = __('login_err_user_pass');
     } else {
         ensure_users_second_password_hash($pdo);
         $cid_for_branch = 0;
@@ -96,20 +96,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $db_role = strtolower(trim((string)($u['role'] ?? '')));
         if (!$u) {
-            $error = '用户名或密码错误';
+            $error = __('login_err_bad_creds');
         } elseif ((int)$u['is_active'] !== 1) {
-            $error = '该账号已禁用';
+            $error = __('login_err_disabled');
         } elseif ($login_as === 'admin' && !in_array($db_role, ['admin', 'superadmin', 'boss'], true)) {
-            $error = '请使用 Admin 登录入口，或该账号不是管理员';
+            $error = __('login_err_admin_gate');
         } elseif ($login_as === 'member' && !in_array($db_role, ['member', 'agent'], true)) {
-            $error = '当前账号角色为 ' . ($db_role !== '' ? $db_role : '未设置') . '，Member / Agent 入口仅允许 member 或 agent。请到「用户管理」修改角色。';
+            $error = __f('login_err_member_gate', $db_role !== '' ? role_label($db_role) : __('login_err_role_unset'));
         } elseif ($login_as !== 'admin' && $db_role === 'superadmin') {
-            $error = '平台 big boss 请使用 Admin 登录入口。';
+            $error = __('login_err_sa_admin_only');
         } else {
             if (in_array($db_role, ['admin', 'member'], true)) {
                 $h2 = trim((string)($u['second_password_hash'] ?? ''));
                 if ($h2 === '') {
-                    $error = '此账号尚未开通二级验证，请联系管理员处理。';
+                    $error = __('login_err_second_not_setup');
                 } else {
                     $_SESSION[AUTH_LOGIN_PENDING_SECOND] = [
                         'uid' => (int)$u['id'],
@@ -134,11 +134,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $login_as = $_POST['login_as'] ?? 'admin';
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>登录 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__f('login_page_title', defined('SITE_TITLE') ? SITE_TITLE : 'K8'), ENT_QUOTES, 'UTF-8') ?></title>
     <link rel="icon" href="favicon.ico" type="image/x-icon">
     <style>
         * { box-sizing: border-box; }
@@ -323,10 +323,16 @@ $login_as = $_POST['login_as'] ?? 'admin';
     </style>
 </head>
 <body>
+    <?php $login_lang_to = rawurlencode('login.php'); ?>
+    <div style="position:fixed; top:14px; right:16px; z-index:2; font-size:13px; font-weight:600;">
+        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none;">Eng</a>
+        <span style="color:#94a3b8; margin:0 8px;">|</span>
+        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none;">中文</a>
+    </div>
     <div class="login-card">
         <div class="tabs">
-            <a href="#" class="tab <?= $login_as === 'admin' ? 'active' : '' ?>" data-tab="admin">Admin</a>
-            <a href="#" class="tab <?= $login_as === 'member' ? 'active' : '' ?>" data-tab="member">Member</a>
+            <a href="#" class="tab <?= $login_as === 'admin' ? 'active' : '' ?>" data-tab="admin"><?= htmlspecialchars(__('login_tab_admin'), ENT_QUOTES, 'UTF-8') ?></a>
+            <a href="#" class="tab <?= $login_as === 'member' ? 'active' : '' ?>" data-tab="member"><?= htmlspecialchars(__('login_tab_member'), ENT_QUOTES, 'UTF-8') ?></a>
         </div>
 
         <?php if ($error): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
@@ -336,40 +342,41 @@ $login_as = $_POST['login_as'] ?? 'admin';
 
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <input type="text" name="company_code" class="login-field-upper" placeholder="Company" value="<?= htmlspecialchars(mb_strtoupper(trim((string)($_POST['company_code'] ?? '')), 'UTF-8')) ?>" autocomplete="organization">
+                <input type="text" name="company_code" class="login-field-upper" placeholder="<?= htmlspecialchars(__('login_ph_company'), ENT_QUOTES, 'UTF-8') ?>" value="<?= htmlspecialchars(mb_strtoupper(trim((string)($_POST['company_code'] ?? '')), 'UTF-8')) ?>" autocomplete="organization">
             </div>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
-                <input type="text" name="user" class="login-field-upper" placeholder="Username" required value="<?= htmlspecialchars(mb_strtoupper(trim((string)($_POST['user'] ?? '')), 'UTF-8')) ?>">
+                <input type="text" name="user" class="login-field-upper" placeholder="<?= htmlspecialchars(__('login_ph_username'), ENT_QUOTES, 'UTF-8') ?>" required value="<?= htmlspecialchars(mb_strtoupper(trim((string)($_POST['user'] ?? '')), 'UTF-8')) ?>">
             </div>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" /></svg>
-                <input type="password" name="pass" placeholder="Password" required>
+                <input type="password" name="pass" placeholder="<?= htmlspecialchars(__('login_ph_password'), ENT_QUOTES, 'UTF-8') ?>" required>
             </div>
 
             <div class="row">
                 <label class="remember">
                     <input type="checkbox" name="remember" value="1" <?= !empty($_POST['remember']) ? 'checked' : '' ?>>
-                    Remember me
+                    <?= htmlspecialchars(__('login_remember'), ENT_QUOTES, 'UTF-8') ?>
                 </label>
-                <a href="#" class="forget">Forget Password?</a>
+                <a href="#" class="forget"><?= htmlspecialchars(__('login_forget'), ENT_QUOTES, 'UTF-8') ?></a>
             </div>
 
-            <button type="submit" class="btn-login">Login</button>
+            <button type="submit" class="btn-login"><?= htmlspecialchars(__('login_submit'), ENT_QUOTES, 'UTF-8') ?></button>
         </form>
 
     </div>
     <div class="login-modal-mask" id="login-modal-mask" aria-hidden="true">
-        <div class="login-modal" role="dialog" aria-modal="true" aria-label="系统提示">
-            <div class="login-modal-head">系统提示</div>
+        <div class="login-modal" role="dialog" aria-modal="true" aria-label="<?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?>">
+            <div class="login-modal-head"><?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?></div>
             <div class="login-modal-body" id="login-modal-body"></div>
             <div class="login-modal-foot">
-                <button type="button" class="login-modal-ok" id="login-modal-ok">OK</button>
+                <button type="button" class="login-modal-ok" id="login-modal-ok"><?= htmlspecialchars(__('btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
             </div>
         </div>
     </div>
 
     <script>
+        window.__LOGIN_I18N = <?= json_encode(['resetContact' => __('login_reset_contact')], JSON_UNESCAPED_UNICODE) ?>;
         function showLoginModal(message) {
             var mask = document.getElementById('login-modal-mask');
             var body = document.getElementById('login-modal-body');
@@ -388,7 +395,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
         });
         document.querySelector('.forget').addEventListener('click', function(e) {
             e.preventDefault();
-            showLoginModal('请联系管理员重置密码。');
+            showLoginModal((window.__LOGIN_I18N && window.__LOGIN_I18N.resetContact) || '');
         });
         document.querySelectorAll('input.login-field-upper').forEach(function(el) {
             el.addEventListener('input', function() {

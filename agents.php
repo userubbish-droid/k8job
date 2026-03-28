@@ -46,8 +46,46 @@ function agents_agent_period_range(string $period): array
 }
 
 $agent_period = 'this_week';
+$agent_ui_show_week = true;
+$agent_ui_show_month = true;
 if ($is_agent_user) {
-    $p = strtolower(trim((string)($_GET['period'] ?? 'this_week')));
+    try {
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        if ($uid > 0) {
+            $stPrefs = $pdo->prepare('SELECT agent_ui_show_week, agent_ui_show_month FROM users WHERE id = ? LIMIT 1');
+            $stPrefs->execute([$uid]);
+            $prefRow = $stPrefs->fetch(PDO::FETCH_ASSOC);
+            if ($prefRow) {
+                $agent_ui_show_week = (int)($prefRow['agent_ui_show_week'] ?? 1) === 1;
+                $agent_ui_show_month = (int)($prefRow['agent_ui_show_month'] ?? 1) === 1;
+            }
+        }
+    } catch (Throwable $e) {
+        $agent_ui_show_week = true;
+        $agent_ui_show_month = true;
+    }
+    $week_periods = ['this_week', 'last_week'];
+    $month_periods = ['this_month', 'last_month'];
+    $allowed_periods = [];
+    if ($agent_ui_show_week) {
+        $allowed_periods = array_merge($allowed_periods, $week_periods);
+    }
+    if ($agent_ui_show_month) {
+        $allowed_periods = array_merge($allowed_periods, $month_periods);
+    }
+    if ($allowed_periods === []) {
+        $allowed_periods = ['this_week'];
+    }
+    $p = strtolower(trim((string)($_GET['period'] ?? '')));
+    if (!in_array($p, $allowed_periods, true)) {
+        if (in_array('this_week', $allowed_periods, true)) {
+            $p = 'this_week';
+        } elseif (in_array('this_month', $allowed_periods, true)) {
+            $p = 'this_month';
+        } else {
+            $p = $allowed_periods[0];
+        }
+    }
     [$day_from, $day_to, $agent_period] = agents_agent_period_range($p);
 } else {
     $day_from_raw = isset($_REQUEST['day_from']) && trim((string)$_REQUEST['day_from']) !== '' ? $_REQUEST['day_from'] : $yesterday;
@@ -61,8 +99,11 @@ if ($is_agent_user) {
     }
 }
 
-$agent_welcome_user = trim((string)($_SESSION['user_name'] ?? $_SESSION['username'] ?? 'Agent'));
-$agent_welcome_line = 'Welcome to ' . (defined('AGENT_PORTAL_BRAND') ? AGENT_PORTAL_BRAND : 'k8win') . ' ' . $agent_welcome_user;
+$agent_welcome_user = trim((string)($_SESSION['user_name'] ?? $_SESSION['username'] ?? ''));
+if ($agent_welcome_user === '') {
+    $agent_welcome_user = __('perm_agent');
+}
+$agent_welcome_line = __f('agent_welcome', defined('AGENT_PORTAL_BRAND') ? AGENT_PORTAL_BRAND : 'k8win', $agent_welcome_user);
 
 function ensure_agent_rebate_table(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS agent_rebate_settings (
@@ -115,7 +156,7 @@ function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $d
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
-    $warn = '代理账号仅可查看 Win(Loss) 与 Commission，不能修改本页设置。';
+    $warn = __('agent_warn_readonly');
 } elseif ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = trim((string)($_POST['action'] ?? ''));
     if ($action === 'save_rebate_pct') {
@@ -125,13 +166,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
             $pct = is_numeric($pct_raw) ? (float)$pct_raw : -1;
             $is_paid = !empty($_POST['is_paid']) ? 1 : 0;
             if ($agent === '') {
-                throw new RuntimeException('参数错误：Agent 不能为空。');
+                throw new RuntimeException(__('agent_err_agent_empty'));
             }
             if ($pct < 0 || $pct > 100) {
-                throw new RuntimeException('返水 % 请输入 0 - 100。');
+                throw new RuntimeException(__('agent_err_pct_range'));
             }
             if ($is_agent_user && strcasecmp($agent, $agent_code) !== 0) {
-                throw new RuntimeException('你只能修改自己的返水比例。');
+                throw new RuntimeException(__('agent_err_own_pct'));
             }
             $post_day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_from'] ?? ''))) ? substr(trim((string)$_POST['day_from']), 0, 10) : $day_from;
             $post_day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_to'] ?? ''))) ? substr(trim((string)$_POST['day_to']), 0, 10) : $day_to;
@@ -145,7 +186,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
                                    ON DUPLICATE KEY UPDATE rebate_pct = VALUES(rebate_pct), is_paid = VALUES(is_paid), paid_at = VALUES(paid_at), updated_by = VALUES(updated_by)");
             $paid_at = $is_paid ? date('Y-m-d H:i:s') : null;
             $stmt->execute([$company_id, $agent, $pct, $is_paid, $paid_at, (int)($_SESSION['user_id'] ?? 0)]);
-            $msg = '返水比例/状态已保存。';
+            $msg = __('agent_msg_saved');
         } catch (Throwable $e) {
             $err = $e->getMessage();
         }
@@ -154,10 +195,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
             $agent = trim((string)($_POST['agent'] ?? ''));
             $enabled = !empty($_POST['rebate_enabled']) ? 1 : 0;
             if ($agent === '') {
-                throw new RuntimeException('参数错误：Agent 不能为空。');
+                throw new RuntimeException(__('agent_err_agent_empty'));
             }
             if ($is_agent_user && strcasecmp($agent, $agent_code) !== 0) {
-                throw new RuntimeException('你只能操作自己的开关。');
+                throw new RuntimeException(__('agent_err_own_toggle'));
             }
             ensure_agent_rebate_table($pdo);
             $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_enabled, updated_by) VALUES (?, ?, ?, ?)
@@ -168,7 +209,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
                 $stmt2 = $pdo->prepare("UPDATE agent_rebate_settings SET is_paid = 0, paid_at = NULL WHERE company_id = ? AND agent_code = ?");
                 $stmt2->execute([$company_id, $agent]);
             }
-            $msg = $enabled ? '已启用该 Agent 的反水。' : '已暂停该 Agent 的反水。';
+            $msg = $enabled ? __('agent_msg_enabled') : __('agent_msg_paused');
         } catch (Throwable $e) {
             $err = $e->getMessage();
         }
@@ -221,18 +262,18 @@ try {
     }
 } catch (Throwable $e) {
     if (strpos($e->getMessage(), 'recommend') !== false) {
-        $err = '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。';
+        $err = __('agent_err_migrate');
     } else {
         $err = $e->getMessage();
     }
 }
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Agent - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__f('agent_page_title', defined('SITE_TITLE') ? SITE_TITLE : 'K8'), ENT_QUOTES, 'UTF-8') ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -330,7 +371,7 @@ try {
                     $agent_df_show = date('d/m/Y', strtotime($day_from));
                     $agent_dt_show = date('d/m/Y', strtotime($day_to));
                     ?>
-                    <div class="agent-period-pill" role="status" aria-label="Selected period">
+                    <div class="agent-period-pill" role="status" aria-label="<?= htmlspecialchars(__('agent_period_aria'), ENT_QUOTES, 'UTF-8') ?>">
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
                             <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
                         </svg>
@@ -339,9 +380,9 @@ try {
                         </div>
                     </div>
                     <?php else: ?>
-                    <h2>Agent</h2>
+                    <h2><?= htmlspecialchars(__('perm_agent'), ENT_QUOTES, 'UTF-8') ?></h2>
                     <p class="breadcrumb">
-                        <a href="dashboard.php">Home</a><span>·</span>Agent (from Customer Recommend)
+                        <a href="dashboard.php"><?= htmlspecialchars(__('agent_breadcrumb_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span><?= htmlspecialchars(__('agent_breadcrumb_sub'), ENT_QUOTES, 'UTF-8') ?>
                     </p>
                     <?php endif; ?>
                 </div>
@@ -365,30 +406,34 @@ try {
                 <?php if ($is_agent_user): ?>
                 <div class="filters-bar filters-bar-flow" style="margin-bottom:16px;">
                     <div class="filters-row filters-row-presets" style="flex-wrap:wrap;">
-                        <a href="agents.php?period=this_week" class="btn btn-preset<?= $agent_period === 'this_week' ? ' btn-primary' : '' ?>">This Week</a>
-                        <a href="agents.php?period=last_week" class="btn btn-preset<?= $agent_period === 'last_week' ? ' btn-primary' : '' ?>">Last Week</a>
-                        <a href="agents.php?period=this_month" class="btn btn-preset<?= $agent_period === 'this_month' ? ' btn-primary' : '' ?>">This Month</a>
-                        <a href="agents.php?period=last_month" class="btn btn-preset<?= $agent_period === 'last_month' ? ' btn-primary' : '' ?>">Last Month</a>
+                        <?php if ($agent_ui_show_week): ?>
+                        <a href="agents.php?period=this_week" class="btn btn-preset<?= $agent_period === 'this_week' ? ' btn-primary' : '' ?>"><?= htmlspecialchars(__('agent_btn_this_week'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <a href="agents.php?period=last_week" class="btn btn-preset<?= $agent_period === 'last_week' ? ' btn-primary' : '' ?>"><?= htmlspecialchars(__('agent_btn_last_week'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <?php endif; ?>
+                        <?php if ($agent_ui_show_month): ?>
+                        <a href="agents.php?period=this_month" class="btn btn-preset<?= $agent_period === 'this_month' ? ' btn-primary' : '' ?>"><?= htmlspecialchars(__('agent_btn_this_month'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <a href="agents.php?period=last_month" class="btn btn-preset<?= $agent_period === 'last_month' ? ' btn-primary' : '' ?>"><?= htmlspecialchars(__('agent_btn_last_month'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php else: ?>
                 <form class="filters-bar filters-bar-flow" method="get" style="margin-bottom:16px;">
                     <div class="filters-row filters-row-main">
                         <div class="filter-group">
-                            <label>From:</label>
+                            <label><?= htmlspecialchars(__('agent_filter_from'), ENT_QUOTES, 'UTF-8') ?>:</label>
                             <input type="date" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
                         </div>
                         <div class="filter-group">
                             <label>To:</label>
                             <input type="date" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                         </div>
-                        <button type="submit" class="btn btn-search">Search</button>
+                        <button type="submit" class="btn btn-search"><?= htmlspecialchars(__('btn_search'), ENT_QUOTES, 'UTF-8') ?></button>
                     </div>
                     <div class="filters-row filters-row-presets">
-                        <a href="agents.php?<?= http_build_query(['day_from' => $this_week_start, 'day_to' => $this_week_end]) ?>" class="btn btn-preset">This Week</a>
-                        <a href="agents.php?<?= http_build_query(['day_from' => $last_week_start, 'day_to' => $last_week_end]) ?>" class="btn btn-preset">Last Week</a>
-                        <a href="agents.php?<?= http_build_query(['day_from' => $this_month_start, 'day_to' => $this_month_end]) ?>" class="btn btn-preset">This Month</a>
-                        <a href="agents.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset">Last Month</a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $this_week_start, 'day_to' => $this_week_end]) ?>" class="btn btn-preset"><?= htmlspecialchars(__('agent_btn_this_week'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $last_week_start, 'day_to' => $last_week_end]) ?>" class="btn btn-preset"><?= htmlspecialchars(__('agent_btn_last_week'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $this_month_start, 'day_to' => $this_month_end]) ?>" class="btn btn-preset"><?= htmlspecialchars(__('agent_btn_this_month'), ENT_QUOTES, 'UTF-8') ?></a>
+                        <a href="agents.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset"><?= htmlspecialchars(__('agent_btn_last_month'), ENT_QUOTES, 'UTF-8') ?></a>
                     </div>
                 </form>
                 <?php endif; ?>
@@ -403,27 +448,27 @@ try {
                 <?php if (!$err): ?>
                 <?php if (!$is_agent_user): ?>
                 <div class="summary">
-                    <div class="summary-item"><strong>Agent</strong><span class="num"><?= count($agents) ?></span></div>
+                    <div class="summary-item"><strong><?= htmlspecialchars(__('perm_agent'), ENT_QUOTES, 'UTF-8') ?></strong><span class="num"><?= count($agents) ?></span></div>
                 </div>
                 <?php endif; ?>
                 <div class="card<?= $is_agent_user ? ' agent-self-table' : '' ?>" style="overflow-x: auto;">
-                    <h3><?= $is_agent_user ? 'list player' : '列表' ?></h3>
+                    <h3><?= htmlspecialchars($is_agent_user ? __('agent_list_title_self') : __('agent_list_title_admin'), ENT_QUOTES, 'UTF-8') ?></h3>
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <?php if ($is_agent_user): ?>
-                                <th>Name</th>
-                                <th class="num">Win(Loss)</th>
-                                <th class="num">Commission</th>
+                                <th><?= htmlspecialchars(__('agent_col_name'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('agent_col_winloss'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('agent_col_commission'), ENT_QUOTES, 'UTF-8') ?></th>
                                 <?php else: ?>
-                                <th>Agent</th>
-                                <th class="num">Customers</th>
-                                <th class="num">Win(Loss)</th>
-                                <th class="num">Rebate %</th>
-                                <th class="num">Rebate Amount</th>
-                                <th>Rebate Switch</th>
-                                <th>Paid</th>
-                                <th>操作</th>
+                                <th><?= htmlspecialchars(__('agent_col_agent'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('agent_col_customers'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('agent_col_winloss'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('agent_col_rebate_pct'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('agent_col_rebate_amt'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('agent_col_rebate_switch'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('agent_col_paid'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('lbl_actions'), ENT_QUOTES, 'UTF-8') ?></th>
                                 <?php endif; ?>
                             </tr>
                         </thead>
@@ -445,9 +490,9 @@ try {
                                 if (!$can_pay) $is_paid = false;
                                 $paid_disable_title = '';
                                 if (!$rebate_enabled) {
-                                    $paid_disable_title = '已暂停反水，无法标记已给';
+                                    $paid_disable_title = __('agent_paid_pause');
                                 } elseif (!$can_pay) {
-                                    $paid_disable_title = 'Win/Loss 非正时不能标记已给';
+                                    $paid_disable_title = __('agent_paid_not_positive');
                                 }
                                 $wl_class_agent = 'agent-winloss-even';
                                 if ($winLoss < 0) {
@@ -468,9 +513,9 @@ try {
                             <tr>
                                 <?php if ($is_agent_user): ?>
                                 <td>
-                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-summary-customers-link" title="查看各顾客 Total Win(Lose)">
+                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-summary-customers-link" title="<?= htmlspecialchars(__('agent_title_winloss_detail'), ENT_QUOTES, 'UTF-8') ?>">
                                         <div class="agent-summary-name"><?= htmlspecialchars($agent_row_display_name) ?></div>
-                                        <div class="agent-view-customers-hint">View customers</div>
+                                        <div class="agent-view-customers-hint"><?= htmlspecialchars(__('agent_view_customers'), ENT_QUOTES, 'UTF-8') ?></div>
                                         <?php
                                         $code_show = trim((string)$agent);
                                         if ($code_show !== '' && strcasecmp($code_show, $agent_row_display_name) !== 0):
@@ -480,14 +525,14 @@ try {
                                     </a>
                                 </td>
                                 <td class="num">
-                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= htmlspecialchars($wl_class_agent) ?>" title="查看各顾客 Total Win(Lose)"><?= number_format($winLoss, 2) ?></a>
+                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= htmlspecialchars($wl_class_agent) ?>" title="<?= htmlspecialchars(__('agent_title_winloss_detail'), ENT_QUOTES, 'UTF-8') ?>"><?= number_format($winLoss, 2) ?></a>
                                 </td>
                                 <td class="num <?= $rebate_amount > 0 ? 'agent-commission-amt' : 'agent-commission-zero' ?>"><?= number_format($rebate_amount, 2) ?></td>
                                 <?php else: ?>
                                 <td><?= htmlspecialchars($agent) ?></td>
                                 <td class="num"><?= $cnt ?></td>
                                 <td class="num">
-                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>" title="查看各顾客 Total Win(Lose)"><?= number_format($winLoss, 2) ?></a>
+                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>" title="<?= htmlspecialchars(__('agent_title_winloss_detail'), ENT_QUOTES, 'UTF-8') ?>"><?= number_format($winLoss, 2) ?></a>
                                 </td>
                                 <td class="num">
                                     <form method="post" class="js-agent-rebate-form" style="display:inline-flex; align-items:center; gap:6px;">
@@ -498,12 +543,12 @@ try {
                                         <input type="hidden" class="js-winloss" value="<?= htmlspecialchars((string)$winLoss) ?>">
                                         <div class="agent-pct-view js-pct-view">
                                             <span class="agent-pct-badge"><?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>%</span>
-                                            <button type="button" class="btn btn-sm btn-outline btn-pct-edit js-pct-edit-btn" title="编辑返水比例" aria-label="编辑返水比例">✎</button>
+                                            <button type="button" class="btn btn-sm btn-outline btn-pct-edit js-pct-edit-btn" title="<?= htmlspecialchars(__('agent_edit_rebate_title'), ENT_QUOTES, 'UTF-8') ?>" aria-label="<?= htmlspecialchars(__('agent_edit_rebate_title'), ENT_QUOTES, 'UTF-8') ?>">✎</button>
                                         </div>
                                         <div class="agent-pct-edit js-pct-edit">
                                             <input type="text" name="rebate_pct" class="form-control js-rebate-pct" inputmode="decimal" value="<?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>" style="width:86px; text-align:right;">
-                                            <button type="submit" class="btn btn-sm btn-outline">保存</button>
-                                            <button type="button" class="btn btn-sm btn-outline js-pct-cancel-btn">取消</button>
+                                            <button type="submit" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-sm btn-outline js-pct-cancel-btn"><?= htmlspecialchars(__('btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </div>
                                     </form>
                                 </td>
@@ -517,8 +562,8 @@ try {
                                         <input type="hidden" name="rebate_enabled" value="<?= $rebate_enabled ? '0' : '1' ?>">
                                         <button type="submit"
                                             class="btn btn-sm <?= $rebate_enabled ? 'btn-danger' : 'btn-primary' ?>"
-                                            title="<?= $rebate_enabled ? '暂停后该 Agent 不再计返水，并清除已给标记' : '重新启用返水计算' ?>">
-                                            <?= $rebate_enabled ? '暂停' : '启用' ?>
+                                            title="<?= htmlspecialchars($rebate_enabled ? __('agent_toggle_pause_title') : __('agent_toggle_resume_title'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <?= htmlspecialchars($rebate_enabled ? __('agent_btn_pause') : __('agent_btn_resume'), ENT_QUOTES, 'UTF-8') ?>
                                         </button>
                                     </form>
                                 </td>
@@ -532,21 +577,21 @@ try {
                                         <div class="agent-paid-row">
                                             <label class="agent-paid-check"<?= $paid_disable_title !== '' ? ' title="' . htmlspecialchars($paid_disable_title) . '"' : '' ?>>
                                                 <input type="checkbox" name="is_paid" value="1" <?= $is_paid ? 'checked' : '' ?> <?= $can_pay ? '' : 'disabled' ?>>
-                                                <span>已给</span>
+                                                <span><?= htmlspecialchars(__('agent_paid_label'), ENT_QUOTES, 'UTF-8') ?></span>
                                             </label>
-                                            <button type="submit" class="btn btn-sm btn-outline" <?= $can_pay ? '' : 'disabled' ?> title="<?= htmlspecialchars($can_pay ? '保存已给状态' : $paid_disable_title) ?>">保存</button>
+                                            <button type="submit" class="btn btn-sm btn-outline" <?= $can_pay ? '' : 'disabled' ?> title="<?= htmlspecialchars($can_pay ? __('agent_save_paid_title') : $paid_disable_title, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </div>
                                         <?php if ($paid_at !== ''): ?>
                                         <div class="agent-paid-meta"><?= htmlspecialchars($paid_at) ?></div>
                                         <?php endif; ?>
                                     </form>
                                 </td>
-                                <td><a href="customers.php?recommend=<?= $recommend_param ?>">View Customers</a></td>
+                                <td><a href="customers.php?recommend=<?= $recommend_param ?>"><?= htmlspecialchars(__('agent_view_customers'), ENT_QUOTES, 'UTF-8') ?></a></td>
                                 <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>
                             <?php if (empty($agents)): ?>
-                            <tr><td colspan="<?= $is_agent_user ? '3' : '8' ?>" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
+                            <tr><td colspan="<?= $is_agent_user ? '3' : '8' ?>" style="color:var(--muted); padding:24px;"><?= htmlspecialchars(__('agent_empty_row'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>

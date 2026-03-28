@@ -12,29 +12,21 @@ i18n_bootstrap();
 function get_permission_options(): array
 {
     return [
-        // 文案/顺序尽量与左侧侧栏一致（便于 admin 开关）
-        // Home
-        'home_dashboard'     => 'Dashboard',
-        'statement_report'   => 'Report',
-        // Statement
-        'statement_balance'  => 'Statement',
-        // Expense
-        'expense_statement'  => 'Expense Statement',
-        'kiosk_expense_view' => 'Kiosk Expense',
-        'kiosk_statement'    => 'Kiosk Statement',
-        // Add / Transactions / Rebate / Customers
-        'transaction_create' => 'Add Transaction',
-        'transaction_list'   => 'Transactions',
-        'rebate'             => 'Rebate',
-        'customers'          => 'Customers',
-        'customer_create'    => 'New Customer',
-        'customer_edit'      => 'Edit Customer (incl. Product Accounts)',
-        'product_library'    => 'Product Accounts',
-        // Agent
-        'agent'              => 'Agent',
-
-        // 兼容：旧版只用 statement 一个开关；保留供旧账号继续生效（一般不需要再勾选）
-        'statement'          => 'Statement（legacy old switch）',
+        'home_dashboard'     => __('perm_home_dashboard'),
+        'statement_report'   => __('perm_statement_report'),
+        'statement_balance'  => __('perm_statement_balance'),
+        'expense_statement'  => __('perm_expense_statement'),
+        'kiosk_expense_view' => __('perm_kiosk_expense_view'),
+        'kiosk_statement'    => __('perm_kiosk_statement'),
+        'transaction_create' => __('perm_transaction_create'),
+        'transaction_list'   => __('perm_transaction_list'),
+        'rebate'             => __('perm_rebate'),
+        'customers'          => __('perm_customers'),
+        'customer_create'    => __('perm_customer_create'),
+        'customer_edit'      => __('perm_customer_edit'),
+        'product_library'    => __('perm_product_library'),
+        'agent'              => __('perm_agent'),
+        'statement'          => __('perm_statement_legacy'),
     ];
 }
 
@@ -112,7 +104,7 @@ function require_permission(string $key): void
     require_login();
     if (!has_permission($key)) {
         http_response_code(403);
-        echo '无权限访问此功能。如需开通，请联系管理员在「权限设置」中勾选。';
+        echo htmlspecialchars(__('err_403_feature'), ENT_QUOTES, 'UTF-8');
         exit;
     }
 }
@@ -162,7 +154,7 @@ function require_superadmin(): void
     require_login();
     if (($_SESSION['user_role'] ?? '') !== 'superadmin') {
         http_response_code(403);
-        echo '无权限（仅平台 big boss 可访问）';
+        echo htmlspecialchars(__('err_403_superadmin_only'), ENT_QUOTES, 'UTF-8');
         exit;
     }
 }
@@ -183,17 +175,17 @@ function role_label(string $role): string
 {
     switch (strtolower(trim($role))) {
         case 'superadmin':
-            return 'big boss';
+            return __('role_bb');
         case 'boss':
-            return 'boss';
+            return __('role_boss');
         case 'admin':
-            return 'admin';
+            return __('role_admin');
         case 'member':
-            return 'member';
+            return __('role_member');
         case 'agent':
-            return 'agent';
+            return __('role_agent');
         default:
-            return $role;
+            return $role !== '' ? $role : __('login_err_role_unset');
     }
 }
 
@@ -301,11 +293,11 @@ function auth_commit_login_session(PDO $pdo, array $u, bool $remember, string $c
         } elseif ($use_company > 0) {
             $_SESSION['company_id'] = $use_company;
         } else {
-            $error = '暂无可用公司，请先创建公司。';
+            $error = __('auth_err_no_company_available');
         }
     } else {
         if ($db_company_id <= 0) {
-            $error = '该账号未绑定公司，请到用户管理里设置 company_id。';
+            $error = __('auth_err_user_no_company');
         } else {
             $_SESSION['company_id'] = $db_company_id;
         }
@@ -356,7 +348,7 @@ function auth_commit_login_session(PDO $pdo, array $u, bool $remember, string $c
         foreach (['user_id', 'user_name', 'user_role', 'company_id', 'avatar_url', 'agent_code'] as $k) {
             unset($_SESSION[$k]);
         }
-        return ['ok' => false, 'error' => '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。'];
+        return ['ok' => false, 'error' => __('login_err_no_perm')];
     }
     return ['ok' => true, 'location' => $target];
 }
