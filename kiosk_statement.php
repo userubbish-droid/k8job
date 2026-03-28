@@ -41,6 +41,43 @@ function kiosk_stmt_fmt_in(float $v): string {
     <title>Kiosk Statement - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+    .stmt-drill {
+        background: none; border: none; padding: 0; margin: 0; font: inherit;
+        cursor: pointer; text-decoration: underline dotted; text-underline-offset: 3px;
+        color: inherit; text-align: right; width: 100%;
+    }
+    .stmt-drill:hover { text-decoration: underline solid; opacity: 0.92; }
+    .stmt-drill:focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 4px; }
+    .stmt-drill-mask {
+        display: none; position: fixed; inset: 0; z-index: 1200;
+        background: rgba(15, 23, 42, 0.45); align-items: center; justify-content: center; padding: 16px;
+    }
+    .stmt-drill-mask.show { display: flex; }
+    .stmt-drill-dialog {
+        background: #fff; border-radius: 14px; max-width: min(960px, 100%);
+        max-height: min(85vh, 900px); display: flex; flex-direction: column;
+        box-shadow: 0 20px 50px rgba(15, 23, 42, 0.2); width: 100%;
+    }
+    .stmt-drill-head {
+        display: flex; align-items: center; justify-content: space-between; gap: 12px;
+        padding: 14px 18px; border-bottom: 1px solid #e2e8f0;
+    }
+    .stmt-drill-head h3 { margin: 0; font-size: 1.05rem; font-weight: 700; color: var(--text); }
+    .stmt-drill-x {
+        border: none; background: #f1f5f9; width: 36px; height: 36px; border-radius: 10px;
+        font-size: 22px; line-height: 1; cursor: pointer; color: #475569;
+    }
+    .stmt-drill-x:hover { background: #e2e8f0; }
+    .stmt-drill-body { padding: 12px 16px 18px; overflow: auto; flex: 1; }
+    .stmt-drill-body h4 { margin: 16px 0 8px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: none; }
+    .stmt-drill-body h4:first-child { margin-top: 0; }
+    .stmt-drill-table { width: 100%; font-size: 13px; margin-bottom: 8px; }
+    .stmt-drill-table th, .stmt-drill-table td { padding: 6px 8px; white-space: nowrap; }
+    .stmt-drill-table td.stmt-drill-wrap { white-space: normal; max-width: 220px; }
+    .stmt-drill-loading, .stmt-drill-err { padding: 20px; text-align: center; color: var(--muted); }
+    .stmt-drill-err { color: var(--danger); }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -116,14 +153,14 @@ function kiosk_stmt_fmt_in(float $v): string {
                                         <td><?= htmlspecialchars($name) ?></td>
                                         <?php if ($is_admin): ?>
                                             <td class="num"><?= number_format($init, 2) ?></td>
-                                            <td class="num stmt-in"><?= kiosk_stmt_fmt_in($dep) ?></td>
-                                            <td class="num stmt-in"><?= kiosk_stmt_fmt_in($reb) ?></td>
-                                            <td class="num stmt-in"><?= kiosk_stmt_fmt_in($fr) ?></td>
-                                            <td class="num stmt-in"><?= kiosk_stmt_fmt_in($fwd) ?></td>
-                                            <td class="num"><?= $bns != 0 ? number_format($bns, 2) : '—' ?></td>
-                                            <td class="num stmt-topup"><?= $topup != 0 ? number_format($topup, 2) : '—' ?></td>
-                                            <td class="num stmt-out"><?= $out != 0 ? number_format($out, 2) : '—' ?></td>
-                                            <td class="num stmt-in"><?= kiosk_stmt_fmt_in($in) ?></td>
+                                            <td class="num stmt-in"><?php if ($dep != 0): ?><button type="button" class="stmt-drill" data-bucket="dep" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= kiosk_stmt_fmt_in($dep) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num stmt-in"><?php if ($reb != 0): ?><button type="button" class="stmt-drill" data-bucket="reb" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= kiosk_stmt_fmt_in($reb) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num stmt-in"><?php if ($fr != 0): ?><button type="button" class="stmt-drill" data-bucket="fr" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= kiosk_stmt_fmt_in($fr) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num stmt-in"><?php if ($fwd != 0): ?><button type="button" class="stmt-drill" data-bucket="fwd" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= kiosk_stmt_fmt_in($fwd) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num"><?php if ($bns != 0): ?><button type="button" class="stmt-drill profit" style="color:inherit" data-bucket="bns" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= number_format($bns, 2) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num stmt-topup"><?php if ($topup != 0): ?><button type="button" class="stmt-drill" data-bucket="topup" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= number_format($topup, 2) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num stmt-out"><?php if ($out != 0): ?><button type="button" class="stmt-drill" data-bucket="out" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= number_format($out, 2) ?></button><?php else: ?>—<?php endif; ?></td>
+                                            <td class="num stmt-in"><?php if ($in != 0): ?><button type="button" class="stmt-drill" data-bucket="in" data-product="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= kiosk_stmt_fmt_in($in) ?></button><?php else: ?>—<?php endif; ?></td>
                                         <?php endif; ?>
                                         <td class="num <?= $balance < 0 ? 'stmt-negative' : 'profit' ?>"><?= number_format($balance, 2) ?></td>
                                     </tr>
@@ -142,13 +179,26 @@ function kiosk_stmt_fmt_in(float $v): string {
                             <strong>Rebate</strong> 列含流水 <code>mode=REBATE</code> 与<strong>返点页「已给」</strong>（<code>rebate_given</code>，日期为返点页区间<strong>结束日</strong>、筛选须包含该日；按客户代号归到其首个产品账号）。返点页金额<strong>仅用于本列核对</strong>，<strong>不计入 In 合计与 Balance</strong>（与银行侧返点口径不同，避免把「已给」当平台入账重复扣账）。
                             <strong>Bonus</strong> 列为 <code>bonus</code> 字段加上「入账行 total/amount+bonus 与 amount、bonus 的差额」推导（兼容旧数据只写总额未填 bonus）。
                             未计入 In/Out 的模式：<strong>BANK / OTHER</strong> 等不会出现在本表，除非以后扩展规则。
+                            <strong>提示：</strong>带虚线下划线的数字可点击，弹出对应流水或返点页「已给」明细（管理员）。
                         </p>
                     <?php endif; ?>
                 </div>
             </div>
         </main>
     </div>
+    <?php if ($is_admin): ?>
+    <div class="stmt-drill-mask" id="stmt-drill-mask" aria-hidden="true">
+        <div class="stmt-drill-dialog" role="dialog" aria-modal="true" aria-labelledby="stmt-drill-title">
+            <div class="stmt-drill-head">
+                <h3 id="stmt-drill-title">明细</h3>
+                <button type="button" class="stmt-drill-x" id="stmt-drill-close" aria-label="关闭">×</button>
+            </div>
+            <div class="stmt-drill-body" id="stmt-drill-body"></div>
+        </div>
+    </div>
+    <?php endif; ?>
 <script>
+window.KIOSK_STMT = <?= json_encode(['day_from' => $day_from, 'day_to' => $day_to], JSON_UNESCAPED_UNICODE) ?>;
 (function(){
     var btn = document.getElementById('stmt-date-toggle');
     var form = document.getElementById('stmt-date-form');
@@ -175,6 +225,123 @@ function kiosk_stmt_fmt_in(float $v): string {
         });
     });
 })();
+<?php if ($is_admin): ?>
+(function(){
+    var mask = document.getElementById('stmt-drill-mask');
+    var bodyEl = document.getElementById('stmt-drill-body');
+    var titleEl = document.getElementById('stmt-drill-title');
+    var closeBtn = document.getElementById('stmt-drill-close');
+    if (!mask || !bodyEl || !titleEl) return;
+    function closeDrill() {
+        mask.classList.remove('show');
+        mask.setAttribute('aria-hidden', 'true');
+        bodyEl.innerHTML = '';
+    }
+    function esc(s) {
+        if (!s) return '';
+        var d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+    function renderRows(sec, canEdit) {
+        var tbl = document.createElement('table');
+        tbl.className = 'data-table stmt-drill-table';
+        var thead = document.createElement('thead');
+        var hr = document.createElement('tr');
+        sec.columns.forEach(function(c) {
+            var th = document.createElement('th');
+            th.textContent = c;
+            hr.appendChild(th);
+        });
+        if (canEdit) {
+            var tha = document.createElement('th');
+            tha.textContent = '';
+            hr.appendChild(tha);
+        }
+        thead.appendChild(hr);
+        tbl.appendChild(thead);
+        var tb = document.createElement('tbody');
+        (sec.rows || []).forEach(function(row) {
+            var tr = document.createElement('tr');
+            var cells = row.cells || [];
+            cells.forEach(function(cell, idx) {
+                var td = document.createElement('td');
+                if (idx === cells.length - 1 && String(cell).length > 40) td.className = 'stmt-drill-wrap';
+                td.textContent = cell;
+                tr.appendChild(td);
+            });
+            if (canEdit && row.txn_id) {
+                var tda = document.createElement('td');
+                var a = document.createElement('a');
+                a.href = 'transaction_edit.php?id=' + encodeURIComponent(row.txn_id);
+                a.textContent = '编辑';
+                a.className = 'btn btn-sm btn-outline';
+                tda.appendChild(a);
+                tr.appendChild(tda);
+            } else if (canEdit) {
+                tr.appendChild(document.createElement('td'));
+            }
+            tb.appendChild(tr);
+        });
+        tbl.appendChild(tb);
+        return tbl;
+    }
+    function openDrill(bucket, product) {
+        var q = window.KIOSK_STMT || {};
+        var url = 'kiosk_statement_detail.php?bucket=' + encodeURIComponent(bucket)
+            + '&product=' + encodeURIComponent(product)
+            + '&day_from=' + encodeURIComponent(q.day_from || '')
+            + '&day_to=' + encodeURIComponent(q.day_to || '');
+        mask.classList.add('show');
+        mask.setAttribute('aria-hidden', 'false');
+        titleEl.textContent = '加载中…';
+        bodyEl.innerHTML = '<div class="stmt-drill-loading">加载中…</div>';
+        fetch(url, { credentials: 'same-origin' })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (!data.ok) {
+                    bodyEl.innerHTML = '<div class="stmt-drill-err">' + esc(data.error || '加载失败') + '</div>';
+                    titleEl.textContent = '明细';
+                    return;
+                }
+                titleEl.textContent = data.title || '明细';
+                bodyEl.innerHTML = '';
+                var canEdit = !!data.can_edit_txn;
+                (data.sections || []).forEach(function(sec) {
+                    if (!sec.rows || sec.rows.length === 0) return;
+                    var h = document.createElement('h4');
+                    h.textContent = sec.label || '';
+                    bodyEl.appendChild(h);
+                    bodyEl.appendChild(renderRows(sec, canEdit));
+                });
+                if (!bodyEl.querySelector('.stmt-drill-table')) {
+                    bodyEl.innerHTML = '<div class="stmt-drill-loading">暂无明细</div>';
+                }
+                if (data.truncated) {
+                    var p = document.createElement('p');
+                    p.className = 'form-hint';
+                    p.style.marginTop = '10px';
+                    p.textContent = '仅显示前 400 条流水，如需更多请缩短日期范围或在流水列表筛选。';
+                    bodyEl.appendChild(p);
+                }
+            })
+            .catch(function() {
+                bodyEl.innerHTML = '<div class="stmt-drill-err">网络错误</div>';
+                titleEl.textContent = '明细';
+            });
+    }
+    document.querySelectorAll('.stmt-drill').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            openDrill(btn.getAttribute('data-bucket'), btn.getAttribute('data-product'));
+        });
+    });
+    if (closeBtn) closeBtn.addEventListener('click', closeDrill);
+    mask.addEventListener('click', function(e) { if (e.target === mask) closeDrill(); });
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape' && mask.classList.contains('show')) closeDrill();
+    });
+})();
+<?php endif; ?>
 </script>
 </body>
 </html>
