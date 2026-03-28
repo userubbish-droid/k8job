@@ -6,6 +6,7 @@
  */
 require 'config.php';
 require 'auth.php';
+require_admin();
 
 $result = '';
 $sent = false;

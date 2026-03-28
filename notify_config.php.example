@@ -1,16 +1,14 @@
 <?php
 /**
- * 待审核通知配置示例
- * 复制为 notify_config.php 并填写后，有流水待审核时会推送通知
+ * 待审核流水 + 余额阈值 Telegram 通知（与本文件同目录的 config.php 会自动 include）
+ * 复制本文件为 notify_config.php（勿提交 Git），取消注释并填写。
  *
- * === Telegram（推荐，免费）===
- * 1. Telegram 搜索 @BotFather，发送 /newbot 创建机器人，获得 BOT_TOKEN
- * 2. 与你的机器人对话（发一条任意消息）
- * 3. 浏览器打开 https://api.telegram.org/bot<你的BOT_TOKEN>/getUpdates
- *    在返回的 JSON 里找到 "chat":{"id": 123456789}，该数字即为 CHAT_ID
- * 4. 取消下面三行注释并填入真实值
+ * === Telegram ===
+ * 1. @BotFather /newbot 取得 BOT_TOKEN
+ * 2. 先对 Bot 私聊发一条消息
+ * 3. 浏览器打开 https://api.telegram.org/bot<TOKEN>/getUpdates 取 chat.id 作为 CHAT_ID
  */
-// $NOTIFY_TELEGRAM_BOT_TOKEN = '123456:ABC-DEF...';
-// $NOTIFY_TELEGRAM_CHAT_ID  = '123456789';
-// $NOTIFY_BASE_URL = 'https://你的网站域名.com';
+$NOTIFY_TELEGRAM_BOT_TOKEN = ''; // 必填
+$NOTIFY_TELEGRAM_CHAT_ID  = '';  // 必填，多为数字字符串
+$NOTIFY_BASE_URL = '';           // 选填：待审核消息里审核链接前缀，如 https://你的域名.com
 

@@ -135,11 +135,13 @@ try { $pdo->exec("ALTER TABLE customers ADD COLUMN status ENUM('pending','approv
 try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_by INT UNSIGNED NULL AFTER status"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_at DATETIME NULL AFTER approved_by"); } catch (Throwable $e) {}
 
-// 待审核通知（Telegram，免费）：有流水待审核时推送到 Telegram
-$NOTIFY_TELEGRAM_BOT_TOKEN = '8609332956:AAHWcn815xZ-L4It23rwqMTbcO7G24AYwV4';
-$NOTIFY_TELEGRAM_CHAT_ID  = '7086050417';
-$NOTIFY_BASE_URL = 'https://k8wincs96.com';
-if (!defined('NOTIFY_CONFIG_LOADED')) define('NOTIFY_CONFIG_LOADED', true);
-if (file_exists(__DIR__ . '/notify_config.php')) {
+// Telegram 通知：密钥勿写在此文件（避免进 Git）。复制 notify_config.php.example 为 notify_config.php 并填写（已在 .gitignore）
+$NOTIFY_TELEGRAM_BOT_TOKEN = '';
+$NOTIFY_TELEGRAM_CHAT_ID  = '';
+$NOTIFY_BASE_URL = '';
+if (!defined('NOTIFY_CONFIG_LOADED')) {
+    define('NOTIFY_CONFIG_LOADED', true);
+}
+if (is_file(__DIR__ . '/notify_config.php')) {
     include __DIR__ . '/notify_config.php';
 }
