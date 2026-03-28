@@ -337,6 +337,29 @@ if ($actor_is_superadmin) {
         .agent-customer-code { font-weight: 800; color: #1e3a8a; min-width: 74px; }
         .agent-customer-name { color: #0f172a; }
         .agent-customer-meta { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+        /* 全平台列表：按分公司配色（仅 .admin-users-by-company） */
+        .admin-users-by-company.data-table tbody tr.admin-users-co-row {
+            border-left: 4px solid transparent;
+            transition: background-color .12s ease, box-shadow .12s ease;
+        }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b0 { background: rgba(239, 246, 255, 0.92) !important; border-left-color: #2563eb; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b1 { background: rgba(236, 253, 245, 0.92) !important; border-left-color: #059669; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b2 { background: rgba(255, 251, 235, 0.95) !important; border-left-color: #d97706; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b3 { background: rgba(245, 243, 255, 0.95) !important; border-left-color: #7c3aed; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b4 { background: rgba(255, 241, 242, 0.95) !important; border-left-color: #e11d48; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b5 { background: rgba(236, 254, 255, 0.92) !important; border-left-color: #0891b2; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b6 { background: rgba(247, 254, 231, 0.95) !important; border-left-color: #65a30d; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b7 { background: rgba(255, 247, 237, 0.95) !important; border-left-color: #ea580c; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-orphan { background: rgba(241, 245, 249, 0.95) !important; border-left-color: #64748b; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b0:hover { background: rgba(219, 234, 254, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b1:hover { background: rgba(209, 250, 229, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b2:hover { background: rgba(254, 243, 199, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b3:hover { background: rgba(237, 233, 254, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b4:hover { background: rgba(254, 226, 231, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b5:hover { background: rgba(207, 250, 254, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b6:hover { background: rgba(236, 252, 203, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-b7:hover { background: rgba(255, 237, 213, 0.98) !important; }
+        .admin-users-by-company.data-table tbody tr.admin-users-co-orphan:hover { background: rgba(226, 232, 240, 0.98) !important; }
     </style>
 </head>
 <body>
@@ -450,14 +473,14 @@ if ($actor_is_superadmin) {
         <div class="card">
             <h3><?= $actor_is_superadmin ? '全部分公司账号' : '本公司账号' ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
             <p class="agent-customer-hint" style="margin-top:-6px;"><?= $actor_is_superadmin
-                ? '汇总所有公司的 admin / member / agent；平台 superadmin 仅在下方单独列表。本表仅 superadmin 登录后可见。'
+                ? '汇总所有公司的 admin / member / agent；平台 superadmin 仅在下方单独列表。本表仅 superadmin 登录后可见。<strong>左侧色条与浅底色按分公司区分</strong>，便于扫读。'
                 : '不含平台 superadmin；与当前侧栏所选公司一致。分公司管理员无法查看其他公司或平台管理员。' ?></p>
             <?= $filter_links ?>
             <?php if (!$actor_is_superadmin && $view_company_id <= 0): ?>
                 <div class="alert alert-error" role="status">无法加载本公司账号（缺少公司上下文），请重新登录。</div>
             <?php endif; ?>
             <div style="overflow-x:auto;">
-            <table class="data-table">
+            <table class="data-table<?= $users_primary_show_company_col ? ' admin-users-by-company' : '' ?>">
                 <thead>
                     <tr>
                         <th>ID</th>
@@ -479,8 +502,10 @@ if ($actor_is_superadmin) {
                     $co_disp = ($co_code !== '' || $co_name !== '')
                         ? ($co_code . ($co_name !== '' ? ' — ' . $co_name : ''))
                         : (((int)($u['company_id'] ?? 0) > 0) ? ('#' . (int)$u['company_id']) : '—');
+                    $cid_row = (int)($u['company_id'] ?? 0);
+                    $co_row_class = 'admin-users-co-row ' . ($cid_row > 0 ? 'admin-users-co-b' . (($cid_row - 1) % 8) : 'admin-users-co-orphan');
                 ?>
-                    <tr>
+                    <tr<?= $users_primary_show_company_col ? ' class="' . htmlspecialchars($co_row_class) . '"' : '' ?>>
                         <td><?= (int)$u['id'] ?></td>
                         <?php if ($users_primary_show_company_col): ?><td><?= htmlspecialchars($co_disp) ?></td><?php endif; ?>
                         <td><?= htmlspecialchars($u['username']) ?></td>
