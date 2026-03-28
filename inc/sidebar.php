@@ -139,8 +139,11 @@ if ($sidebar_is_superadmin) {
     </div>
     <?php endif; ?>
     <?php endif; ?>
-    <?php if (($_SESSION['user_role'] ?? '') === 'admin'): ?>
+    <?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true)): ?>
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span>User Management</a>
+        <?php if ($sidebar_is_superadmin): ?>
+        <a href="admin_companies.php" class="nav-item <?= $sidebar_current === 'admin_companies' ? 'primary' : '' ?>"><span class="nav-icon"></span>分公司 / Companies</a>
+        <?php endif; ?>
         <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>Banks & Products</a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span>Permissions</a>
         <a href="admin_customer_approvals.php" class="nav-item <?= $sidebar_current === 'admin_customer_approvals' ? 'primary' : '' ?>"><span class="nav-icon"></span>Customer Approvals</a>
@@ -148,7 +151,7 @@ if ($sidebar_is_superadmin) {
     <a href="logout.php" class="nav-item"><span class="nav-icon"></span>Logout</a>
 </aside>
 <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="打开导航"><span class="sidebar-toggle-icon">☰</span> MENU</button>
-<?php if (($_SESSION['user_role'] ?? '') === 'admin' && $sidebar_pending > 0): ?>
+<?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin'], true) && $sidebar_pending > 0): ?>
 <a href="admin_approvals.php" class="sidebar-bell" title="Pending <?= $sidebar_pending ?>" aria-label="Pending approvals"><span class="sidebar-bell-icon">🔔</span><span class="sidebar-bell-badge"><?= $sidebar_pending ?></span></a>
 <?php endif; ?>
 <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>

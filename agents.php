@@ -193,12 +193,23 @@ try {
     <style>
         .agent-winloss-pos { color: var(--success); font-weight: 700; }
         .agent-winloss-neg { color: var(--danger); font-weight: 700; }
-        .agent-paid-wrap { display: inline-flex; align-items: center; gap: 6px; margin-left: 8px; font-size: 12px; color: #475569; }
-        .agent-paid-at { color: var(--muted); font-size: 12px; white-space: nowrap; }
-        .agent-pct-view { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; width: 100%; }
+        .agent-paid-cell { vertical-align: middle; }
+        .agent-paid-form { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
+        .agent-paid-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+        .agent-paid-check {
+            display: inline-flex; align-items: center; gap: 6px; margin: 0;
+            font-size: 13px; color: #475569; cursor: pointer; user-select: none;
+        }
+        .agent-paid-check input:disabled { cursor: not-allowed; }
+        .agent-paid-check input:disabled + span { opacity: 0.55; }
+        .agent-paid-meta { font-size: 11px; color: var(--muted); line-height: 1.3; }
+        .agent-pct-view { display: inline-flex; align-items: center; gap: 6px; justify-content: flex-end; width: 100%; }
         .agent-pct-edit { display: none; align-items: center; gap: 6px; justify-content: flex-end; width: 100%; }
-        .agent-pct-badge { font-weight: 600; color: #1f2937; }
-        .agent-pct-note { font-size: 12px; color: var(--muted); }
+        .agent-pct-badge { font-weight: 600; color: #1f2937; font-variant-numeric: tabular-nums; }
+        .btn-pct-edit {
+            padding: 2px 8px; min-width: 30px; font-size: 14px; line-height: 1.2;
+            border-radius: 6px;
+        }
         .agent-self-table { max-width: 520px; }
         .agent-self-table th,
         .agent-self-table td { font-size: 15px; }
@@ -298,6 +309,12 @@ try {
                                 $recommend_param = htmlspecialchars(urlencode($agent));
                                 $can_pay = $winLoss < 0 && $rebate_enabled;
                                 if (!$can_pay) $is_paid = false;
+                                $paid_disable_title = '';
+                                if (!$rebate_enabled) {
+                                    $paid_disable_title = '已暂停反水，无法标记已给';
+                                } elseif (!$can_pay) {
+                                    $paid_disable_title = 'Win/Loss 非负时不能标记已给';
+                                }
                             ?>
                             <tr>
                                 <?php if ($is_agent_user): ?>
@@ -316,7 +333,7 @@ try {
                                         <input type="hidden" class="js-winloss" value="<?= htmlspecialchars((string)$winLoss) ?>">
                                         <div class="agent-pct-view js-pct-view">
                                             <span class="agent-pct-badge"><?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>%</span>
-                                            <button type="button" class="btn btn-sm btn-outline js-pct-edit-btn">编辑</button>
+                                            <button type="button" class="btn btn-sm btn-outline btn-pct-edit js-pct-edit-btn" title="编辑返水比例" aria-label="编辑返水比例">✎</button>
                                         </div>
                                         <div class="agent-pct-edit js-pct-edit">
                                             <input type="text" name="rebate_pct" class="form-control js-rebate-pct" inputmode="decimal" value="<?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>" style="width:86px; text-align:right;">
@@ -327,34 +344,37 @@ try {
                                 </td>
                                 <td class="num js-rebate-amount <?= $rebate_amount > 0 ? 'agent-winloss-pos' : '' ?>"><?= number_format($rebate_amount, 2) ?></td>
                                 <td>
-                                    <form method="post" style="display:inline-flex; align-items:center; gap:8px;">
+                                    <form method="post" class="agent-rebate-toggle-form">
                                         <input type="hidden" name="action" value="toggle_rebate_enabled">
                                         <input type="hidden" name="agent" value="<?= htmlspecialchars($agent) ?>">
                                         <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
                                         <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                         <input type="hidden" name="rebate_enabled" value="<?= $rebate_enabled ? '0' : '1' ?>">
-                                        <button type="submit" class="btn btn-sm <?= $rebate_enabled ? 'btn-danger' : 'btn-primary' ?>">
+                                        <button type="submit"
+                                            class="btn btn-sm <?= $rebate_enabled ? 'btn-danger' : 'btn-primary' ?>"
+                                            title="<?= $rebate_enabled ? '暂停后该 Agent 不再计返水，并清除已给标记' : '重新启用返水计算' ?>">
                                             <?= $rebate_enabled ? '暂停' : '启用' ?>
                                         </button>
-                                        <span class="agent-pct-note"><?= $rebate_enabled ? '需要给' : '不需要给' ?></span>
                                     </form>
                                 </td>
-                                <td>
-                                    <form method="post" class="js-agent-paid-form" style="display:inline-flex; align-items:center; gap:8px;">
+                                <td class="agent-paid-cell">
+                                    <form method="post" class="agent-paid-form js-agent-paid-form">
                                         <input type="hidden" name="action" value="save_rebate_pct">
                                         <input type="hidden" name="agent" value="<?= htmlspecialchars($agent) ?>">
                                         <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
                                         <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                         <input type="hidden" name="rebate_pct" value="<?= htmlspecialchars(number_format($pct, 2, '.', '')) ?>">
-                                        <label class="agent-paid-wrap" style="margin-left:0;">
-                                            <input type="checkbox" name="is_paid" value="1" <?= $is_paid ? 'checked' : '' ?> <?= $can_pay ? '' : 'disabled' ?>>
-                                            已给 Agent
-                                        </label>
-                                        <button type="submit" class="btn btn-sm btn-outline" <?= $can_pay ? '' : 'disabled' ?>>保存</button>
+                                        <div class="agent-paid-row">
+                                            <label class="agent-paid-check"<?= $paid_disable_title !== '' ? ' title="' . htmlspecialchars($paid_disable_title) . '"' : '' ?>>
+                                                <input type="checkbox" name="is_paid" value="1" <?= $is_paid ? 'checked' : '' ?> <?= $can_pay ? '' : 'disabled' ?>>
+                                                <span>已给</span>
+                                            </label>
+                                            <button type="submit" class="btn btn-sm btn-outline" <?= $can_pay ? '' : 'disabled' ?> title="<?= htmlspecialchars($can_pay ? '保存已给状态' : $paid_disable_title) ?>">保存</button>
+                                        </div>
+                                        <?php if ($paid_at !== ''): ?>
+                                        <div class="agent-paid-meta"><?= htmlspecialchars($paid_at) ?></div>
+                                        <?php endif; ?>
                                     </form>
-                                    <?php if (!$rebate_enabled): ?><span class="agent-pct-note">（已暂停反水）</span>
-                                    <?php elseif (!$can_pay): ?><span class="agent-pct-note">（Win/Loss 非负，不能给）</span><?php endif; ?>
-                                    <?php if ($paid_at !== ''): ?><span class="agent-paid-at">（<?= htmlspecialchars($paid_at) ?>）</span><?php endif; ?>
                                 </td>
                                 <td><a href="customers.php?recommend=<?= $recommend_param ?>">View Customers</a></td>
                                 <?php endif; ?>

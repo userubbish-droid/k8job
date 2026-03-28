@@ -26,6 +26,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $is_active = isset($_POST['is_active']) && (string)$_POST['is_active'] === '1' ? 1 : 0;
     if ($username === '') {
         $err = '用户名不能为空。';
+    } elseif (!user_is_manageable_by_current_actor($pdo, $id)) {
+        $err = '无权限保存该账号。';
     } else {
         try {
             $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, avatar_url = ?, is_active = ? WHERE id = ?");
@@ -57,6 +59,11 @@ try {
 }
 if (!$u) {
     header('Location: admin_users.php');
+    exit;
+}
+if (!user_is_manageable_by_current_actor($pdo, $id)) {
+    http_response_code(403);
+    echo '无权限编辑该账号（本公司账号与平台 superadmin 已分开管理）。';
     exit;
 }
 ?>

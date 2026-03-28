@@ -4,12 +4,25 @@ require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_permissions';
 
+$actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+
 $msg = '';
 $err = '';
 
 $members = [];
 try {
-    $members = $pdo->query("SELECT id, username, display_name FROM users WHERE role = 'member' ORDER BY username ASC")->fetchAll();
+    if ($actor_is_superadmin) {
+        $members = $pdo->query("SELECT u.id, u.username, u.display_name, u.company_id, COALESCE(c.code, '') AS company_code
+            FROM users u
+            LEFT JOIN companies c ON c.id = u.company_id
+            WHERE u.role = 'member'
+            ORDER BY u.company_id ASC, u.username ASC")->fetchAll();
+    } else {
+        $cid = current_company_id();
+        $stmt = $pdo->prepare("SELECT id, username, display_name, company_id FROM users WHERE role = 'member' AND company_id = ? ORDER BY username ASC");
+        $stmt->execute([$cid]);
+        $members = $stmt->fetchAll();
+    }
 } catch (Throwable $e) {
     $members = [];
 }
@@ -20,27 +33,31 @@ if ($selected_id > 0 && !in_array($selected_id, array_column($members, 'id'), tr
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0) {
-    $checked = $_POST['perms'] ?? [];
-    if (!is_array($checked)) {
-        $checked = [];
-    }
-    $options = get_permission_options();
-    $valid = array_keys($options);
-    $to_insert = array_intersect($checked, $valid);
-
-    try {
-        $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?")->execute([$selected_id]);
-        $stmt = $pdo->prepare("INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)");
-        foreach ($to_insert as $key) {
-            $stmt->execute([$selected_id, $key]);
+    if (!user_is_manageable_by_current_actor($pdo, $selected_id)) {
+        $err = '无权限保存该员工的权限（仅可管理本公司 Member；平台总管理员可管理全部）。';
+    } else {
+        $checked = $_POST['perms'] ?? [];
+        if (!is_array($checked)) {
+            $checked = [];
         }
-        $msg = '已保存该员工的权限。';
-    } catch (Throwable $e) {
-        $msg = $e->getMessage();
-        if (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false)) {
-            $err = '保存失败：尚未创建权限表。请到 Hostinger 的 phpMyAdmin 中选中当前数据库，执行一次 <strong>migrate_user_permissions.sql</strong> 里的 SQL（创建 user_permissions 表），保存后再试。';
-        } else {
-            $err = '保存失败：' . htmlspecialchars($msg);
+        $options = get_permission_options();
+        $valid = array_keys($options);
+        $to_insert = array_intersect($checked, $valid);
+
+        try {
+            $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?")->execute([$selected_id]);
+            $stmt = $pdo->prepare("INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)");
+            foreach ($to_insert as $key) {
+                $stmt->execute([$selected_id, $key]);
+            }
+            $msg = '已保存该员工的权限。';
+        } catch (Throwable $e) {
+            $msg = $e->getMessage();
+            if (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false)) {
+                $err = '保存失败：尚未创建权限表。请到 Hostinger 的 phpMyAdmin 中选中当前数据库，执行一次 <strong>migrate_user_permissions.sql</strong> 里的 SQL（创建 user_permissions 表），保存后再试。';
+            } else {
+                $err = '保存失败：' . htmlspecialchars($msg);
+            }
         }
     }
 }
@@ -111,10 +128,11 @@ if ($selected_id > 0) {
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 560px;">
         <div class="page-header">
-            <h2>Member 权限设置</h2>
+            <h2>Member 权限设置<?= $actor_is_superadmin ? '（全平台）' : '（本公司）' ?></h2>
             <p class="breadcrumb">
                 <a href="dashboard.php">首页</a><span>·</span>
                 <a href="admin_users.php">用户管理</a>
+                <?= $actor_is_superadmin ? '' : '<span>·</span><span>列表仅含本公司 Member</span>' ?>
             </p>
         </div>
 
@@ -127,10 +145,13 @@ if ($selected_id > 0) {
                     <label>选择 Member</label>
                     <select name="user_id" class="form-control" onchange="this.form.submit()">
                         <option value="">-- 请选 --</option>
-                        <?php foreach ($members as $m): ?>
+                        <?php foreach ($members as $m):
+                            $m_cc = trim((string)($m['company_code'] ?? ''));
+                            $co_tag = ($actor_is_superadmin && $m_cc !== '') ? (' [' . $m_cc . ']') : '';
+                        ?>
                             <option value="<?= (int)$m['id'] ?>" <?= $selected_id === (int)$m['id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($m['username']) ?>
-                                <?= $m['display_name'] ? '（' . htmlspecialchars($m['display_name']) . '）' : '' ?>
+                                <?= $m['display_name'] ? '（' . htmlspecialchars($m['display_name']) . '）' : '' ?><?= htmlspecialchars($co_tag) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>

@@ -4,6 +4,8 @@ require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_users';
 
+$actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+
 $msg = '';
 $err = '';
 $customers_for_agent = [];
@@ -53,6 +55,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!in_array($role, ['superadmin', 'admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
             }
+            if ($role === 'superadmin' && !$actor_is_superadmin) {
+                throw new RuntimeException('仅平台管理员可创建 superadmin 账号。');
+            }
 
             if (in_array($role, ['agent', 'superadmin'], true)) {
                 // 兼容旧库：旧版本 users.role 仅支持 admin/member
@@ -68,8 +73,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
             try {
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name, company_id) VALUES (?, ?, ?, ?, ?)");
-            // superadmin 不绑定公司（可在侧栏切换）
-            $company_id = ($role === 'superadmin') ? null : 1;
+            $cid_new = current_company_id();
+            if ($role === 'superadmin') {
+                $company_id = null;
+            } else {
+                if ($cid_new <= 0) {
+                    throw new RuntimeException('无法确定所属公司：请重新登录或（superadmin）在侧栏选择公司后再创建。');
+                }
+                $company_id = $cid_new;
+            }
             $stmt->execute([$username, $hash, $role, $display_name !== '' ? $display_name : null, $company_id]);
 
                 if ($role === 'agent') {
@@ -95,22 +107,53 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)($_POST['id'] ?? 0);
             $role = trim($_POST['role'] ?? 'member');
             if ($id <= 0) throw new RuntimeException('参数错误。');
+            if (!user_is_manageable_by_current_actor($pdo, $id)) {
+                throw new RuntimeException('无权限操作该账号。');
+            }
             if (!in_array($role, ['superadmin', 'admin', 'member', 'agent'], true)) {
                 throw new RuntimeException('角色不正确。');
+            }
+            if ($role === 'superadmin' && !$actor_is_superadmin) {
+                throw new RuntimeException('仅平台管理员可将账号设为 superadmin。');
             }
             if (in_array($role, ['agent', 'superadmin'], true)) {
                 // 兼容旧库：旧版本 users.role 仅支持 admin/member
                 ensure_users_role_supports_agent($pdo);
             }
-            if ($id === (int)($_SESSION['user_id'] ?? 0) && $role !== 'admin') {
-                throw new RuntimeException('不能把当前登录账号改为非 admin。');
+            $stmt = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
+            $stmt->execute([$id]);
+            $oldRole = (string)($stmt->fetchColumn() ?: '');
+            $self = ($id === (int)($_SESSION['user_id'] ?? 0));
+            $curActorRole = (string)($_SESSION['user_role'] ?? '');
+            if ($self) {
+                if ($curActorRole === 'admin' && $role !== 'admin') {
+                    throw new RuntimeException('不能把当前登录账号改为非 admin。');
+                }
+                if ($curActorRole === 'superadmin' && !in_array($role, ['superadmin', 'admin'], true)) {
+                    throw new RuntimeException('不能把当前账号改为该角色。');
+                }
             }
-            $stmt = $pdo->prepare("UPDATE users SET role = ? WHERE id = ?");
-            $stmt->execute([$role, $id]);
+            if ($role === 'superadmin') {
+                $stmt = $pdo->prepare("UPDATE users SET role = ?, company_id = NULL WHERE id = ?");
+                $stmt->execute([$role, $id]);
+            } elseif ($oldRole === 'superadmin' && $role !== 'superadmin') {
+                $ncid = current_company_id();
+                if ($ncid <= 0) {
+                    throw new RuntimeException('请先在侧栏选择公司，以便将该账号归入该公司。');
+                }
+                $stmt = $pdo->prepare("UPDATE users SET role = ?, company_id = ? WHERE id = ?");
+                $stmt->execute([$role, $ncid, $id]);
+            } else {
+                $stmt = $pdo->prepare("UPDATE users SET role = ? WHERE id = ?");
+                $stmt->execute([$role, $id]);
+            }
             $msg = '角色已更新。';
         } elseif ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
+            if (!user_is_manageable_by_current_actor($pdo, $id)) {
+                throw new RuntimeException('无权限操作该账号。');
+            }
             if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException('不能禁用自己。');
 
             $stmt = $pdo->prepare("UPDATE users SET is_active = IF(is_active=1,0,1) WHERE id = ?");
@@ -119,6 +162,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'delete_user') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
+            if (!user_is_manageable_by_current_actor($pdo, $id)) {
+                throw new RuntimeException('无权限操作该账号。');
+            }
             if ($id === (int)($_SESSION['user_id'] ?? 0)) throw new RuntimeException('不能删除自己。');
 
             // 删除账号同时清理权限表（若表不存在则忽略）
@@ -141,6 +187,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $id = (int)($_POST['id'] ?? 0);
             $new_password = (string) ($_POST['new_password'] ?? '');
             if ($id <= 0 || $new_password === '') throw new RuntimeException('请填写新密码。');
+            if (!user_is_manageable_by_current_actor($pdo, $id)) {
+                throw new RuntimeException('无权限操作该账号。');
+            }
 
             $hash = password_hash($new_password, PASSWORD_DEFAULT);
             $stmt = $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?");
@@ -159,14 +208,61 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$users_sql = "SELECT id, username, role, display_name, is_active, last_login_at, last_login_ip, created_at FROM users";
+$status_sql = '';
 if ($status_filter === 'active') {
-    $users_sql .= " WHERE is_active = 1";
+    $status_sql = ' AND is_active = 1';
 } elseif ($status_filter === 'inactive') {
-    $users_sql .= " WHERE is_active = 0";
+    $status_sql = ' AND is_active = 0';
 }
-$users_sql .= " ORDER BY id DESC";
-$users = $pdo->query($users_sql)->fetchAll();
+
+$view_company_id = current_company_id();
+$view_company_label = '';
+if ($view_company_id > 0) {
+    try {
+        $stmt = $pdo->prepare('SELECT code, name FROM companies WHERE id = ? LIMIT 1');
+        $stmt->execute([$view_company_id]);
+        $cr = $stmt->fetch(PDO::FETCH_ASSOC);
+        if ($cr) {
+            $view_company_label = trim((string)($cr['code'] ?? '')) . ' — ' . trim((string)($cr['name'] ?? ''));
+        }
+    } catch (Throwable $e) {
+        $view_company_label = '#' . $view_company_id;
+    }
+}
+
+$company_users = [];
+if (!$actor_is_superadmin && $view_company_id > 0) {
+    $sql = "SELECT id, username, role, display_name, is_active, last_login_at, last_login_ip, created_at FROM users
+            WHERE role != 'superadmin' AND company_id = ?" . $status_sql . ' ORDER BY id DESC';
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute([$view_company_id]);
+    $company_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
+
+$all_company_users = [];
+if ($actor_is_superadmin) {
+    $sql_all = "SELECT u.id, u.username, u.role, u.display_name, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id,
+                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name
+                FROM users u
+                LEFT JOIN companies c ON c.id = u.company_id
+                WHERE u.role != 'superadmin'" . $status_sql . '
+                ORDER BY u.company_id ASC, u.id DESC';
+    $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
+}
+
+$superadmin_users = [];
+if ($actor_is_superadmin) {
+    $sql_sa = "SELECT id, username, role, display_name, is_active, last_login_at, last_login_ip, created_at FROM users
+               WHERE role = 'superadmin'" . $status_sql . ' ORDER BY id DESC';
+    $superadmin_users = $pdo->query($sql_sa)->fetchAll(PDO::FETCH_ASSOC);
+}
+
+$users_primary_list = $actor_is_superadmin ? $all_company_users : $company_users;
+$users_primary_show_company_col = $actor_is_superadmin;
+$users_primary_colspan = $users_primary_show_company_col ? 10 : 9;
+
+$role_opts_company = ['admin', 'member', 'agent'];
+$role_opts_platform = ['superadmin', 'admin', 'member', 'agent'];
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -223,8 +319,11 @@ $users = $pdo->query($users_sql)->fetchAll();
         <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
-            <h2>用户管理（仅 admin）</h2>
-            <p class="breadcrumb">当前：<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>（<?= htmlspecialchars($_SESSION['user_role'] ?? '') ?>）</p>
+            <h2><?= $actor_is_superadmin ? '用户管理（全平台）' : '用户管理（本公司）' ?></h2>
+            <p class="breadcrumb">当前：<?= htmlspecialchars($_SESSION['user_name'] ?? '') ?>（<?= htmlspecialchars($_SESSION['user_role'] ?? '') ?>）<?= $actor_is_superadmin ? ' · 可查看所有分公司账号与平台管理员' : ' · 仅本公司账号，无平台 superadmin' ?></p>
+            <?php if ($actor_is_superadmin): ?>
+            <p class="agent-customer-hint" style="margin-top:10px;">新增或停用<strong>分公司</strong>（公司代码、登录可选公司）请到 <a href="admin_companies.php">分公司管理</a>。</p>
+            <?php endif; ?>
         </div>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -232,6 +331,11 @@ $users = $pdo->query($users_sql)->fetchAll();
 
         <div class="card">
             <h3>创建账号</h3>
+            <?php if ($actor_is_superadmin): ?>
+            <p class="agent-customer-hint" style="margin-top:-6px;">新建 admin / member / agent 将归入<strong>侧栏当前所选公司</strong>；superadmin 不归属任何公司。</p>
+            <?php else: ?>
+            <p class="agent-customer-hint" style="margin-top:-6px;">新账号仅可创建在本公司；平台 superadmin 仅平台总管理员可见与创建。</p>
+            <?php endif; ?>
             <form method="post">
                 <input type="hidden" name="action" value="create">
                 <div class="admin-users-grid">
@@ -251,7 +355,9 @@ $users = $pdo->query($users_sql)->fetchAll();
                             <option value="member" selected>member</option>
                             <option value="admin">admin</option>
                             <option value="agent">agent</option>
+                            <?php if ($actor_is_superadmin): ?>
                             <option value="superadmin">superadmin</option>
+                            <?php endif; ?>
                         </select>
                     </div>
                     <div class="form-group">
@@ -288,18 +394,28 @@ $users = $pdo->query($users_sql)->fetchAll();
             </form>
         </div>
 
+        <?php
+        $filter_links = '<div class="admin-users-actions" style="margin-bottom:10px;">'
+            . '<a class="btn btn-sm ' . ($status_filter === 'all' ? 'btn-primary' : 'btn-outline') . '" href="admin_users.php?status_filter=all">显示全部</a>'
+            . '<a class="btn btn-sm ' . ($status_filter === 'active' ? 'btn-primary' : 'btn-outline') . '" href="admin_users.php?status_filter=active">仅启用</a>'
+            . '<a class="btn btn-sm ' . ($status_filter === 'inactive' ? 'btn-primary' : 'btn-outline') . '" href="admin_users.php?status_filter=inactive">仅禁用</a>'
+            . '</div>';
+        ?>
         <div class="card">
-            <h3>账号列表</h3>
-            <div class="admin-users-actions" style="margin-bottom:10px;">
-                <a class="btn btn-sm <?= $status_filter === 'all' ? 'btn-primary' : 'btn-outline' ?>" href="admin_users.php?status_filter=all">显示全部</a>
-                <a class="btn btn-sm <?= $status_filter === 'active' ? 'btn-primary' : 'btn-outline' ?>" href="admin_users.php?status_filter=active">仅启用</a>
-                <a class="btn btn-sm <?= $status_filter === 'inactive' ? 'btn-primary' : 'btn-outline' ?>" href="admin_users.php?status_filter=inactive">仅禁用</a>
-            </div>
+            <h3><?= $actor_is_superadmin ? '全部分公司账号' : '本公司账号' ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
+            <p class="agent-customer-hint" style="margin-top:-6px;"><?= $actor_is_superadmin
+                ? '汇总所有公司的 admin / member / agent；平台 superadmin 仅在下方单独列表。本表仅 superadmin 登录后可见。'
+                : '不含平台 superadmin；与当前侧栏所选公司一致。分公司管理员无法查看其他公司或平台管理员。' ?></p>
+            <?= $filter_links ?>
+            <?php if (!$actor_is_superadmin && $view_company_id <= 0): ?>
+                <div class="alert alert-error" role="status">无法加载本公司账号（缺少公司上下文），请重新登录。</div>
+            <?php endif; ?>
             <div style="overflow-x:auto;">
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>ID</th>
+                        <?php if ($users_primary_show_company_col): ?><th>公司</th><?php endif; ?>
                         <th>用户名</th>
                         <th>显示名</th>
                         <th>角色</th>
@@ -311,9 +427,16 @@ $users = $pdo->query($users_sql)->fetchAll();
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($users as $u): ?>
+                <?php foreach ($users_primary_list as $u):
+                    $co_code = trim((string)($u['company_code'] ?? ''));
+                    $co_name = trim((string)($u['company_name'] ?? ''));
+                    $co_disp = ($co_code !== '' || $co_name !== '')
+                        ? ($co_code . ($co_name !== '' ? ' — ' . $co_name : ''))
+                        : (((int)($u['company_id'] ?? 0) > 0) ? ('#' . (int)$u['company_id']) : '—');
+                ?>
                     <tr>
                         <td><?= (int)$u['id'] ?></td>
+                        <?php if ($users_primary_show_company_col): ?><td><?= htmlspecialchars($co_disp) ?></td><?php endif; ?>
                         <td><?= htmlspecialchars($u['username']) ?></td>
                         <td><?= htmlspecialchars($u['display_name'] ?? '') ?></td>
                         <td>
@@ -321,10 +444,9 @@ $users = $pdo->query($users_sql)->fetchAll();
                                 <input type="hidden" name="action" value="change_role">
                                 <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
                                 <select name="role" class="form-control">
-                                    <option value="superadmin" <?= ($u['role'] ?? '') === 'superadmin' ? 'selected' : '' ?>>superadmin</option>
-                                    <option value="member" <?= ($u['role'] ?? '') === 'member' ? 'selected' : '' ?>>member</option>
-                                    <option value="admin" <?= ($u['role'] ?? '') === 'admin' ? 'selected' : '' ?>>admin</option>
-                                    <option value="agent" <?= ($u['role'] ?? '') === 'agent' ? 'selected' : '' ?>>agent</option>
+                                    <?php foreach ($role_opts_company as $opt): ?>
+                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars($opt) ?></option>
+                                    <?php endforeach; ?>
                                 </select>
                                 <button type="submit" class="btn btn-gray btn-sm">改角色</button>
                             </form>
@@ -354,13 +476,84 @@ $users = $pdo->query($users_sql)->fetchAll();
                         </td>
                     </tr>
                 <?php endforeach; ?>
-                <?php if (!$users): ?>
-                    <tr><td colspan="9" class="admin-users-center">暂无账号</td></tr>
+                <?php if (!$users_primary_list): ?>
+                    <tr><td colspan="<?= (int)$users_primary_colspan ?>" class="admin-users-center"><?= $actor_is_superadmin ? '暂无各分公司账号' : ($view_company_id > 0 ? '暂无本公司账号' : '未选择公司') ?></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
             </div>
         </div>
+        <?php if ($actor_is_superadmin): ?>
+        <div class="card">
+            <h3>平台管理员（superadmin）</h3>
+            <p class="agent-customer-hint" style="margin-top:-6px;">不归属任何公司；与上方各分公司账号分开。<strong>仅 superadmin 登录后显示本区块</strong>；将账号降级为分公司角色时，将归入侧栏当前所选公司。</p>
+            <?= $filter_links ?>
+            <div style="overflow-x:auto;">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>用户名</th>
+                        <th>显示名</th>
+                        <th>角色</th>
+                        <th>状态</th>
+                        <th>Login IP</th>
+                        <th>Last Login</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody>
+                <?php foreach ($superadmin_users as $u): ?>
+                    <tr>
+                        <td><?= (int)$u['id'] ?></td>
+                        <td><?= htmlspecialchars($u['username']) ?></td>
+                        <td><?= htmlspecialchars($u['display_name'] ?? '') ?></td>
+                        <td>
+                            <form method="post" class="admin-users-role-form">
+                                <input type="hidden" name="action" value="change_role">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <select name="role" class="form-control">
+                                    <?php foreach ($role_opts_platform as $opt): ?>
+                                    <option value="<?= htmlspecialchars($opt) ?>" <?= ($u['role'] ?? '') === $opt ? 'selected' : '' ?>><?= htmlspecialchars($opt) ?></option>
+                                    <?php endforeach; ?>
+                                </select>
+                                <button type="submit" class="btn btn-gray btn-sm">改角色</button>
+                            </form>
+                        </td>
+                        <td><?= ((int)$u['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                        <td><?= htmlspecialchars((string)($u['last_login_ip'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars((string)($u['last_login_at'] ?? '')) ?></td>
+                        <td><?= htmlspecialchars($u['created_at']) ?></td>
+                        <td>
+                            <a class="btn btn-outline btn-sm inline" href="admin_user_edit.php?id=<?= (int)$u['id'] ?>">编辑</a>
+                            <form method="post" class="inline">
+                                <input type="hidden" name="action" value="toggle_active">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <button type="submit" class="btn btn-gray btn-sm"><?= ((int)$u['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                            </form>
+                            <form method="post" class="inline" data-confirm="确定删除该账号？删除后不可恢复。">
+                                <input type="hidden" name="action" value="delete_user">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <button type="submit" class="btn btn-sm btn-danger" <?= ((int)$u['id'] === (int)($_SESSION['user_id'] ?? 0)) ? 'disabled' : '' ?>>删除</button>
+                            </form>
+                            <form method="post" class="admin-users-reset-form inline">
+                                <input type="hidden" name="action" value="reset_password">
+                                <input type="hidden" name="id" value="<?= (int)$u['id'] ?>">
+                                <input name="new_password" type="password" placeholder="新密码" class="form-control">
+                                <button type="submit" class="btn btn-primary btn-sm">重置密码</button>
+                            </form>
+                        </td>
+                    </tr>
+                <?php endforeach; ?>
+                <?php if (!$superadmin_users): ?>
+                    <tr><td colspan="9" class="admin-users-center">暂无 superadmin 账号</td></tr>
+                <?php endif; ?>
+                </tbody>
+            </table>
+            </div>
+        </div>
+        <?php endif; ?>
     </div>
         </main>
     </div>

@@ -131,10 +131,51 @@ function require_admin(): void
     }
 }
 
+function require_superadmin(): void
+{
+    require_login();
+    if (($_SESSION['user_role'] ?? '') !== 'superadmin') {
+        http_response_code(403);
+        echo '无权限（仅平台 superadmin 可访问）';
+        exit;
+    }
+}
+
 /** 当前公司 ID（superadmin 也会有：用于切换查看） */
 function current_company_id(): int {
     $cid = (int)($_SESSION['company_id'] ?? 0);
     return $cid > 0 ? $cid : 0;
+}
+
+/**
+ * 当前登录者是否可管理目标用户：平台 superadmin 仅由 superadmin 管理；superadmin 可管理任意分公司的账号；
+ * 分公司 admin 仅可管理本公司且非 superadmin 的用户。
+ */
+function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
+{
+    if ($user_id <= 0) {
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT role, company_id FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$user_id]);
+    $row = $stmt->fetch(PDO::FETCH_ASSOC);
+    if (!$row) {
+        return false;
+    }
+    $role = (string)($row['role'] ?? '');
+    $actor_sa = (($_SESSION['user_role'] ?? '') === 'superadmin');
+    if ($role === 'superadmin') {
+        return $actor_sa;
+    }
+    // 分公司账号：仅本公司 admin 可管；平台 superadmin 可管任意公司
+    if ($actor_sa) {
+        return true;
+    }
+    $cid = current_company_id();
+    if ($cid <= 0) {
+        return false;
+    }
+    return (int)($row['company_id'] ?? 0) === $cid;
 }
 
 
