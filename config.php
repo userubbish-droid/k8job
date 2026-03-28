@@ -5,6 +5,9 @@ date_default_timezone_set('Asia/Kuala_Lumpur');
 // 浏览器标签标题后缀（可改为你的品牌名）
 if (!defined('SITE_TITLE')) define('SITE_TITLE', 'K8');
 
+// Agent 登录后欢迎语中的品牌词，例如：Welcome to k8win {用户名}
+if (!defined('AGENT_PORTAL_BRAND')) define('AGENT_PORTAL_BRAND', 'k8win');
+
 // Hostinger MySQL 配置
 $host = 'localhost';
 $db   = 'u870568714_K8win96';

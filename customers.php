@@ -195,6 +195,10 @@ try {
             opacity: .66;
             filter: grayscale(18%);
         }
+        /* Win(Loss) = Total WD − Total DP（公司视角）：正=顾客净赢/公司输(红)，负=顾客净输/公司赚(蓝) */
+        .cust-pnl-cust-wins { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .cust-pnl-company-wins { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .cust-pnl-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
     </style>
 </head>
 <body>
@@ -248,16 +252,20 @@ try {
                     $all_wd = $all_withdraw_by_code[$code] ?? 0;
                     $win_loss = $all_wd - $all_dp;
                     $agent_total_win_loss += $win_loss;
+                    $wl_cls = $win_loss > 0 ? 'cust-pnl-cust-wins' : ($win_loss < 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                 ?>
                     <tr>
                         <td><?= htmlspecialchars($code) ?></td>
-                        <td class="num <?= $win_loss >= 0 ? 'stmt-out' : 'stmt-in' ?>"><?= number_format($win_loss, 2) ?></td>
+                        <td class="num <?= $wl_cls ?>"><?= number_format($win_loss, 2) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($rows): ?>
+                    <?php
+                    $tot_cls = $agent_total_win_loss > 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss < 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
+                    ?>
                     <tr style="font-weight:bold; background:var(--bg);">
                         <td>Total</td>
-                        <td class="num <?= $agent_total_win_loss >= 0 ? 'stmt-out' : 'stmt-in' ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
+                        <td class="num <?= $tot_cls ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
                     </tr>
                 <?php endif; ?>
                 <?php if (!$rows): ?>

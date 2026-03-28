@@ -57,13 +57,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
     if ($err === '' && user_actor_can_set_second_password($pdo, $id)) {
         $np2 = (string)($_POST['new_second_password'] ?? '');
-        $cf2 = (string)($_POST['new_second_password_confirm'] ?? '');
-        if ($np2 !== '' || $cf2 !== '') {
+        if ($np2 !== '') {
             if (mb_strlen($np2, 'UTF-8') < 4) {
                 $err = '二级密码至少 4 个字符。';
-                $msg = '';
-            } elseif ($np2 !== $cf2) {
-                $err = '二级密码两次输入不一致。';
                 $msg = '';
             } else {
                 try {
@@ -96,7 +92,6 @@ if (!user_is_manageable_by_current_actor($pdo, $id)) {
     exit;
 }
 $can_set_second = user_actor_can_set_second_password($pdo, $id);
-$second_is_set = trim((string)($u['second_password_hash'] ?? '')) !== '';
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -138,13 +133,11 @@ $second_is_set = trim((string)($u['second_password_hash'] ?? '')) !== '';
                         <div class="form-group">
                             <label>头像 URL（可选）</label>
                             <input class="form-control" name="avatar_url" value="<?= htmlspecialchars((string)($u['avatar_url'] ?? '')) ?>" placeholder="例如：https://.../avatar.png">
-                            <p class="form-hint">留空则侧栏显示首字母。建议使用 https 图片地址。</p>
                         </div>
                         <div class="form-row-2">
                             <div class="form-group">
                                 <label>角色</label>
                                 <input class="form-control" value="<?= htmlspecialchars(function_exists('role_label') ? role_label((string)($u['role'] ?? '')) : (string)($u['role'] ?? '')) ?>" disabled>
-                                <p class="form-hint">角色请回到列表页用「改角色」。</p>
                             </div>
                             <div class="form-group">
                                 <label>状态</label>
@@ -169,17 +162,7 @@ $second_is_set = trim((string)($u['second_password_hash'] ?? '')) !== '';
                         <?php if ($can_set_second): ?>
                         <div class="form-group" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
                             <label>二级密码（Admin / Member 登录）</label>
-                            <p class="form-hint" style="margin-top:0;">仅 Boss 与平台 big boss 可设置。登录时在主密码之后必须再输入一次。当前状态：<strong><?= $second_is_set ? '已设置' : '未设置（无法完成登录）' ?></strong></p>
-                            <div class="form-row-2">
-                                <div class="form-group">
-                                    <label>新二级密码</label>
-                                    <input class="form-control" type="password" name="new_second_password" autocomplete="new-password" placeholder="至少 4 位；留空则不修改">
-                                </div>
-                                <div class="form-group">
-                                    <label>确认二级密码</label>
-                                    <input class="form-control" type="password" name="new_second_password_confirm" autocomplete="new-password" placeholder="再次输入">
-                                </div>
-                            </div>
+                            <input class="form-control" type="password" name="new_second_password" autocomplete="new-password" placeholder="至少 4 位；留空则不修改">
                         </div>
                         <?php endif; ?>
 

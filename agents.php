@@ -14,11 +14,55 @@ $agent_code = $is_agent_user ? trim((string)($_SESSION['agent_code'] ?? '')) : '
 $agent_rebate_settings_map = [];
 $today = date('Y-m-d');
 $yesterday = date('Y-m-d', strtotime('-1 day'));
-$day_from_raw = isset($_REQUEST['day_from']) && trim((string)$_REQUEST['day_from']) !== '' ? $_REQUEST['day_from'] : $yesterday;
-$day_to_raw = isset($_REQUEST['day_to']) && trim((string)$_REQUEST['day_to']) !== '' ? $_REQUEST['day_to'] : $yesterday;
-$day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : $today;
-$day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw) ? substr($day_to_raw, 0, 10) : $today;
-if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
+
+/** Agent 端：周一至周日为一周；月为自然月 1 日—末日。仅允许四种 period。 */
+function agents_agent_period_range(string $period): array
+{
+    $allowed = ['this_week', 'last_week', 'this_month', 'last_month'];
+    if (!in_array($period, $allowed, true)) {
+        $period = 'this_week';
+    }
+    $ref = new DateTime('today');
+    if ($period === 'this_month' || $period === 'last_month') {
+        if ($period === 'this_month') {
+            $from = $ref->format('Y-m-01');
+            $to = $ref->format('Y-m-t');
+            return [$from, $to, $period];
+        }
+        $lm = (clone $ref)->modify('first day of last month');
+        $from = $lm->format('Y-m-d');
+        $to = $lm->format('Y-m-t');
+        return [$from, $to, $period];
+    }
+    $dow = (int)$ref->format('N');
+    $monday_this = clone $ref;
+    $monday_this->modify('-' . ($dow - 1) . ' days');
+    if ($period === 'last_week') {
+        $monday_this->modify('-7 days');
+    }
+    $sunday = clone $monday_this;
+    $sunday->modify('+6 days');
+    return [$monday_this->format('Y-m-d'), $sunday->format('Y-m-d'), $period];
+}
+
+$agent_period = 'this_week';
+if ($is_agent_user) {
+    $p = strtolower(trim((string)($_GET['period'] ?? 'this_week')));
+    [$day_from, $day_to, $agent_period] = agents_agent_period_range($p);
+} else {
+    $day_from_raw = isset($_REQUEST['day_from']) && trim((string)$_REQUEST['day_from']) !== '' ? $_REQUEST['day_from'] : $yesterday;
+    $day_to_raw = isset($_REQUEST['day_to']) && trim((string)$_REQUEST['day_to']) !== '' ? $_REQUEST['day_to'] : $yesterday;
+    $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : $today;
+    $day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw) ? substr($day_to_raw, 0, 10) : $today;
+    if ($day_from > $day_to) {
+        $t = $day_from;
+        $day_from = $day_to;
+        $day_to = $t;
+    }
+}
+
+$agent_welcome_user = trim((string)($_SESSION['user_name'] ?? $_SESSION['username'] ?? 'Agent'));
+$agent_welcome_line = 'Welcome to ' . (defined('AGENT_PORTAL_BRAND') ? AGENT_PORTAL_BRAND : 'k8win') . ' ' . $agent_welcome_user;
 
 function ensure_agent_rebate_table(PDO $pdo): void {
     $pdo->exec("CREATE TABLE IF NOT EXISTS agent_rebate_settings (
@@ -194,6 +238,14 @@ try {
     <style>
         .agent-winloss-pos { color: var(--success); font-weight: 700; }
         .agent-winloss-neg { color: var(--danger); font-weight: 700; }
+        /* Agent 本人汇总：赢 = 蓝，输 = 红，平 = 灰 */
+        .agent-winloss-win { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
+        .agent-winloss-loss { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
+        .agent-winloss-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .agent-summary-name { font-weight: 700; color: #0f172a; font-size: 15px; }
+        .agent-summary-code { font-size: 12px; color: var(--muted); margin-top: 2px; }
+        .agent-commission-amt { font-weight: 700; font-variant-numeric: tabular-nums; color: #059669; }
+        .agent-commission-zero { color: #64748b; font-variant-numeric: tabular-nums; }
         .agent-paid-cell { vertical-align: middle; }
         .agent-paid-form { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; }
         .agent-paid-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
@@ -211,7 +263,7 @@ try {
             padding: 2px 8px; min-width: 30px; font-size: 14px; line-height: 1.2;
             border-radius: 6px;
         }
-        .agent-self-table { max-width: 520px; }
+        .agent-self-table { max-width: 640px; }
         .agent-self-table th,
         .agent-self-table td { font-size: 15px; }
     </style>
@@ -222,25 +274,46 @@ try {
         <main class="dashboard-main">
             <div class="page-wrap">
                 <div class="page-header">
-                    <h2><?= $is_agent_user ? '我的代理数据' : 'Agent' ?></h2>
-                    <p class="breadcrumb">
-                        <?php if ($is_agent_user): ?>
-                        <span>Win(Loss)</span><span>·</span><span>Commission</span>
-                        <?php else: ?>
-                        <a href="dashboard.php">Home</a><span>·</span>Agent (from Customer Recommend)
-                        <?php endif; ?>
+                    <?php if ($is_agent_user): ?>
+                    <h2 style="font-size:1.35rem; font-weight:700; color:#0f172a; letter-spacing:0.02em;"><?= htmlspecialchars($agent_welcome_line) ?></h2>
+                    <p class="breadcrumb" style="margin-top:6px;">
+                        <span><?= htmlspecialchars($day_from) ?></span><span>·</span><span><?= htmlspecialchars($day_to) ?></span>
+                        <span>·</span><span>Win(Loss) &amp; Commission</span>
                     </p>
+                    <?php else: ?>
+                    <h2>Agent</h2>
+                    <p class="breadcrumb">
+                        <a href="dashboard.php">Home</a><span>·</span>Agent (from Customer Recommend)
+                    </p>
+                    <?php endif; ?>
                 </div>
                 <?php
-                    $this_week_start = date('Y-m-d', strtotime('monday this week'));
-                    $this_week_end = date('Y-m-d', strtotime('sunday this week'));
-                    $last_week_start = date('Y-m-d', strtotime('monday last week'));
-                    $last_week_end = date('Y-m-d', strtotime('sunday last week'));
-                    $this_month_start = date('Y-m-01');
-                    $this_month_end = date('Y-m-t');
-                    $last_month_start = date('Y-m-01', strtotime('first day of last month'));
-                    $last_month_end = date('Y-m-t', strtotime('last day of last month'));
+                    $ref_adm = new DateTime('today');
+                    $dow_adm = (int)$ref_adm->format('N');
+                    $mon_this = clone $ref_adm;
+                    $mon_this->modify('-' . ($dow_adm - 1) . ' days');
+                    $this_week_start = $mon_this->format('Y-m-d');
+                    $this_week_end = (clone $mon_this)->modify('+6 days')->format('Y-m-d');
+                    $mon_last = clone $mon_this;
+                    $mon_last->modify('-7 days');
+                    $last_week_start = $mon_last->format('Y-m-d');
+                    $last_week_end = (clone $mon_last)->modify('+6 days')->format('Y-m-d');
+                    $this_month_start = $ref_adm->format('Y-m-01');
+                    $this_month_end = $ref_adm->format('Y-m-t');
+                    $lm_adm = (clone $ref_adm)->modify('first day of last month');
+                    $last_month_start = $lm_adm->format('Y-m-d');
+                    $last_month_end = $lm_adm->format('Y-m-t');
                 ?>
+                <?php if ($is_agent_user): ?>
+                <div class="filters-bar filters-bar-flow" style="margin-bottom:16px;">
+                    <div class="filters-row filters-row-presets" style="flex-wrap:wrap;">
+                        <a href="agents.php?period=this_week" class="btn btn-preset<?= $agent_period === 'this_week' ? ' btn-primary' : '' ?>">This Week</a>
+                        <a href="agents.php?period=last_week" class="btn btn-preset<?= $agent_period === 'last_week' ? ' btn-primary' : '' ?>">Last Week</a>
+                        <a href="agents.php?period=this_month" class="btn btn-preset<?= $agent_period === 'this_month' ? ' btn-primary' : '' ?>">This Month</a>
+                        <a href="agents.php?period=last_month" class="btn btn-preset<?= $agent_period === 'last_month' ? ' btn-primary' : '' ?>">Last Month</a>
+                    </div>
+                </div>
+                <?php else: ?>
                 <form class="filters-bar filters-bar-flow" method="get" style="margin-bottom:16px;">
                     <div class="filters-row filters-row-main">
                         <div class="filter-group">
@@ -260,6 +333,7 @@ try {
                         <a href="agents.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset">Last Month</a>
                     </div>
                 </form>
+                <?php endif; ?>
                 <?php if ($warn): ?>
                     <div class="alert alert-error" role="status"><?= htmlspecialchars($warn) ?></div>
                 <?php endif; ?>
@@ -275,11 +349,12 @@ try {
                 </div>
                 <?php endif; ?>
                 <div class="card<?= $is_agent_user ? ' agent-self-table' : '' ?>" style="overflow-x: auto;">
-                    <h3><?= $is_agent_user ? '汇总' : '列表' ?></h3>
+                    <h3><?= $is_agent_user ? 'Summary' : '列表' ?></h3>
                     <table class="data-table">
                         <thead>
                             <tr>
                                 <?php if ($is_agent_user): ?>
+                                <th>Name</th>
                                 <th class="num">Win(Loss)</th>
                                 <th class="num">Commission</th>
                                 <?php else: ?>
@@ -316,11 +391,30 @@ try {
                                 } elseif (!$can_pay) {
                                     $paid_disable_title = 'Win/Loss 非负时不能标记已给';
                                 }
+                                $wl_class_agent = 'agent-winloss-even';
+                                if ($winLoss < 0) {
+                                    $wl_class_agent = 'agent-winloss-loss';
+                                } elseif ($winLoss > 0) {
+                                    $wl_class_agent = 'agent-winloss-win';
+                                }
+                                $agent_row_display_name = trim((string)($_SESSION['user_name'] ?? ''));
+                                if ($agent_row_display_name === '') {
+                                    $agent_row_display_name = trim((string)$agent) !== '' ? trim((string)$agent) : (string)($agent_code ?: 'Agent');
+                                }
                             ?>
                             <tr>
                                 <?php if ($is_agent_user): ?>
-                                <td class="num <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>"><?= number_format($winLoss, 2) ?></td>
-                                <td class="num <?= $rebate_amount > 0 ? 'agent-winloss-pos' : '' ?>"><?= number_format($rebate_amount, 2) ?></td>
+                                <td>
+                                    <div class="agent-summary-name"><?= htmlspecialchars($agent_row_display_name) ?></div>
+                                    <?php
+                                    $code_show = trim((string)$agent);
+                                    if ($code_show !== '' && strcasecmp($code_show, $agent_row_display_name) !== 0):
+                                    ?>
+                                    <div class="agent-summary-code"><?= htmlspecialchars($code_show) ?></div>
+                                    <?php endif; ?>
+                                </td>
+                                <td class="num <?= htmlspecialchars($wl_class_agent) ?>"><?= number_format($winLoss, 2) ?></td>
+                                <td class="num <?= $rebate_amount > 0 ? 'agent-commission-amt' : 'agent-commission-zero' ?>"><?= number_format($rebate_amount, 2) ?></td>
                                 <?php else: ?>
                                 <td><?= htmlspecialchars($agent) ?></td>
                                 <td class="num"><?= $cnt ?></td>
@@ -382,7 +476,7 @@ try {
                             </tr>
                             <?php endforeach; ?>
                             <?php if (empty($agents)): ?>
-                            <tr><td colspan="<?= $is_agent_user ? '2' : '8' ?>" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
+                            <tr><td colspan="<?= $is_agent_user ? '3' : '8' ?>" style="color:var(--muted); padding:24px;">No data. Agents are derived from customers whose Recommend field is filled.</td></tr>
                             <?php endif; ?>
                         </tbody>
                     </table>
