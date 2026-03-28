@@ -246,18 +246,16 @@ if ($selected_id > 0) {
             <form method="post">
                 <input type="hidden" name="user_id" value="<?= $selected_id ?>">
                 <?php
-                    // 按侧栏 inc/sidebar.php 的分组/顺序组织（与侧栏尽量一致）
+                    // 分组标题与顺序对齐 inc/sidebar.php 的 nav_* 文案（__() 与侧栏一致）
                     $perm_groups = [
-                        'Home' => ['home_dashboard', 'statement_report'],
-                        'Statement' => ['statement_balance'],
-                        'Add' => ['transaction_create', 'customer_create'],
-                        'Expense' => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
-                        'Transactions' => ['transaction_list'],
-                        'Rebate' => ['rebate', 'agent'],
-                        'Customer Detail' => ['customers', 'product_library'],
-                        // 不在侧栏单独显示但实际需要的权限，单独放一个组，避免和侧栏不一致
-                        'More（高级）' => ['customer_edit'],
-                        'Legacy（旧版兼容）' => ['statement'],
+                        __('nav_home') => ['home_dashboard', 'statement_report'],
+                        __('nav_statement') => ['statement_balance'],
+                        __('nav_transactions') => ['transaction_list'],
+                        __('nav_add') => ['transaction_create', 'customer_create'],
+                        __('nav_expense') => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
+                        __('nav_rebate') => ['rebate', 'agent'],
+                        __('nav_customer_detail') => ['customers', 'product_library', 'customer_edit'],
+                        __('perm_group_legacy') => ['statement'],
                     ];
                     $group_id = 0;
                 ?>

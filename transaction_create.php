@@ -452,14 +452,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
             margin-bottom: 0;
         }
         .txn-modal-title { margin: 0; font-size: 1.125rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
-        .txn-form-legend {
-            margin: 10px 0 0;
-            padding: 0 0 14px;
-            font-size: 12px;
-            color: var(--muted);
-            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
-            line-height: 1.4;
-        }
         .txn-modal-close {
             width: 36px;
             height: 36px;
@@ -1280,7 +1272,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
         <div class="txn-modal-title"><?= htmlspecialchars($expense_page_title, ENT_QUOTES, 'UTF-8') ?></div>
         <a class="txn-modal-close" href="transaction_list.php" aria-label="<?= htmlspecialchars(__('aria_close'), ENT_QUOTES, 'UTF-8') ?>">×</a>
     </div>
-    <p class="txn-form-legend"><?= htmlspecialchars(__('txn_form_required_legend'), ENT_QUOTES, 'UTF-8') ?></p>
     <form method="post" class="txn-form" autocomplete="off">
         <?php if ($is_admin): ?>
         <div class="form-section form-section--datetime-admin">

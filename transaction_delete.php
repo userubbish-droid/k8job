@@ -4,19 +4,9 @@ require 'auth.php';
 require_permission('transaction_list');
 require_admin(); // 仅管理员可删除流水
 
-$ensure_deleted_at = function(PDO $pdo): void {
-    try {
-        $pdo->exec("ALTER TABLE transactions ADD COLUMN deleted_at DATETIME NULL DEFAULT NULL AFTER status");
-    } catch (Throwable $e) {
-    }
-};
-
-$purge_old_deleted = function(PDO $pdo): void {
-    try {
-        $pdo->exec("DELETE FROM transactions WHERE deleted_at IS NOT NULL AND deleted_at < (NOW() - INTERVAL 2 MONTH)");
-    } catch (Throwable $e) {
-    }
-};
+require_once __DIR__ . '/inc/transaction_soft_delete.php';
+transaction_ensure_soft_delete_columns($pdo);
+transaction_purge_soft_deleted($pdo, 100);
 
 $id = (int)($_REQUEST['id'] ?? 0);
 $return_to = trim($_REQUEST['return_to'] ?? '');
@@ -41,11 +31,16 @@ if ($id <= 0) {
     exit;
 }
 
-$ensure_deleted_at($pdo);
-$purge_old_deleted($pdo);
+$who = trim((string)($_SESSION['user_name'] ?? ''));
+if ($who === '') {
+    $who = (string)(int)($_SESSION['user_id'] ?? 0);
+}
+if (strlen($who) > 120) {
+    $who = substr($who, 0, 120);
+}
 
-// 软删除：先标记 deleted_at，保留 2 个月后再物理删除
-$stmt = $pdo->prepare("UPDATE transactions SET deleted_at = NOW() WHERE id = ? AND deleted_at IS NULL");
-$stmt->execute([$id]);
+// 软删除：标记 deleted_at / deleted_by，满 100 天后由 purge 物理删除
+$stmt = $pdo->prepare('UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL');
+$stmt->execute([$who !== '' ? $who : null, $id, current_company_id()]);
 header('Location: ' . $return_to);
 exit;

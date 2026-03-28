@@ -255,7 +255,6 @@ try {
                     <div class="report-kpi-item"><strong>开销</strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
                     <div class="report-kpi-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
                 </div>
-                <p class="form-hint" style="margin:-8px 0 18px;">统计与首页/返点页一致：仅已批准流水，且<strong>不含已软删除</strong>（<code>deleted_at</code>）；总入/总出为<strong>有银行</strong>的 DEPOSIT/WITHDRAW，并排除备注「转至/来自」的互转；利润 = 总入 − 总出 − 开销（EXPENSE）。</p>
 
                 <div class="card report-section-card">
                     <h3 class="report-collapse-head">

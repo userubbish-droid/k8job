@@ -6,6 +6,20 @@ $sidebar_current = 'transaction_list';
 
 $company_id = current_company_id();
 
+require_once __DIR__ . '/inc/transaction_soft_delete.php';
+transaction_ensure_soft_delete_columns($pdo);
+transaction_purge_soft_deleted($pdo, 100);
+
+$has_deleted_at = false;
+try {
+    $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+    $has_deleted_at = true;
+} catch (Throwable $e) {
+    if (strpos($e->getMessage(), 'deleted_at') === false) {
+        throw $e;
+    }
+}
+
 $day_from_raw = $_GET['day_from'] ?? date('Y-m-d');
 $day_to_raw   = $_GET['day_to'] ?? date('Y-m-d');
 $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from_raw, 0, 10) : date('Y-m-d');
@@ -25,12 +39,9 @@ $params = [];
 $where  = ['1=1', 'company_id = ?'];
 $params[] = $company_id;
 
-// 软删除：隐藏已删除流水（保留 2 个月后物理删除）
-try {
-    $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
-    $where[] = "deleted_at IS NULL";
-} catch (Throwable $e) {
-    if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
+// 会员不显示已软删；管理员列表保留已删行（标红），与汇总口径分离
+if (!$is_admin && $has_deleted_at) {
+    $where[] = 'deleted_at IS NULL';
 }
 
 // 审批过滤：默认只看已批准
@@ -87,12 +98,17 @@ if ($product !== '') {
     $params[] = $product;
 }
 
-$sql_where = implode(' AND ', $where);
+$sql_where_list = implode(' AND ', $where);
+$sql_where_active = $sql_where_list;
+if ($is_admin && $has_deleted_at) {
+    $sql_where_active .= ' AND deleted_at IS NULL';
+}
 
-// 导出 CSV：按当前筛选导出全部匹配记录（不分页）
+// 导出 CSV：仅未删除流水（与汇总一致）
 if ($export) {
-    $export_sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark
-                   FROM transactions WHERE $sql_where ORDER BY day DESC, time DESC";
+    $export_extra = $has_deleted_at ? ', deleted_at, deleted_by' : '';
+    $export_sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark{$export_extra}
+                   FROM transactions WHERE $sql_where_active ORDER BY day DESC, time DESC";
     $export_stmt = $pdo->prepare($export_sql);
     $export_stmt->execute($params);
     $export_rows = $export_stmt->fetchAll();
@@ -101,16 +117,26 @@ if ($export) {
     header('Content-Disposition: attachment; filename="' . $filename . '"');
     $out = fopen('php://output', 'w');
     fwrite($out, "\xEF\xBB\xBF");
-    fputcsv($out, ['day','time','mode','code','bank','product','amount','bonus','total','staff','remark']);
+    $hdr = ['day','time','mode','code','bank','product','amount','bonus','total','staff','remark'];
+    if ($has_deleted_at) {
+        $hdr[] = 'deleted_at';
+        $hdr[] = 'deleted_by';
+    }
+    fputcsv($out, $hdr);
     foreach ($export_rows as $r) {
-        fputcsv($out, [$r['day'],$r['time'],$r['mode'],$r['code'],$r['bank'],$r['product'],$r['amount'],$r['bonus'],$r['total'],$r['staff'],$r['remark']]);
+        $row = [$r['day'],$r['time'],$r['mode'],$r['code'],$r['bank'],$r['product'],$r['amount'],$r['bonus'],$r['total'],$r['staff'],$r['remark']];
+        if ($has_deleted_at) {
+            $row[] = $r['deleted_at'] ?? '';
+            $row[] = $r['deleted_by'] ?? '';
+        }
+        fputcsv($out, $row);
     }
     fclose($out);
     exit;
 }
 
-// 总数（分页用）
-$count_sql = "SELECT COUNT(*) FROM transactions WHERE $sql_where";
+// 总数（分页用）：管理员含已删行
+$count_sql = "SELECT COUNT(*) FROM transactions WHERE $sql_where_list";
 $count_stmt = $pdo->prepare($count_sql);
 $count_stmt->execute($params);
 $total_rows = (int) $count_stmt->fetchColumn();
@@ -118,9 +144,10 @@ $total_pages = $total_rows > 0 ? (int) ceil($total_rows / $per_page) : 1;
 $page = min($page, max(1, $total_pages));
 $offset = ($page - 1) * $per_page;
 
-$sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark
+$sel_extra = $has_deleted_at ? ', deleted_at, deleted_by' : '';
+$sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark{$sel_extra}
         FROM transactions
-        WHERE $sql_where
+        WHERE $sql_where_list
         ORDER BY day DESC, time DESC
         LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
 $stmt = $pdo->prepare($sql);
@@ -149,7 +176,7 @@ $codes = $stC->fetchAll(PDO::FETCH_COLUMN);
 $sum_sql = "SELECT
     COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
     COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
-FROM transactions WHERE $sql_where";
+FROM transactions WHERE $sql_where_active";
 $sum_stmt = $pdo->prepare($sum_sql);
 $sum_stmt->execute($params);
 $sum = $sum_stmt->fetch();
@@ -177,6 +204,15 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>流水记录 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+    .data-table tbody tr.txn-row-deleted td {
+        color: #b91c1c !important;
+        background: #fffbeb !important;
+        font-weight: 600;
+    }
+    .data-table tbody tr.txn-row-deleted td.num { font-variant-numeric: tabular-nums; }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -289,6 +325,9 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
         <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
     </div>
+    <?php if ($has_deleted_at): ?>
+    <p class="form-hint" style="margin-top:8px;">汇总为<strong>未删除</strong>流水；已删除行在表中<strong>红色底</strong>显示删除人与时间，满 <strong>100 天</strong>后系统自动清除。</p>
+    <?php endif; ?>
     </div>
     <?php endif; ?>
 
@@ -309,6 +348,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <th>合计</th>
                 <th>员工</th>
                 <th>备注</th>
+                <?php if ($is_admin && $has_deleted_at): ?><th>删除</th><?php endif; ?>
                 <?php if ($is_admin): ?><th>操作</th><?php endif; ?>
             </tr>
         </thead>
@@ -318,8 +358,15 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 $display_mode = $r['mode'];
                 if ($rmk === '产品加额') $display_mode = 'topup';
                 elseif ($rmk !== '' && (strpos($rmk, '转至 ') === 0 || strpos($rmk, '来自 ') === 0)) $display_mode = 'contra';
+                $is_del = $has_deleted_at && !empty($r['deleted_at']);
+                $del_txt = '';
+                if ($is_del) {
+                    $who = trim((string)($r['deleted_by'] ?? ''));
+                    $dts = (string)($r['deleted_at'] ?? '');
+                    $del_txt = ($who !== '' ? $who . '，' : '') . $dts;
+                }
             ?>
-            <tr>
+            <tr class="<?= $is_del ? 'txn-row-deleted' : '' ?>">
                 <td><?= htmlspecialchars($r['day']) ?></td>
                 <td><?= htmlspecialchars($r['time']) ?></td>
                 <td><?= htmlspecialchars($display_mode) ?></td>
@@ -331,17 +378,24 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 <td><?= number_format((float)($r['total'] ?? 0), 2) ?></td>
                 <td><?= htmlspecialchars($r['staff'] ?? '') ?></td>
                 <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
+                <?php if ($is_admin && $has_deleted_at): ?>
+                <td><?= $is_del ? htmlspecialchars($del_txt) : '—' ?></td>
+                <?php endif; ?>
                 <?php if ($is_admin): ?>
                 <td>
                     <?php $edit_return = 'transaction_list.php?' . ($query_string ? $query_string . '&' : '') . 'page=' . $page; ?>
+                    <?php if (!$is_del): ?>
                     <a href="transaction_edit.php?id=<?= (int)$r['id'] ?>&return_to=<?= urlencode($edit_return) ?>">编辑</a>
                     <a href="transaction_delete.php?id=<?= (int)$r['id'] ?>&<?= $query_string ?>&page=<?= $page ?>" data-confirm="确定删除这条流水？">删除</a>
+                    <?php else: ?>
+                    <span class="form-hint">已删除</span>
+                    <?php endif; ?>
                 </td>
                 <?php endif; ?>
             </tr>
             <?php endforeach; ?>
             <?php if (empty($rows)): ?>
-            <tr><td colspan="<?= $is_admin ? 12 : 11 ?>">暂无流水</td></tr>
+            <tr><td colspan="<?= $is_admin ? ($has_deleted_at ? 13 : 12) : 11 ?>">暂无流水</td></tr>
             <?php endif; ?>
         </tbody>
     </table>

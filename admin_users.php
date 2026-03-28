@@ -542,10 +542,6 @@ if ($actor_is_superadmin) {
     <div class="page-wrap">
         <div class="page-header">
             <h2><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_title_sa') : __('adm_users_title_co'), ENT_QUOTES, 'UTF-8') ?></h2>
-            <p class="breadcrumb"><?= htmlspecialchars(__f('adm_users_breadcrumb', $_SESSION['user_name'] ?? '', role_label((string)($_SESSION['user_role'] ?? '')), $actor_is_superadmin ? __('adm_users_breadcrumb_sa_extra') : __('adm_users_breadcrumb_co_extra')), ENT_QUOTES, 'UTF-8') ?></p>
-            <?php if ($actor_is_superadmin): ?>
-            <p class="agent-customer-hint" style="margin-top:10px;"><?= htmlspecialchars(__('adm_users_hint_companies'), ENT_QUOTES, 'UTF-8') ?> <a href="admin_companies.php"><?= htmlspecialchars(__('adm_users_companies_link'), ENT_QUOTES, 'UTF-8') ?></a><?= app_lang() === 'en' ? '.' : '。' ?></p>
-            <?php endif; ?>
         </div>
 
         <form method="get" action="admin_users.php" class="admin-users-toolbar" id="admin-users-toolbar-form" autocomplete="off">
@@ -634,6 +630,7 @@ if ($actor_is_superadmin) {
                         <option value="<?= $cid ?>" <?= $cid === $sess_cid ? 'selected' : '' ?>><?= htmlspecialchars(trim((string)($co['code'] ?? ''))) ?> — <?= htmlspecialchars(trim((string)($co['name'] ?? ''))) ?></option>
                         <?php endforeach; ?>
                     </select>
+                    <p class="form-hint" style="margin-top:8px;"><?= htmlspecialchars(__('adm_users_create_company_hint_sa'), ENT_QUOTES, 'UTF-8') ?></p>
                 </div>
                 <?php endif; ?>
                 <div class="agent-customer-box" id="agent_customer_box" style="display:none;">
@@ -668,7 +665,9 @@ if ($actor_is_superadmin) {
         </div>
 
         <div class="card">
-            <h3><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_card_users_sa') : __('adm_users_card_users_co'), ENT_QUOTES, 'UTF-8') ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
+            <?php if ($actor_is_superadmin): ?>
+            <h3><?= htmlspecialchars(__('adm_users_card_users_sa'), ENT_QUOTES, 'UTF-8') ?></h3>
+            <?php endif; ?>
             <?php if (!$actor_is_superadmin && $view_company_id <= 0): ?>
                 <div class="alert alert-error" role="status"><?= htmlspecialchars(__('adm_users_err_context'), ENT_QUOTES, 'UTF-8') ?></div>
             <?php endif; ?>
