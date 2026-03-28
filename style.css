@@ -590,6 +590,24 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     background: rgba(255, 255, 255, 0.12);
     margin: 0 16px 14px;
 }
+/* 侧栏主导航分组：日常操作 vs 系统管理、退出 */
+.sidebar-nav-divider {
+    height: 1px;
+    background: rgba(255, 255, 255, 0.14);
+    margin: 10px 20px 12px;
+    flex-shrink: 0;
+}
+.sidebar-nav-divider--before-logout {
+    margin-top: 14px;
+    margin-bottom: 10px;
+    opacity: 0.95;
+}
+.dashboard-sidebar .nav-item-logout {
+    margin-top: 8px;
+}
+.sidebar-nav-divider--before-logout + .nav-item-logout {
+    margin-top: 0;
+}
 .dashboard-sidebar .nav-item {
     display: flex;
     flex-direction: row;

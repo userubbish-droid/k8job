@@ -171,11 +171,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 
     if ($day === '' || $mode === '') {
-        $error = '请填写日期和模式。';
+        $error = __('txn_err_day_mode');
     } elseif ($mode === 'EXPENSE' && ($bank === '' || $product === '')) {
-        $error = 'EXPENSE 必须填写 Bank 和 Expense 项目。';
+        $error = __('txn_err_expense_bank');
     } elseif (!is_numeric($amount)) {
-        $error = '金额请填数字。';
+        $error = __('txn_err_amount_num');
     } else {
         $amount = (float) $amount;
         // Bonus = 金额 × 奖励/返点% / 100；优先用百分比，否则用隐藏域 bonus
@@ -231,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                 }
                 if (stripos($msg, 'bonus') !== false || stripos($msg, 'total') !== false) {
-                    $error = '数据库缺少 bonus/total 列。请在 phpMyAdmin 中执行 migrate_bonus.sql 里的 SQL。';
+                    $error = __('txn_err_bonus_cols');
                     break;
                 }
                 if (stripos($msg, 'hide_from_member') !== false && $withHide) continue;
@@ -379,7 +379,7 @@ if ($quick === 'expense') {
         $expense_report_by_product = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         // 保持页面可用，仅在下方展示错误信息
-        $error = $error !== '' ? $error : ('Expense 汇总加载失败：' . $e->getMessage());
+        $error = $error !== '' ? $error : (__('txn_err_expense_load') . $e->getMessage());
     }
 }
 
@@ -414,14 +414,14 @@ if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
 }
 
 $expense_page_title = ($quick === 'expense')
-    ? ($expense_kind_ui === 'kiosk' ? 'Kiosk Expense' : 'Expense Statement')
-    : 'Add Transaction';
+    ? ($expense_kind_ui === 'kiosk' ? __('txn_page_kiosk') : __('txn_page_expense'))
+    : __('txn_page_add');
 $expense_entry_url = ($expense_kind_ui === 'kiosk') ? 'kiosk_expense.php' : 'expense.php';
 $expense_modal_should_open = ($quick === 'expense' && $expense_kind_ui !== 'kiosk' && $_SERVER['REQUEST_METHOD'] === 'POST' && $error !== '');
 $ep = $expense_modal_should_open ? $_POST : [];
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -890,33 +890,33 @@ $ep = $expense_modal_should_open ? $_POST : [];
     <div class="page-wrap txn-wrap<?= ($quick === 'expense' && $expense_kind_ui === 'kiosk') ? ' kiosk-expense-page' : '' ?>">
         <div class="page-header">
             <h2><?= htmlspecialchars($expense_page_title) ?></h2>
-            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_list.php">流水记录</a></p>
+            <p class="breadcrumb"><a href="dashboard.php"><?= htmlspecialchars(__('txn_bc_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span><a href="transaction_list.php"><?= htmlspecialchars(__('txn_bc_transactions'), ENT_QUOTES, 'UTF-8') ?></a></p>
         </div>
 
     <?php if ($saved): ?>
         <div class="card" style="margin-bottom: 20px;">
             <div style="margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); font-size: 14px;">
-                <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code ?: '—') ?> <?= htmlspecialchars($saved_product ?: '—') ?> · 金额 <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? '，奖励 ' . number_format($saved_reward_pct, 0) . '%' : '' ?> · <strong>本笔 Bonus：<?= number_format($saved_bonus, 2) ?></strong> · 总数 <?= number_format($saved_total, 2) ?></div>
-                <?php if ($saved_bonus > 0 && !empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:var(--success);">此笔 Bonus 将计入顾客 <?= htmlspecialchars($saved_code) ?> 的汇总<?= $submitted_status === 'pending' ? '（需管理员批准后生效）' : '。' ?></p><?php endif; ?>
-                <?php if ($saved_bonus > 0 && empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:#b45309;">未选客户时，Bonus 不会计入顾客列表；请记一笔时选择客户。</p><?php endif; ?>
+                <div style="margin-bottom: 4px;"><strong><?= htmlspecialchars($saved_mode) ?></strong> <?= htmlspecialchars($saved_code ?: '—') ?> <?= htmlspecialchars($saved_product ?: '—') ?> · <?= htmlspecialchars(__('txn_saved_amount_word'), ENT_QUOTES, 'UTF-8') ?> <?= number_format($saved_amount, 2) ?><?= $saved_reward_pct !== null ? htmlspecialchars(__f('txn_saved_reward_part', number_format($saved_reward_pct, 0)), ENT_QUOTES, 'UTF-8') : '' ?> · <strong><?= htmlspecialchars(__('txn_saved_bonus_label'), ENT_QUOTES, 'UTF-8') ?><?= number_format($saved_bonus, 2) ?></strong> · <?= htmlspecialchars(__('txn_saved_total_word'), ENT_QUOTES, 'UTF-8') ?> <?= number_format($saved_total, 2) ?></div>
+                <?php if ($saved_bonus > 0 && !empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:var(--success);"><?= htmlspecialchars(__f('txn_bonus_applies_customer', htmlspecialchars($saved_code, ENT_QUOTES, 'UTF-8')), ENT_QUOTES, 'UTF-8') ?><?= $submitted_status === 'pending' ? htmlspecialchars(__('txn_bonus_pending_paren'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('txn_bonus_end_period'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+                <?php if ($saved_bonus > 0 && empty($saved_code)): ?><p class="form-hint" style="margin-top:4px; color:#b45309;"><?= htmlspecialchars(__('txn_bonus_no_customer_warn'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
                 <?php if (!empty($saved_code) || !empty($saved_product) || $saved_mode === 'WITHDRAW'): ?>
                 <?php if ($saved_mode === 'WITHDRAW' && !empty($saved_code)): ?>
-                <div class="form-hint" style="margin-bottom:4px;">顾客姓名：<?= htmlspecialchars($saved_customer_name ?: '—') ?></div>
-                <div class="form-hint">银行资料：<?= htmlspecialchars($saved_customer_bank ?: '—') ?></div>
+                <div class="form-hint" style="margin-bottom:4px;"><?= htmlspecialchars(__('txn_hint_customer_name_colon'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($saved_customer_name ?: '—') ?></div>
+                <div class="form-hint"><?= htmlspecialchars(__('txn_hint_bank_colon'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($saved_customer_bank ?: '—') ?></div>
                 <?php endif; ?>
                 <?php if (!empty($saved_product) && !empty($saved_code)): ?>
-                <div class="form-hint" style="margin-top:4px;"><?= htmlspecialchars($saved_code) ?> 的 <?= htmlspecialchars($saved_product) ?> 账号：<?= htmlspecialchars($saved_account) ?></div>
+                <div class="form-hint" style="margin-top:4px;"><?= htmlspecialchars(__f('txn_hint_account_line', htmlspecialchars($saved_code, ENT_QUOTES, 'UTF-8'), htmlspecialchars($saved_product, ENT_QUOTES, 'UTF-8'), htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8')), ENT_QUOTES, 'UTF-8') ?></div>
                 <?php endif; ?>
                 <?php endif; ?>
             </div>
             <div class="success-actions">
-                <a href="<?= $quick === 'expense' ? htmlspecialchars($expense_entry_url) : 'transaction_create.php' ?>">再记一笔</a>
-                <a href="transaction_list.php">看流水</a>
-                <a href="dashboard.php">回首页</a>
+                <a href="<?= $quick === 'expense' ? htmlspecialchars($expense_entry_url) : 'transaction_create.php' ?>"><?= htmlspecialchars(__('txn_link_another'), ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="transaction_list.php"><?= htmlspecialchars(__('txn_link_list'), ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="dashboard.php"><?= htmlspecialchars(__('txn_link_home'), ENT_QUOTES, 'UTF-8') ?></a>
             </div>
         </div>
     <?php elseif ($error): ?>
-        <div class="alert alert-error"><?= $is_admin ? htmlspecialchars($error) : '✗ Faild' ?></div>
+        <div class="alert alert-error"><?= $is_admin ? htmlspecialchars($error) : htmlspecialchars(__('txn_err_submit_fail'), ENT_QUOTES, 'UTF-8') ?></div>
     <?php endif; ?>
 
     <?php if ($quick === 'expense'): ?>
@@ -937,7 +937,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
         ?>
         <?php if ($expense_kind_ui === 'kiosk'): ?>
         <div class="kiosk-io-summary">
-            <div class="kiosk-io-title" style="margin-bottom:10px;">Game Platform</div>
+            <div class="kiosk-io-title" style="margin-bottom:10px;"><?= htmlspecialchars(__('txn_game_platform'), ENT_QUOTES, 'UTF-8') ?></div>
             <form method="get" class="filters-bar filters-bar-flow kiosk-expense-filter-in-gp" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
                 <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
                 <div class="filters-row filters-row-main">
@@ -952,7 +952,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <div class="filter-group">
                         <label>Bank</label>
                         <select name="expense_bank" class="form-control">
-                            <option value="">全部</option>
+                            <option value=""><?= htmlspecialchars(__('txn_filter_all'), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php foreach ($expense_filter_banks as $bank_name): ?>
                             <option value="<?= htmlspecialchars((string)$bank_name) ?>" <?= $expense_bank_filter === (string)$bank_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$bank_name) ?></option>
                             <?php endforeach; ?>
@@ -961,7 +961,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <div class="filter-group">
                         <label>Product</label>
                         <select name="expense_product" class="form-control">
-                            <option value="">全部</option>
+                            <option value=""><?= htmlspecialchars(__('txn_filter_all'), ENT_QUOTES, 'UTF-8') ?></option>
                             <?php foreach ($expense_filter_products as $product_name): ?>
                             <option value="<?= htmlspecialchars((string)$product_name) ?>" <?= $expense_product_filter === (string)$product_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$product_name) ?></option>
                             <?php endforeach; ?>
@@ -970,16 +970,16 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <button type="submit" class="btn btn-search">Search</button>
                     <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back">Reset</a>
                 </div>
-                <div class="filters-row filters-row-presets kiosk-quick-dates" aria-label="日期快捷">
-                    <a href="#" class="btn btn-preset expense-quick-range" data-range="yesterday" title="昨天">Yesterday</a>
-                    <a href="#" class="btn btn-preset expense-quick-range" data-range="this_week" title="本周一至本周日">This Week</a>
-                    <a href="#" class="btn btn-preset expense-quick-range" data-range="last_week" title="上周一至上周日">Last Week</a>
-                    <a href="#" class="btn btn-preset expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">This Month</a>
-                    <a href="#" class="btn btn-preset expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">Last Month</a>
+                <div class="filters-row filters-row-presets kiosk-quick-dates" aria-label="<?= htmlspecialchars(__('txn_aria_quick_dates'), ENT_QUOTES, 'UTF-8') ?>">
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="yesterday" title="<?= htmlspecialchars(__('txn_range_title_yesterday'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('txn_range_btn_yesterday'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="this_week" title="<?= htmlspecialchars(__('txn_range_title_this_week'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_this_week'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="last_week" title="<?= htmlspecialchars(__('txn_range_title_last_week'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_last_week'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="this_month" title="<?= htmlspecialchars(__('txn_range_title_this_month'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_this_month'), ENT_QUOTES, 'UTF-8') ?></a>
+                    <a href="#" class="btn btn-preset expense-quick-range" data-range="last_month" title="<?= htmlspecialchars(__('txn_range_title_last_month'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_last_month'), ENT_QUOTES, 'UTF-8') ?></a>
                 </div>
             </form>
-            <div class="kiosk-gp-filters" role="group" aria-label="Game Platform filters">
-                <label><input type="checkbox" id="kiosk-gp-show-inout"> Show In / Out</label>
+            <div class="kiosk-gp-filters" role="group" aria-label="<?= htmlspecialchars(__('txn_aria_gp_filters'), ENT_QUOTES, 'UTF-8') ?>">
+                <label><input type="checkbox" id="kiosk-gp-show-inout"> <?= htmlspecialchars(__('txn_kiosk_show_inout'), ENT_QUOTES, 'UTF-8') ?></label>
             </div>
             <?php if ($is_admin): ?>
             <form method="post" action="kiosk_expense.php" class="kiosk-gp-meta-form" autocomplete="off">
@@ -996,12 +996,12 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <table class="data-table kiosk-gp-table is-inout-hidden" id="kiosk-gp-table">
                     <thead>
                         <tr>
-                            <th>Game Platform</th>
+                            <th><?= htmlspecialchars(__('txn_game_platform'), ENT_QUOTES, 'UTF-8') ?></th>
                             <th class="num">In</th>
                             <th class="num">Out</th>
-                            <th class="num">净额（In − Out）</th>
-                            <th class="num">%</th>
-                            <th class="num">amount paid</th>
+                            <th class="num"><?= htmlspecialchars(__('txn_kiosk_net_col'), ENT_QUOTES, 'UTF-8') ?></th>
+                            <th class="num"><?= htmlspecialchars(__('txn_col_pct'), ENT_QUOTES, 'UTF-8') ?></th>
+                            <th class="num"><?= htmlspecialchars(__('txn_col_amount_paid'), ENT_QUOTES, 'UTF-8') ?></th>
                         </tr>
                     </thead>
                     <tbody id="kiosk-gp-tbody">
@@ -1034,14 +1034,14 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             <td class="num kiosk-io-net"><?= number_format($knet, 2) ?></td>
                             <td class="num">
                                 <?php if ($is_admin): ?>
-                                <input type="text" name="kiosk_pct[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-pct" inputmode="decimal" value="<?= htmlspecialchars($mvPctDisplay) ?>" placeholder="%" aria-label="%">
+                                <input type="text" name="kiosk_pct[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-pct" inputmode="decimal" value="<?= htmlspecialchars($mvPctDisplay) ?>" placeholder="%" aria-label="<?= htmlspecialchars(__('txn_col_pct'), ENT_QUOTES, 'UTF-8') ?>">
                                 <?php else: ?>
                                 <span class="kiosk-gp-readonly"><?= $mvPctDisplay !== '' ? htmlspecialchars($mvPctDisplay) : '—' ?></span>
                                 <?php endif; ?>
                             </td>
                             <td class="num">
                                 <?php if ($is_admin): ?>
-                                <input type="text" name="kiosk_paid[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-paid" inputmode="decimal" value="<?= htmlspecialchars($mvPaidDisplay) ?>" placeholder="0.00" aria-label="amount paid" readonly tabindex="-1" title="由净额 × % 自动计算（分位向上取整）">
+                                <input type="text" name="kiosk_paid[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-paid" inputmode="decimal" value="<?= htmlspecialchars($mvPaidDisplay) ?>" placeholder="0.00" aria-label="<?= htmlspecialchars(__('txn_col_amount_paid'), ENT_QUOTES, 'UTF-8') ?>" readonly tabindex="-1" title="<?= htmlspecialchars(__('txn_title_kiosk_paid'), ENT_QUOTES, 'UTF-8') ?>">
                                 <?php else: ?>
                                 <span class="kiosk-gp-readonly"><?= $mvPaidDisplay !== '' ? htmlspecialchars($mvPaidDisplay) : '—' ?></span>
                                 <?php endif; ?>
@@ -1049,14 +1049,14 @@ $ep = $expense_modal_should_open ? $_POST : [];
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($kiosk_gp_products)): ?>
-                        <tr class="kiosk-gp-no-products"><td colspan="6">暂无产品，请在后台维护 Products。</td></tr>
+                        <tr class="kiosk-gp-no-products"><td colspan="6"><?= htmlspecialchars(__('txn_kiosk_no_products'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                 </table>
             </div>
                 <?php if ($is_admin && !empty($kiosk_gp_products)): ?>
                 <div class="kiosk-gp-meta-actions">
-                    <button type="submit" class="btn btn-primary btn-sm">保存设置</button>
+                    <button type="submit" class="btn btn-primary btn-sm"><?= htmlspecialchars(__('txn_kiosk_save_meta'), ENT_QUOTES, 'UTF-8') ?></button>
                 </div>
                 <?php endif; ?>
             <?php if ($is_admin): ?>
@@ -1067,30 +1067,30 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
         <?php else: ?>
         <div class="expense-userlist-toolbar">
-            <button type="button" class="btn-expense-add" id="expense-modal-open">+ 新增开销</button>
+            <button type="button" class="btn-expense-add" id="expense-modal-open"><?= htmlspecialchars(__('txn_expense_add_btn'), ENT_QUOTES, 'UTF-8') ?></button>
         </div>
         <?php endif; ?>
         <?php if ($expense_kind_ui !== 'kiosk'): ?>
         <div class="expense-entry-modal-mask<?= $expense_modal_should_open ? ' show' : '' ?>" id="expense-entry-modal" aria-modal="true" role="dialog" aria-labelledby="expense-modal-title" aria-hidden="<?= $expense_modal_should_open ? 'false' : 'true' ?>">
             <div class="expense-entry-modal">
                 <div class="expense-entry-modal-head">
-                    <span id="expense-modal-title">新增开销</span>
-                    <button type="button" class="expense-entry-modal-x" id="expense-modal-close" aria-label="关闭">×</button>
+                    <span id="expense-modal-title"><?= htmlspecialchars(__('txn_expense_modal_title'), ENT_QUOTES, 'UTF-8') ?></span>
+                    <button type="button" class="expense-entry-modal-x" id="expense-modal-close" aria-label="<?= htmlspecialchars(__('aria_close'), ENT_QUOTES, 'UTF-8') ?>">×</button>
                 </div>
                 <form method="post" class="expense-modal-form txn-form" id="expense-modal-form" action="">
                     <div class="expense-modal-2col">
                         <div class="expense-modal-col expense-modal-col-left">
-                            <h3 class="expense-modal-section-title">开销信息</h3>
+                            <h3 class="expense-modal-section-title"><?= htmlspecialchars(__('txn_expense_section_info'), ENT_QUOTES, 'UTF-8') ?></h3>
                             <div class="form-section member-dt-section" style="margin:0; padding:12px; border-radius:12px; background:#fff; border:1px solid #e2e8f0;">
                                 <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
-                                    日期 / 时间
+                                    <?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?>
                                     <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="<?= $ep_muc ? '0' : '1' ?>">
-                                    <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="展开修改日期时间"><?= $ep_muc ? '−' : '+' ?></button>
+                                    <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="<?= htmlspecialchars(__('txn_aria_toggle_datetime'), ENT_QUOTES, 'UTF-8') ?>"><?= $ep_muc ? '−' : '+' ?></button>
                                 </div>
                                 <div id="member_dt_box" style="display:<?= $ep_muc ? 'block' : 'none' ?>;">
                                     <div class="form-row-2">
-                                        <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= $ep_day ?>"></div>
-                                        <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= $ep_time ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+                                        <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_date'), ENT_QUOTES, 'UTF-8') ?></label><input type="date" name="day" id="day" class="form-control" value="<?= $ep_day ?>"></div>
+                                        <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_time'), ENT_QUOTES, 'UTF-8') ?></label><input type="text" name="time" id="time" class="form-control" value="<?= $ep_time ?>" placeholder="<?= htmlspecialchars(__('txn_ph_time'), ENT_QUOTES, 'UTF-8') ?>" maxlength="5" title="<?= htmlspecialchars(__('txn_title_time_autofill'), ENT_QUOTES, 'UTF-8') ?>"></div>
                                     </div>
                                 </div>
                             </div>
@@ -1099,46 +1099,46 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             <div class="txn-expense-block" style="margin:0;">
                                 <div class="form-row-2">
                                     <div class="form-group" style="margin-bottom:0;">
-                                        <label>Bank <span id="bank_req_mark">*</span></label>
-                                        <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                                        <select name="bank" id="bank" class="form-control" required title="关联 Statement 与银行 In/Out 统计">
-                                            <option value="">-- 请选 --</option>
+                                        <label><?= htmlspecialchars(__('txn_label_bank'), ENT_QUOTES, 'UTF-8') ?> <span id="bank_req_mark">*</span></label>
+                                        <?php if (!$is_admin && empty($banks)): ?><p class="form-hint"><?= htmlspecialchars(__('txn_contact_admin_add'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+                                        <select name="bank" id="bank" class="form-control" required title="<?= htmlspecialchars(__('txn_title_bank_expense'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>
                                             <?php foreach ($banks as $b): $bs = (string)$b; ?>
                                             <option value="<?= htmlspecialchars($bs) ?>" <?= ($ep_bank !== '' && $ep_bank === $bs) ? 'selected' : '' ?>><?= htmlspecialchars($bs) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
                                     <div class="form-group" style="margin-bottom:0;">
-                                        <label>金额 *</label>
-                                        <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required inputmode="decimal" value="<?= $ep_amount ?>">
+                                        <label><?= htmlspecialchars(__('txn_label_amount'), ENT_QUOTES, 'UTF-8') ?></label>
+                                        <input type="text" name="amount" id="amount" class="form-control" placeholder="<?= htmlspecialchars(__('txn_ph_amount'), ENT_QUOTES, 'UTF-8') ?>" required inputmode="decimal" value="<?= $ep_amount ?>">
                                     </div>
                                 </div>
                                 <div class="form-group" style="margin-bottom:0;">
-                                    <label>备注</label>
-                                    <textarea name="remark" id="expenseRemark" class="form-control" rows="3" placeholder="选填，可写明细说明"><?= $ep_remark ?></textarea>
+                                    <label><?= htmlspecialchars(__('txn_label_remark'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    <textarea name="remark" id="expenseRemark" class="form-control" rows="3" placeholder="<?= htmlspecialchars(__('txn_expense_ph_remark'), ENT_QUOTES, 'UTF-8') ?>"><?= $ep_remark ?></textarea>
                                 </div>
                                 <input type="hidden" name="reward_pct" id="reward_pct" value="0">
                                 <input type="hidden" name="bonus" id="bonus_hidden" value="0">
                             </div>
                             <div class="expense-modal-col-actions">
-                                <button type="submit" class="btn-expense-save">保存</button>
-                                <button type="button" class="btn-expense-cancel" id="expense-modal-cancel">取消</button>
+                                <button type="submit" class="btn-expense-save"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
+                                <button type="button" class="btn-expense-cancel" id="expense-modal-cancel"><?= htmlspecialchars(__('txn_label_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                             </div>
                         </div>
                         <div class="expense-modal-col expense-modal-col-right">
-                            <h3 class="expense-modal-section-title">Expense 项目</h3>
+                            <h3 class="expense-modal-section-title"><?= htmlspecialchars(__('txn_expense_section_item'), ENT_QUOTES, 'UTF-8') ?></h3>
                             <div class="form-group" style="margin-bottom:0;">
-                                <label id="product_label">Expense 项目 *</label>
-                                <input type="text" name="product" id="product" class="form-control" required placeholder="例如：Office / Salary" value="<?= $ep_product ?>">
+                                <label id="product_label"><?= htmlspecialchars(__('txn_expense_label_item_req'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <input type="text" name="product" id="product" class="form-control" required placeholder="<?= htmlspecialchars(__('txn_expense_ph_item'), ENT_QUOTES, 'UTF-8') ?>" value="<?= $ep_product ?>">
                             </div>
-                            <div class="expense-chip-grid" id="expense-chip-grid" aria-label="快捷类别">
+                            <div class="expense-chip-grid" id="expense-chip-grid" aria-label="<?= htmlspecialchars(__('txn_aria_expense_chips'), ENT_QUOTES, 'UTF-8') ?>">
                                 <?php foreach ($expenses as $ex): $exs = (string)$ex; ?>
                                 <button type="button" class="expense-chip" data-expense-chip="<?= htmlspecialchars($exs) ?>"><?= htmlspecialchars($exs) ?></button>
                                 <?php endforeach; ?>
                             </div>
                             <div class="expense-modal-col-actions-right">
-                                <button type="button" class="btn-expense-select-all" id="expense-select-all" title="选中「Expense 项目」输入框内全部文字，便于整段替换">全选文字</button>
-                                <button type="button" class="btn-expense-clear-all" id="expense-clear-all" title="清空 Expense 项目与备注">清空</button>
+                                <button type="button" class="btn-expense-select-all" id="expense-select-all" title="<?= htmlspecialchars(__('txn_expense_title_select_all'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('txn_expense_select_all'), ENT_QUOTES, 'UTF-8') ?></button>
+                                <button type="button" class="btn-expense-clear-all" id="expense-clear-all" title="<?= htmlspecialchars(__('txn_expense_title_clear'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('txn_expense_clear'), ENT_QUOTES, 'UTF-8') ?></button>
                             </div>
                         </div>
                     </div>
@@ -1149,49 +1149,49 @@ $ep = $expense_modal_should_open ? $_POST : [];
     <?php else: ?>
     <div class="txn-modal">
     <div class="txn-modal-head">
-        <div class="txn-modal-title">Add Transaction</div>
-        <a class="txn-modal-close" href="transaction_list.php" aria-label="关闭">×</a>
+        <div class="txn-modal-title"><?= htmlspecialchars($expense_page_title, ENT_QUOTES, 'UTF-8') ?></div>
+        <a class="txn-modal-close" href="transaction_list.php" aria-label="<?= htmlspecialchars(__('aria_close'), ENT_QUOTES, 'UTF-8') ?>">×</a>
     </div>
     <form method="post" class="txn-form" autocomplete="off">
         <?php if ($is_admin): ?>
         <div class="form-section">
-            <div class="form-section-title">日期 / 时间</div>
+            <div class="form-section-title"><?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?></div>
             <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
                 <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:18px; height:18px;">
-                <span>需要修改日期/时间</span>
+                <span><?= htmlspecialchars(__('txn_edit_datetime'), ENT_QUOTES, 'UTF-8') ?></span>
             </label>
             <div id="dt_box" style="display:none;">
                 <div class="form-row-2">
-                    <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
-                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_date'), ENT_QUOTES, 'UTF-8') ?></label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_time'), ENT_QUOTES, 'UTF-8') ?></label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="<?= htmlspecialchars(__('txn_ph_time'), ENT_QUOTES, 'UTF-8') ?>" maxlength="5" title="<?= htmlspecialchars(__('txn_title_time_autofill'), ENT_QUOTES, 'UTF-8') ?>"></div>
                 </div>
             </div>
         </div>
         <?php else: ?>
         <div class="form-section member-dt-section">
             <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
-                time
+                <?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?>
                 <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
-                <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="展开修改日期时间">+</button>
+                <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="<?= htmlspecialchars(__('txn_aria_toggle_datetime'), ENT_QUOTES, 'UTF-8') ?>">+</button>
             </div>
             <div id="member_dt_box" style="display:none;">
                 <div class="form-row-2">
-                    <div class="form-group" style="margin-bottom:0;"><label>日期</label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
-                    <div class="form-group" style="margin-bottom:0;"><label>时间（24小时）</label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="如 1513 或 14:30" maxlength="5" title="可输数字如 1513 自动变为 15:13"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_date'), ENT_QUOTES, 'UTF-8') ?></label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
+                    <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_time'), ENT_QUOTES, 'UTF-8') ?></label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="<?= htmlspecialchars(__('txn_ph_time'), ENT_QUOTES, 'UTF-8') ?>" maxlength="5" title="<?= htmlspecialchars(__('txn_title_time_autofill'), ENT_QUOTES, 'UTF-8') ?>"></div>
                 </div>
-                <p class="form-hint" style="margin-top:4px;">可输入数字如 1513 自动变为 15:13。修改后提交需管理员审核。</p>
+                <p class="form-hint" style="margin-top:4px;"><?= htmlspecialchars(__('txn_member_dt_note'), ENT_QUOTES, 'UTF-8') ?></p>
             </div>
         </div>
         <?php endif; ?>
 
         <div class="txn-grid-2">
         <div class="form-section">
-            <div class="form-section-title">基本信息</div>
+            <div class="form-section-title"><?= htmlspecialchars(__('txn_sec_basic'), ENT_QUOTES, 'UTF-8') ?></div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label>模式 *</label>
+                    <label><?= htmlspecialchars(__('txn_label_mode'), ENT_QUOTES, 'UTF-8') ?></label>
                     <select name="mode" id="mode" class="form-control" required>
-                        <option value="">-- 请选 --</option>
+                        <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <option value="DEPOSIT" <?= $selected_mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT</option>
                         <option value="WITHDRAW" <?= $selected_mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW</option>
                         <option value="FREE" <?= $selected_mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
@@ -1203,13 +1203,13 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     </select>
                 </div>
                 <div class="form-group">
-                    <label>customer</label>
+                    <label><?= htmlspecialchars(__('txn_label_customer'), ENT_QUOTES, 'UTF-8') ?></label>
                     <?php if (empty($customers)): ?>
-                    <select name="code" class="form-control" disabled><option value="">-- 暂无 --</option></select>
-                    <p class="form-hint"><a href="customers.php">先去添加客户</a></p>
+                    <select name="code" class="form-control" disabled><option value=""><?= htmlspecialchars(__('txn_opt_none'), ENT_QUOTES, 'UTF-8') ?></option></select>
+                    <p class="form-hint"><a href="customers.php"><?= htmlspecialchars(__('txn_add_customer_link'), ENT_QUOTES, 'UTF-8') ?></a></p>
                     <?php else: ?>
                     <select name="code" id="code" class="form-control">
-                        <option value="">-- 请选 --</option>
+                        <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <?php foreach ($customers as $c): ?>
                         <option value="<?= htmlspecialchars($c['code']) ?>"><?= htmlspecialchars($c['code']) ?></option>
                         <?php endforeach; ?>
@@ -1218,23 +1218,23 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 </div>
             </div>
             <div id="withdraw_customer_box" class="form-group" style="display:none; padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:14px; border:1px solid #fcd34d;">
-                <div style="margin-bottom:4px;"><strong>顾客姓名</strong>：<span id="withdraw_customer_name">—</span></div>
-                <div><strong>银行资料</strong>：<span id="withdraw_customer_bank">—</span></div>
+                <div style="margin-bottom:4px;"><strong><?= htmlspecialchars(__('txn_customer_name'), ENT_QUOTES, 'UTF-8') ?></strong>：<span id="withdraw_customer_name">—</span></div>
+                <div><strong><?= htmlspecialchars(__('txn_bank_info'), ENT_QUOTES, 'UTF-8') ?></strong>：<span id="withdraw_customer_bank">—</span></div>
             </div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label>bank <span id="bank_req_mark">*</span></label>
-                    <?php if (!$is_admin && empty($banks)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="bank" id="bank" class="form-control" title="REBATE/FREE 不必选；其他模式必选则银行与产品页会统计">
-                        <option value="">-- 请选 --</option>
+                    <label><?= htmlspecialchars(__('txn_label_bank'), ENT_QUOTES, 'UTF-8') ?> <span id="bank_req_mark">*</span></label>
+                    <?php if (!$is_admin && empty($banks)): ?><p class="form-hint"><?= htmlspecialchars(__('txn_contact_admin_add'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+                    <select name="bank" id="bank" class="form-control" title="<?= htmlspecialchars(__('txn_title_bank_field'), ENT_QUOTES, 'UTF-8') ?>">
+                        <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <?php foreach ($banks as $b): ?><option value="<?= htmlspecialchars($b) ?>"><?= htmlspecialchars($b) ?></option><?php endforeach; ?>
                     </select>
                 </div>
                 <div class="form-group">
-                    <label id="product_label">产品/平台 *</label>
-                    <?php if (!$is_admin && empty($products)): ?><p class="form-hint">请联系管理员添加</p><?php endif; ?>
-                    <select name="product" id="product" class="form-control" required title="必选，否则银行与产品页的 In/Out 不会统计">
-                        <option value="">-- 请选 --</option>
+                    <label id="product_label"><?= htmlspecialchars(__('txn_label_product'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <?php if (!$is_admin && empty($products)): ?><p class="form-hint"><?= htmlspecialchars(__('txn_contact_admin_add'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
+                    <select name="product" id="product" class="form-control" required title="<?= htmlspecialchars(__('txn_title_product_field'), ENT_QUOTES, 'UTF-8') ?>">
+                        <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <?php foreach ($products as $p): ?><option value="<?= htmlspecialchars($p) ?>"><?= htmlspecialchars($p) ?></option><?php endforeach; ?>
                     </select>
                 </div>
@@ -1242,29 +1242,29 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
 
         <div class="form-section">
-            <div class="form-section-title">金额 / 备注</div>
+            <div class="form-section-title"><?= htmlspecialchars(__('txn_sec_amount'), ENT_QUOTES, 'UTF-8') ?></div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label>金额 *</label>
-                    <input type="text" name="amount" id="amount" class="form-control" placeholder="如 630.00" required>
+                    <label><?= htmlspecialchars(__('txn_label_amount'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <input type="text" name="amount" id="amount" class="form-control" placeholder="<?= htmlspecialchars(__('txn_ph_amount'), ENT_QUOTES, 'UTF-8') ?>" required>
                 </div>
                 <div class="form-group">
-                    <label>奖励/返点 %</label>
-                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="" inputmode="decimal" title="按金额百分比计算 bonus，顾客列表 Bonus 列即此项合计">
+                    <label><?= htmlspecialchars(__('txn_label_reward_pct'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <input type="text" name="reward_pct" id="reward_pct" class="form-control" placeholder="" inputmode="decimal" title="<?= htmlspecialchars(__('txn_title_reward_pct'), ENT_QUOTES, 'UTF-8') ?>">
                     <input type="hidden" name="bonus" id="bonus_hidden" value="0">
                 </div>
             </div>
-            <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;">奖励 <span id="reward_amount">0</span>，总数 <strong id="reward_total">0</strong></p>
+            <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;"><?= htmlspecialchars(__('txn_reward_hint_reward'), ENT_QUOTES, 'UTF-8') ?> <span id="reward_amount">0</span><?= htmlspecialchars(__('txn_reward_hint_total'), ENT_QUOTES, 'UTF-8') ?> <strong id="reward_total">0</strong></p>
             <div class="form-group">
-                <label>备注</label>
-                <textarea name="remark" class="form-control" rows="2" placeholder="选填"></textarea>
+                <label><?= htmlspecialchars(__('txn_label_remark'), ENT_QUOTES, 'UTF-8') ?></label>
+                <textarea name="remark" class="form-control" rows="2" placeholder="<?= htmlspecialchars(__('txn_ph_remark'), ENT_QUOTES, 'UTF-8') ?>"></textarea>
             </div>
         </div>
         </div>
 
         <div class="txn-actions">
-            <a href="transaction_list.php" class="btn btn-outline">Cancel</a>
-            <button type="submit" class="btn btn-primary txn-submit" style="width:auto; min-width: 220px;">保存</button>
+            <a href="transaction_list.php" class="btn btn-outline"><?= htmlspecialchars(__('txn_label_cancel'), ENT_QUOTES, 'UTF-8') ?></a>
+            <button type="submit" class="btn btn-primary txn-submit" style="width:auto; min-width: 220px;"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
         </div>
     </form>
     </div>
@@ -1272,7 +1272,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
 
     <?php if ($quick === 'expense' && $expense_kind_ui !== 'kiosk'): ?>
     <div class="card expense-statement-wrap">
-        <h4 class="expense-statement-title">Expense Statement · 明细与汇总</h4>
+        <h4 class="expense-statement-title"><?= htmlspecialchars(__('txn_exp_stmt_title'), ENT_QUOTES, 'UTF-8') ?></h4>
         <form method="get" class="expense-filter-bar" id="expense-filter-form" action="<?= htmlspecialchars($expense_entry_url) ?>">
             <input type="hidden" name="expense_kind" value="<?= htmlspecialchars($expense_kind_ui) ?>">
             <div class="expense-filter-item">
@@ -1286,7 +1286,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
             <div class="expense-filter-item">
                 <label>Bank</label>
                 <select name="expense_bank" class="form-control">
-                    <option value="">全部</option>
+                    <option value=""><?= htmlspecialchars(__('txn_filter_all'), ENT_QUOTES, 'UTF-8') ?></option>
                     <?php foreach ($expense_filter_banks as $bank_name): ?>
                     <option value="<?= htmlspecialchars((string)$bank_name) ?>" <?= $expense_bank_filter === (string)$bank_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$bank_name) ?></option>
                     <?php endforeach; ?>
@@ -1295,7 +1295,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
             <div class="expense-filter-item">
                 <label>Product</label>
                 <select name="expense_product" class="form-control">
-                    <option value="">全部</option>
+                    <option value=""><?= htmlspecialchars(__('txn_filter_all'), ENT_QUOTES, 'UTF-8') ?></option>
                     <?php foreach ($expense_filter_products as $product_name): ?>
                     <option value="<?= htmlspecialchars((string)$product_name) ?>" <?= $expense_product_filter === (string)$product_name ? 'selected' : '' ?>><?= htmlspecialchars((string)$product_name) ?></option>
                     <?php endforeach; ?>
@@ -1305,27 +1305,27 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <button type="submit" class="btn btn-primary btn-sm">Search</button>
                 <a href="<?= htmlspecialchars($expense_entry_url) ?>" class="btn btn-back btn-sm">Reset</a>
             </div>
-            <div class="expense-quick-ranges" aria-label="日期快捷">
-                <span>快捷：</span>
-                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="yesterday" title="昨天">昨日</button>
-                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_week" title="本周一至本周日">本周</button>
-                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="上周一至上周日">上周</button>
-                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="本月1日至本月最后一天">本月</button>
-                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="上月1日至上月最后一天">上月</button>
+            <div class="expense-quick-ranges" aria-label="<?= htmlspecialchars(__('txn_aria_quick_dates'), ENT_QUOTES, 'UTF-8') ?>">
+                <span><?= htmlspecialchars(__('txn_quick_prefix'), ENT_QUOTES, 'UTF-8') ?></span>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="yesterday" title="<?= htmlspecialchars(__('txn_range_title_yesterday'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('txn_range_btn_yesterday'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_week" title="<?= htmlspecialchars(__('txn_range_title_this_week'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_this_week'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_week" title="<?= htmlspecialchars(__('txn_range_title_last_week'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_last_week'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="this_month" title="<?= htmlspecialchars(__('txn_range_title_this_month'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_this_month'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" class="btn btn-sm btn-outline expense-quick-range" data-range="last_month" title="<?= htmlspecialchars(__('txn_range_title_last_month'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('agent_btn_last_month'), ENT_QUOTES, 'UTF-8') ?></button>
             </div>
         </form>
 
         <div class="expense-kpi-grid">
             <div class="expense-kpi-card">
-                <strong>总开销</strong>
+                <strong><?= htmlspecialchars(__('txn_kpi_total_expense'), ENT_QUOTES, 'UTF-8') ?></strong>
                 <span class="num out"><?= number_format($expense_report_total, 2) ?></span>
             </div>
             <div class="expense-kpi-card">
-                <strong>记录数</strong>
+                <strong><?= htmlspecialchars(__('txn_kpi_record_count'), ENT_QUOTES, 'UTF-8') ?></strong>
                 <span class="num"><?= (int)$expense_report_count ?></span>
             </div>
             <div class="expense-kpi-card">
-                <strong>产品数</strong>
+                <strong><?= htmlspecialchars(__('txn_kpi_product_count'), ENT_QUOTES, 'UTF-8') ?></strong>
                 <span class="num"><?= count($expense_report_by_product) ?></span>
             </div>
         </div>
@@ -1347,7 +1347,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                         <td class="num out"><?= number_format((float)($row['total_amount'] ?? 0), 2) ?></td>
                     </tr>
                     <?php endforeach; ?>
-                    <?php if (!$expense_report_by_product): ?><tr><td colspan="3">暂无 Product 汇总</td></tr><?php endif; ?>
+                    <?php if (!$expense_report_by_product): ?><tr><td colspan="3"><?= htmlspecialchars(__('txn_empty_product_summary'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -1379,7 +1379,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                         <td><?= htmlspecialchars((string)($row['remark'] ?? '')) ?></td>
                     </tr>
                     <?php endforeach; ?>
-                    <?php if (!$expense_report_rows): ?><tr><td colspan="8">暂无 Expense 记录</td></tr><?php endif; ?>
+                    <?php if (!$expense_report_rows): ?><tr><td colspan="8"><?= htmlspecialchars(__('txn_empty_expense_rows'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                 </tbody>
             </table>
         </div>
@@ -1387,26 +1387,26 @@ $ep = $expense_modal_should_open ? $_POST : [];
     <?php endif; ?>
 
     <p class="breadcrumb" style="margin-top:16px;">
-        <a href="dashboard.php">返回首页</a><span>·</span>
-        <a href="transaction_list.php">流水记录</a><span>·</span>
-        <a href="logout.php">退出</a>
+        <a href="dashboard.php"><?= htmlspecialchars(__('txn_footer_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
+        <a href="transaction_list.php"><?= htmlspecialchars(__('txn_footer_txns'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
+        <a href="logout.php"><?= htmlspecialchars(__('txn_footer_logout'), ENT_QUOTES, 'UTF-8') ?></a>
     </p>
     </div>
         </main>
     </div>
     <?php if ($saved): ?>
     <div class="pretty-modal-mask" id="saved-modal-mask">
-        <div class="pretty-modal" role="dialog" aria-modal="true" aria-label="提交结果">
-            <div class="pretty-modal-head">系统提示</div>
+        <div class="pretty-modal" role="dialog" aria-modal="true" aria-label="<?= htmlspecialchars(__('txn_saved_modal_aria'), ENT_QUOTES, 'UTF-8') ?>">
+            <div class="pretty-modal-head"><?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?></div>
             <div class="pretty-modal-body">
                 <?php if ($submitted_status === 'pending'): ?>
-                    已提交成功，等待管理员批准。
+                    <?= htmlspecialchars(__('txn_saved_pending'), ENT_QUOTES, 'UTF-8') ?>
                 <?php else: ?>
-                    成功，数据已保存并生效。
+                    <?= htmlspecialchars(__('txn_saved_ok'), ENT_QUOTES, 'UTF-8') ?>
                 <?php endif; ?>
             </div>
             <div class="pretty-modal-foot">
-                <button type="button" class="pretty-ok" id="saved-modal-ok">OK</button>
+                <button type="button" class="pretty-ok" id="saved-modal-ok"><?= htmlspecialchars(__('btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
             </div>
         </div>
     </div>
@@ -1417,6 +1417,11 @@ $ep = $expense_modal_should_open ? $_POST : [];
             var isExpenseQuick = <?= $quick === 'expense' ? 'true' : 'false' ?>;
             var productOptionsDefault = <?= json_encode(array_values($products), JSON_UNESCAPED_UNICODE) ?>;
             var productOptionsExpense = <?= json_encode(array_values($expenses), JSON_UNESCAPED_UNICODE) ?>;
+            var TXN_I18N = <?= json_encode([
+                'optSelect' => __('txn_opt_select'),
+                'lblExpenseProductOpt' => __('txn_js_label_expense_product'),
+                'lblProductPlain' => __('txn_js_label_product_plain'),
+            ], JSON_UNESCAPED_UNICODE) ?>;
             function updateWithdrawCustomer() {
                 var modeEl = document.getElementById('mode');
                 var codeEl = document.getElementById('code');
@@ -1461,9 +1466,11 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     var current = productSelect.value;
                     var list = productOptionsDefault;
                     var isQuickExpenseMode = mode === 'EXPENSE' && isExpenseQuick;
-                    var fallback = isQuickExpenseMode ? 'Expense 项目（可选）' : '产品/平台';
-                    productLabel.textContent = isQuickExpenseMode ? fallback : (fallback + ' *');
-                    productSelect.innerHTML = '<option value="">-- 请选 --</option>';
+                    var TI = TXN_I18N || {};
+                    var lblOpt = TI.lblExpenseProductOpt || '';
+                    var lblPlain = TI.lblProductPlain || '';
+                    productLabel.textContent = isQuickExpenseMode ? lblOpt : (lblPlain + ' *');
+                    productSelect.innerHTML = '<option value="">' + (TI.optSelect || '') + '</option>';
                     (list || []).forEach(function(name){
                         var op = document.createElement('option');
                         op.value = name;
