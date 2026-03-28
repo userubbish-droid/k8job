@@ -266,6 +266,42 @@ try {
         .agent-self-table { max-width: 640px; }
         .agent-self-table th,
         .agent-self-table td { font-size: 15px; }
+        .agent-period-pill {
+            display: inline-flex;
+            align-items: flex-start;
+            gap: 12px;
+            margin-top: 14px;
+            padding: 12px 18px 12px 14px;
+            background: #fff;
+            border: 1px solid #e2e8f0;
+            border-radius: 14px;
+            box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+            max-width: 100%;
+        }
+        .agent-period-pill svg {
+            flex-shrink: 0;
+            width: 22px;
+            height: 22px;
+            color: #2563eb;
+            margin-top: 1px;
+        }
+        .agent-period-pill-body { min-width: 0; }
+        .agent-period-pill-dates {
+            font-size: 16px;
+            font-weight: 700;
+            color: #1e3a8a;
+            font-variant-numeric: tabular-nums;
+            letter-spacing: 0.02em;
+            line-height: 1.35;
+        }
+        .agent-period-pill-sub {
+            font-size: 12px;
+            font-weight: 600;
+            color: #64748b;
+            margin-top: 4px;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+        }
     </style>
 </head>
 <body>
@@ -276,10 +312,19 @@ try {
                 <div class="page-header">
                     <?php if ($is_agent_user): ?>
                     <h2 style="font-size:1.35rem; font-weight:700; color:#0f172a; letter-spacing:0.02em;"><?= htmlspecialchars($agent_welcome_line) ?></h2>
-                    <p class="breadcrumb" style="margin-top:6px;">
-                        <span><?= htmlspecialchars($day_from) ?></span><span>·</span><span><?= htmlspecialchars($day_to) ?></span>
-                        <span>·</span><span>Win(Loss) &amp; Commission</span>
-                    </p>
+                    <?php
+                    $agent_df_show = date('d/m/Y', strtotime($day_from));
+                    $agent_dt_show = date('d/m/Y', strtotime($day_to));
+                    ?>
+                    <div class="agent-period-pill" role="status" aria-label="Selected period">
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+                        </svg>
+                        <div class="agent-period-pill-body">
+                            <div class="agent-period-pill-dates"><?= htmlspecialchars($agent_df_show) ?> - <?= htmlspecialchars($agent_dt_show) ?></div>
+                            <div class="agent-period-pill-sub">Win(Loss) &amp; Commission</div>
+                        </div>
+                    </div>
                     <?php else: ?>
                     <h2>Agent</h2>
                     <p class="breadcrumb">
