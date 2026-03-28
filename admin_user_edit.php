@@ -173,7 +173,6 @@ $can_set_second = user_actor_can_set_second_password($pdo, $id);
                         ?>
                         <div class="form-group" style="margin-top:8px;">
                             <label><?= htmlspecialchars(__('user_edit_agent_portal_section'), ENT_QUOTES, 'UTF-8') ?></label>
-                            <p class="form-hint" style="margin-bottom:10px;"><?= htmlspecialchars(__('user_edit_agent_period_hint'), ENT_QUOTES, 'UTF-8') ?></p>
                             <div class="agent-ui-prefs">
                                 <label class="agent-ui-pref-check">
                                     <input type="checkbox" name="agent_ui_show_week" value="1" <?= $agent_ui_w ? 'checked' : '' ?>>

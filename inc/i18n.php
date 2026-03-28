@@ -120,7 +120,6 @@ function i18n_dictionary(): array
         'user_edit_agent_portal_section' => ['zh' => '代理门户', 'en' => 'Agent portal'],
         'user_edit_agent_period_week' => ['zh' => '期（周）：本周 / 上周', 'en' => 'Week: This week / Last week'],
         'user_edit_agent_period_month' => ['zh' => '月：本月 / 上月', 'en' => 'Month: This month / Last month'],
-        'user_edit_agent_period_hint' => ['zh' => '仅代理登录后在 Agent 页生效，用于控制其可切换的日期范围类型（与流水列表等处「期/月」概念一致）。', 'en' => 'Applies when this user logs in as agent: controls which period shortcuts appear on the Agent page.'],
 
         // 通用
         'btn_save' => ['zh' => '保存', 'en' => 'Save'],
@@ -173,7 +172,7 @@ function i18n_dictionary(): array
         'login_page_title' => ['zh' => '登录 - %s', 'en' => 'Sign in - %s'],
         'login_tab_admin' => ['zh' => '管理员', 'en' => 'Admin'],
         'login_tab_member' => ['zh' => '会员', 'en' => 'Member'],
-        'login_ph_company' => ['zh' => '公司代码', 'en' => 'Company'],
+        'login_ph_company' => ['zh' => '公司代码（如 k8、hq，勿填 0）', 'en' => 'Company code (e.g. k8, hq — not 0)'],
         'login_ph_username' => ['zh' => '用户名', 'en' => 'Username'],
         'login_ph_password' => ['zh' => '密码', 'en' => 'Password'],
         'login_remember' => ['zh' => '记住我', 'en' => 'Remember me'],
