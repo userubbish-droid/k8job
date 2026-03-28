@@ -73,26 +73,6 @@ try {
 } catch (Throwable $e) {
 }
 
-/** 返点页「已给」写入 rebate_given，非 transactions，需并入报表 Rebate / In */
-try {
-    $stmtRg = $pdo->prepare("SELECT TRIM(code) AS cd, COALESCE(SUM(rebate_amount), 0) AS s FROM rebate_given
-        WHERE company_id = ? AND rebate_amount IS NOT NULL AND day < ? GROUP BY TRIM(code)");
-    $stmtRg->execute([$gpc_cid, $day_from]);
-    foreach ($stmtRg->fetchAll(PDO::FETCH_ASSOC) as $rw) {
-        $cd = strtolower(trim((string)($rw['cd'] ?? '')));
-        $amt = (float)($rw['s'] ?? 0);
-        if ($cd === '' || $amt == 0.0) {
-            continue;
-        }
-        $gp = $gpc_code_to_gp[$cd] ?? '';
-        if ($gp === '') {
-            continue;
-        }
-        $cum_in_product[$gp] = ($cum_in_product[$gp] ?? 0) + $amt;
-    }
-} catch (Throwable $e) {
-}
-
 try {
     $stmt = $pdo->prepare("SELECT bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
@@ -169,6 +149,7 @@ try {
     $range_breakdown_product = [];
 }
 
+/** 返点页「已给」仅并入 Rebate 列展示，不计入 In 合计 / Starting / Balance（非 transactions 入账口径） */
 try {
     $stmtRg2 = $pdo->prepare("SELECT TRIM(code) AS cd, COALESCE(SUM(rebate_amount), 0) AS s FROM rebate_given
         WHERE company_id = ? AND rebate_amount IS NOT NULL AND day >= ? AND day <= ? GROUP BY TRIM(code)");
@@ -183,7 +164,6 @@ try {
         if ($gp === '') {
             continue;
         }
-        $range_in_product[$gp] = ($range_in_product[$gp] ?? 0) + $amt;
         if (!isset($range_breakdown_product[$gp])) {
             $range_breakdown_product[$gp] = [
                 'dep' => 0.0,
