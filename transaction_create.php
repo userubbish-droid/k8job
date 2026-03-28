@@ -433,49 +433,94 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .txn-form-card { padding: 24px; }
         .txn-form {
             display: grid;
-            gap: 18px;
+            gap: 16px;
         }
         .txn-modal {
-            background: rgba(255,255,255,0.9);
-            border: 1px solid rgba(152, 176, 242, 0.32);
-            border-radius: 14px;
-            box-shadow: var(--card-shadow);
-            padding: 18px 18px 16px;
+            background: var(--surface-solid);
+            border: 1px solid rgba(148, 163, 184, 0.32);
+            border-radius: 18px;
+            box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255, 255, 255, 0.88) inset;
+            padding: 20px 22px 18px;
         }
         .txn-modal-head {
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 12px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid rgba(140, 165, 235, 0.28);
-            margin-bottom: 14px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.22);
+            margin-bottom: 0;
         }
-        .txn-modal-title { margin: 0; font-size: 18px; font-weight: 800; color: #0f172a; }
+        .txn-modal-title { margin: 0; font-size: 1.125rem; font-weight: 700; color: var(--text); letter-spacing: -0.02em; }
+        .txn-form-legend {
+            margin: 10px 0 0;
+            padding: 0 0 14px;
+            font-size: 12px;
+            color: var(--muted);
+            border-bottom: 1px solid rgba(148, 163, 184, 0.18);
+            line-height: 1.4;
+        }
         .txn-modal-close {
-            width: 34px;
-            height: 34px;
+            width: 36px;
+            height: 36px;
             border-radius: 10px;
-            border: 1px solid rgba(148,163,184,0.55);
-            background: #fff;
-            color: #334155;
+            border: 1px solid var(--border);
+            background: rgba(255, 255, 255, 0.95);
+            color: var(--text-secondary);
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             justify-content: center;
             text-decoration: none;
             line-height: 1;
-            font-size: 18px;
+            font-size: 20px;
+            transition: background 0.2s, border-color 0.2s, color 0.2s;
         }
-        .txn-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .txn-modal-close:hover {
+            background: var(--primary-soft);
+            border-color: rgba(77, 100, 248, 0.35);
+            color: var(--primary);
+        }
+        .txn-grid-2 {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            align-items: stretch;
+        }
         @media (max-width: 720px) { .txn-grid-2 { grid-template-columns: 1fr; } }
+        .txn-grid-2 > .form-section {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            min-height: 100%;
+        }
+        .txn-grid-2 > .form-section > .form-section-title {
+            margin-bottom: 0;
+        }
+        .txn-grid-2 > .form-section > .form-row-2 + .form-row-2,
+        .txn-grid-2 > .form-section > .form-row-2 + .form-group,
+        .txn-grid-2 > .form-section #withdraw_customer_box {
+            margin-top: 0;
+        }
+        .txn-grid-2 > .form-section:last-child > .form-group:last-child {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            margin-bottom: 0;
+        }
+        .txn-grid-2 > .form-section:last-child textarea.form-control {
+            flex: 1;
+            min-height: 112px;
+            resize: vertical;
+        }
         .txn-actions {
             display: flex;
             justify-content: flex-end;
-            gap: 10px;
-            margin-top: 14px;
-            padding-top: 14px;
-            border-top: 1px solid rgba(140, 165, 235, 0.22);
+            gap: 12px;
+            margin-top: 4px;
+            padding-top: 16px;
+            border-top: 1px solid rgba(148, 163, 184, 0.2);
         }
         @media (max-width: 640px) {
             .txn-wrap { max-width: 100%; }
@@ -490,24 +535,98 @@ $ep = $expense_modal_should_open ? $_POST : [];
         }
         .form-section {
             margin: 0;
-            padding: 14px 14px 12px;
-            border: 1px solid rgba(126, 154, 228, 0.22);
-            border-radius: 12px;
-            background: rgba(255,255,255,0.72);
+            padding: 16px 18px;
+            border: 1px solid rgba(148, 163, 184, 0.26);
+            border-radius: 14px;
+            background: rgba(255, 255, 255, 0.94);
+            box-shadow: 0 1px 0 rgba(255, 255, 255, 0.8) inset;
         }
         .form-section-title {
-            font-size: 12px;
-            color: #475569;
+            font-size: 13px;
+            color: var(--text);
             font-weight: 700;
-            margin-bottom: 10px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            margin: 0 0 2px;
+            letter-spacing: 0.02em;
+            text-transform: none;
+            line-height: 1.35;
+            padding-left: 11px;
+            border-left: 3px solid var(--primary);
         }
-        .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+        .form-section--datetime-admin {
+            padding-top: 14px;
+            padding-bottom: 14px;
+        }
+        .txn-dt-head-row {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px 16px;
+            margin-bottom: 2px;
+        }
+        .txn-dt-head-row .form-section-title {
+            margin: 0;
+            flex: 1 1 auto;
+            min-width: 140px;
+        }
+        .txn-checkbox-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            margin: 0;
+            font-size: 13px;
+            font-weight: 500;
+            color: var(--text-secondary);
+            cursor: pointer;
+            user-select: none;
+        }
+        .txn-checkbox-label input[type="checkbox"] {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            flex-shrink: 0;
+        }
+        .txn-member-dt-head { align-items: center; }
+        .txn-member-dt-actions { flex-shrink: 0; }
+        .txn-dt-expand-btn {
+            padding: 6px 12px;
+            font-size: 13px;
+            font-weight: 600;
+            min-height: 34px;
+            border-radius: 10px;
+        }
+        .txn-dt-fields {
+            margin-top: 4px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(148, 163, 184, 0.18);
+        }
+        .txn-withdraw-hint {
+            padding: 10px 12px;
+            background: linear-gradient(135deg, rgba(254, 243, 199, 0.65) 0%, rgba(255, 251, 235, 0.9) 100%);
+            border-radius: 10px;
+            font-size: 13px;
+            border: 1px solid rgba(252, 211, 77, 0.45);
+            line-height: 1.45;
+        }
+        .form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
         .form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
         .txn-form .form-group { margin-bottom: 0; }
-        .txn-form .form-control { min-height: 46px; border-radius: 10px; }
-        .txn-form textarea.form-control { min-height: 110px; }
+        .txn-form .form-group > label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+            letter-spacing: 0.01em;
+        }
+        .txn-form .req-mark,
+        .txn-form #bank_req_mark {
+            color: var(--danger);
+            font-weight: 700;
+            margin-left: 1px;
+        }
+        .txn-form .form-control { min-height: 44px; border-radius: var(--radius-md, 12px); }
+        .txn-form textarea.form-control { min-height: 96px; line-height: 1.45; }
         .txn-submit { width: 100%; min-height: 48px; font-size: 16px; font-weight: 700; }
         .calc-box { margin: 12px 0; padding: 12px 14px; background: #f0f9ff; border-radius: 8px; font-size: 14px; color: #0c4a6e; }
         .success-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
@@ -534,7 +653,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .expense-kpi-card { border: 1px solid rgba(115, 146, 230, 0.25); border-radius: 10px; background: rgba(255,255,255,0.82); padding: 10px 12px; }
         .expense-kpi-card strong { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; }
         .expense-kpi-card .num { font-size: 1.2rem; font-weight: 700; line-height: 1; }
-        .txn-expense-block .form-section-title { margin-bottom: 12px; }
+        .txn-expense-block .form-section-title { margin-bottom: 12px; border-left-color: rgba(77, 100, 248, 0.55); }
         .txn-expense-block .form-row-2 { align-items: flex-end; }
         @media (max-width: 640px) {
             .form-row-2, .form-row-3 { grid-template-columns: 1fr; }
@@ -813,7 +932,10 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .kiosk-io-summary .data-table thead th { background: #2563eb; color: #fff; }
         .kiosk-io-summary .kiosk-gp-in { color: #16a34a; font-weight: 700; }
         .kiosk-io-summary .kiosk-gp-out { color: #dc2626; font-weight: 700; }
-        .kiosk-io-summary .kiosk-io-net { font-weight: 700; color: #2563eb; }
+        .kiosk-io-summary .kiosk-io-net { font-weight: 700; font-variant-numeric: tabular-nums; }
+        .kiosk-io-summary .kiosk-io-net--pos { color: var(--success); }
+        .kiosk-io-summary .kiosk-io-net--neg { color: var(--danger); }
+        .kiosk-io-summary .kiosk-io-net--zero { color: var(--muted); }
         .kiosk-gp-filters {
             display: flex;
             flex-wrap: wrap;
@@ -1026,12 +1148,18 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             }
                             $compPaid = $pctNum !== null ? kiosk_ceil_money2($knet * $pctNum / 100) : null;
                             $mvPaidDisplay = $compPaid !== null ? number_format($compPaid, 2, '.', '') : '';
+                            $knetNetClass = 'kiosk-io-net--zero';
+                            if ($knet > 0.0001) {
+                                $knetNetClass = 'kiosk-io-net--pos';
+                            } elseif ($knet < -0.0001) {
+                                $knetNetClass = 'kiosk-io-net--neg';
+                            }
                             ?>
                         <tr class="kiosk-gp-row" data-in="<?= htmlspecialchars((string)$kin) ?>" data-out="<?= htmlspecialchars((string)$kout) ?>" data-net="<?= htmlspecialchars((string)$knet) ?>">
                             <td><?= htmlspecialchars($gpname) ?></td>
                             <td class="num kiosk-gp-in"><?= number_format($kin, 2) ?></td>
                             <td class="num kiosk-gp-out"><?= number_format($kout, 2) ?></td>
-                            <td class="num kiosk-io-net"><?= number_format($knet, 2) ?></td>
+                            <td class="num kiosk-io-net <?= htmlspecialchars($knetNetClass, ENT_QUOTES, 'UTF-8') ?>"><?= number_format($knet, 2) ?></td>
                             <td class="num">
                                 <?php if ($is_admin): ?>
                                 <input type="text" name="kiosk_pct[<?= htmlspecialchars($gpname, ENT_QUOTES) ?>]" class="form-control kiosk-gp-input kiosk-gp-pct" inputmode="decimal" value="<?= htmlspecialchars($mvPctDisplay) ?>" placeholder="%" aria-label="<?= htmlspecialchars(__('txn_col_pct'), ENT_QUOTES, 'UTF-8') ?>">
@@ -1099,7 +1227,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                             <div class="txn-expense-block" style="margin:0;">
                                 <div class="form-row-2">
                                     <div class="form-group" style="margin-bottom:0;">
-                                        <label><?= htmlspecialchars(__('txn_label_bank'), ENT_QUOTES, 'UTF-8') ?> <span id="bank_req_mark">*</span></label>
+                                        <label><?= htmlspecialchars(__('txn_label_bank'), ENT_QUOTES, 'UTF-8') ?> <span id="bank_req_mark" class="req-mark">*</span></label>
                                         <?php if (!$is_admin && empty($banks)): ?><p class="form-hint"><?= htmlspecialchars(__('txn_contact_admin_add'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
                                         <select name="bank" id="bank" class="form-control" required title="<?= htmlspecialchars(__('txn_title_bank_expense'), ENT_QUOTES, 'UTF-8') ?>">
                                             <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>
@@ -1152,15 +1280,18 @@ $ep = $expense_modal_should_open ? $_POST : [];
         <div class="txn-modal-title"><?= htmlspecialchars($expense_page_title, ENT_QUOTES, 'UTF-8') ?></div>
         <a class="txn-modal-close" href="transaction_list.php" aria-label="<?= htmlspecialchars(__('aria_close'), ENT_QUOTES, 'UTF-8') ?>">×</a>
     </div>
+    <p class="txn-form-legend"><?= htmlspecialchars(__('txn_form_required_legend'), ENT_QUOTES, 'UTF-8') ?></p>
     <form method="post" class="txn-form" autocomplete="off">
         <?php if ($is_admin): ?>
-        <div class="form-section">
-            <div class="form-section-title"><?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?></div>
-            <label style="display:flex; align-items:center; gap:8px; margin-bottom:8px;">
-                <input type="checkbox" name="edit_dt" value="1" id="edit_dt" style="width:18px; height:18px;">
-                <span><?= htmlspecialchars(__('txn_edit_datetime'), ENT_QUOTES, 'UTF-8') ?></span>
-            </label>
-            <div id="dt_box" style="display:none;">
+        <div class="form-section form-section--datetime-admin">
+            <div class="txn-dt-head-row">
+                <div class="form-section-title"><?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?></div>
+                <label class="txn-checkbox-label">
+                    <input type="checkbox" name="edit_dt" value="1" id="edit_dt">
+                    <span><?= htmlspecialchars(__('txn_edit_datetime'), ENT_QUOTES, 'UTF-8') ?></span>
+                </label>
+            </div>
+            <div id="dt_box" class="txn-dt-fields" style="display:none;">
                 <div class="form-row-2">
                     <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_date'), ENT_QUOTES, 'UTF-8') ?></label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
                     <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_time'), ENT_QUOTES, 'UTF-8') ?></label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="<?= htmlspecialchars(__('txn_ph_time'), ENT_QUOTES, 'UTF-8') ?>" maxlength="5" title="<?= htmlspecialchars(__('txn_title_time_autofill'), ENT_QUOTES, 'UTF-8') ?>"></div>
@@ -1168,13 +1299,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
             </div>
         </div>
         <?php else: ?>
-        <div class="form-section member-dt-section">
-            <div class="form-section-title" style="display:flex; align-items:center; gap:6px;">
-                <?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?>
-                <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
-                <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm" style="padding:2px 8px; font-size:13px; line-height:1.2;" aria-label="<?= htmlspecialchars(__('txn_aria_toggle_datetime'), ENT_QUOTES, 'UTF-8') ?>">+</button>
+        <div class="form-section form-section--datetime-admin member-dt-section">
+            <div class="txn-dt-head-row txn-member-dt-head">
+                <div class="form-section-title"><?= htmlspecialchars(__('txn_sec_datetime'), ENT_QUOTES, 'UTF-8') ?></div>
+                <div class="txn-member-dt-actions">
+                    <input type="hidden" name="member_use_current_time" id="member_use_current_time" value="1">
+                    <button type="button" id="member_dt_toggle" class="btn btn-outline btn-sm txn-dt-expand-btn" aria-label="<?= htmlspecialchars(__('txn_aria_toggle_datetime'), ENT_QUOTES, 'UTF-8') ?>">+</button>
+                </div>
             </div>
-            <div id="member_dt_box" style="display:none;">
+            <div id="member_dt_box" class="txn-dt-fields" style="display:none;">
                 <div class="form-row-2">
                     <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_date'), ENT_QUOTES, 'UTF-8') ?></label><input type="date" name="day" id="day" class="form-control" value="<?= htmlspecialchars($today) ?>"></div>
                     <div class="form-group" style="margin-bottom:0;"><label><?= htmlspecialchars(__('txn_label_time'), ENT_QUOTES, 'UTF-8') ?></label><input type="text" name="time" id="time" class="form-control" value="<?= htmlspecialchars($now) ?>" placeholder="<?= htmlspecialchars(__('txn_ph_time'), ENT_QUOTES, 'UTF-8') ?>" maxlength="5" title="<?= htmlspecialchars(__('txn_title_time_autofill'), ENT_QUOTES, 'UTF-8') ?>"></div>
@@ -1217,13 +1350,13 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <?php endif; ?>
                 </div>
             </div>
-            <div id="withdraw_customer_box" class="form-group" style="display:none; padding:10px 12px; background:#fef3c7; border-radius:8px; font-size:14px; border:1px solid #fcd34d;">
+            <div id="withdraw_customer_box" class="form-group txn-withdraw-hint" style="display:none;">
                 <div style="margin-bottom:4px;"><strong><?= htmlspecialchars(__('txn_customer_name'), ENT_QUOTES, 'UTF-8') ?></strong>：<span id="withdraw_customer_name">—</span></div>
                 <div><strong><?= htmlspecialchars(__('txn_bank_info'), ENT_QUOTES, 'UTF-8') ?></strong>：<span id="withdraw_customer_bank">—</span></div>
             </div>
             <div class="form-row-2">
                 <div class="form-group">
-                    <label><?= htmlspecialchars(__('txn_label_bank'), ENT_QUOTES, 'UTF-8') ?> <span id="bank_req_mark">*</span></label>
+                    <label><?= htmlspecialchars(__('txn_label_bank'), ENT_QUOTES, 'UTF-8') ?> <span id="bank_req_mark" class="req-mark">*</span></label>
                     <?php if (!$is_admin && empty($banks)): ?><p class="form-hint"><?= htmlspecialchars(__('txn_contact_admin_add'), ENT_QUOTES, 'UTF-8') ?></p><?php endif; ?>
                     <select name="bank" id="bank" class="form-control" title="<?= htmlspecialchars(__('txn_title_bank_field'), ENT_QUOTES, 'UTF-8') ?>">
                         <option value=""><?= htmlspecialchars(__('txn_opt_select'), ENT_QUOTES, 'UTF-8') ?></option>

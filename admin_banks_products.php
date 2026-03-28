@@ -323,7 +323,7 @@ try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
         COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS tout
+        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
         FROM transactions WHERE status = 'approved' AND company_id = ? GROUP BY COALESCE(product, '')");
     $stmt->execute([$company_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);

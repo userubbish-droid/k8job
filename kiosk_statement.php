@@ -137,7 +137,9 @@ function kiosk_stmt_fmt_in(float $v): string {
                     <?php if ($is_admin): ?>
                         <p class="form-hint" style="margin-top:12px;">
                             <strong>In 合计</strong> 与 statement 中 Game Platform 的 <strong>In</strong> 相同（DEPOSIT+REBATE+FREE+FREE WITHDRAW，按 total 或 amount+bonus）。
-                            <strong>Bonus</strong> 列为上述模式下 <code>bonus</code> 字段之和（与 In 中的奖励部分对应，便于核对）。
+                            <strong>Out</strong> 为 <strong>WITHDRAW + EXPENSE</strong> 按产品汇总（与银行侧「出账」口径一致；含开销类流水，此前仅统计 WITHDRAW 会漏算）。
+                            <strong>Bonus</strong> 列为上述入账模式下 <code>bonus</code> 字段之和（便于与 In 核对）。
+                            未计入 In/Out 的模式：<strong>BANK / OTHER</strong> 等若未带上述 mode，不会出现在本表；若有需要可再扩展规则。
                         </p>
                     <?php endif; ?>
                 </div>

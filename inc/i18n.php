@@ -344,6 +344,7 @@ function i18n_dictionary(): array
         'txn_footer_txns' => ['zh' => '流水记录', 'en' => 'Transactions'],
         'txn_footer_logout' => ['zh' => '退出', 'en' => 'Log out'],
         'txn_sec_datetime' => ['zh' => '日期 / 时间', 'en' => 'Date / time'],
+        'txn_form_required_legend' => ['zh' => '标 * 的为必填项', 'en' => 'Fields marked * are required'],
         'txn_edit_datetime' => ['zh' => '需要修改日期/时间', 'en' => 'Change date/time'],
         'txn_label_date' => ['zh' => '日期', 'en' => 'Date'],
         'txn_label_time' => ['zh' => '时间（24小时）', 'en' => 'Time (24h)'],
