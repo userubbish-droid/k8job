@@ -73,12 +73,23 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $pdo->beginTransaction();
             try {
             $stmt = $pdo->prepare("INSERT INTO users (username, password_hash, role, display_name, company_id) VALUES (?, ?, ?, ?, ?)");
-            $cid_new = current_company_id();
             if ($role === 'superadmin') {
                 $company_id = null;
+            } elseif ($actor_is_superadmin) {
+                $pick = (int)($_POST['create_company_id'] ?? 0);
+                if ($pick <= 0) {
+                    throw new RuntimeException('请选择该账号所属的分公司。');
+                }
+                $stmtC = $pdo->prepare('SELECT id FROM companies WHERE id = ? AND is_active = 1 LIMIT 1');
+                $stmtC->execute([$pick]);
+                if (!$stmtC->fetch()) {
+                    throw new RuntimeException('所选分公司无效或已停用。');
+                }
+                $company_id = $pick;
             } else {
+                $cid_new = current_company_id();
                 if ($cid_new <= 0) {
-                    throw new RuntimeException('无法确定所属公司：请重新登录或（superadmin）在侧栏选择公司后再创建。');
+                    throw new RuntimeException('无法确定所属公司，请重新登录。');
                 }
                 $company_id = $cid_new;
             }
@@ -263,6 +274,15 @@ $users_primary_colspan = $users_primary_show_company_col ? 10 : 9;
 
 $role_opts_company = ['admin', 'member', 'agent'];
 $role_opts_platform = ['superadmin', 'admin', 'member', 'agent'];
+
+$companies_for_create = [];
+if ($actor_is_superadmin) {
+    try {
+        $companies_for_create = $pdo->query('SELECT id, code, name FROM companies WHERE is_active = 1 ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $companies_for_create = [];
+    }
+}
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -332,7 +352,10 @@ $role_opts_platform = ['superadmin', 'admin', 'member', 'agent'];
         <div class="card">
             <h3>创建账号</h3>
             <?php if ($actor_is_superadmin): ?>
-            <p class="agent-customer-hint" style="margin-top:-6px;">新建 admin / member / agent 将归入<strong>侧栏当前所选公司</strong>；superadmin 不归属任何公司。</p>
+            <p class="agent-customer-hint" style="margin-top:-6px;">新建 admin / member / agent 时请在下方选择<strong>所属分公司</strong>（与「分公司管理」里的代码对应）；创建平台 <strong>superadmin</strong> 时不选公司。分公司管理员登录请在登录页 Company 填该公司代码。</p>
+            <?php if (!$companies_for_create): ?>
+            <div class="alert alert-error" role="status">当前没有「启用」的分公司，请先到 <a href="admin_companies.php">分公司管理</a> 新增。</div>
+            <?php endif; ?>
             <?php else: ?>
             <p class="agent-customer-hint" style="margin-top:-6px;">新账号仅可创建在本公司；平台 superadmin 仅平台总管理员可见与创建。</p>
             <?php endif; ?>
@@ -365,6 +388,23 @@ $role_opts_platform = ['superadmin', 'admin', 'member', 'agent'];
                         <input class="form-control" name="display_name" placeholder="例如 小明">
                     </div>
                 </div>
+                <?php if ($actor_is_superadmin && $companies_for_create): ?>
+                <div class="form-group" id="create_company_wrap">
+                    <label>所属分公司 *</label>
+                    <select class="form-control" name="create_company_id" id="create_company_id" required>
+                        <?php
+                        $sess_cid = current_company_id();
+                        foreach ($companies_for_create as $co):
+                            $cid = (int)($co['id'] ?? 0);
+                            if ($cid <= 0) {
+                                continue;
+                            }
+                        ?>
+                        <option value="<?= $cid ?>" <?= $cid === $sess_cid ? 'selected' : '' ?>><?= htmlspecialchars(trim((string)($co['code'] ?? ''))) ?> — <?= htmlspecialchars(trim((string)($co['name'] ?? ''))) ?></option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+                <?php endif; ?>
                 <div class="agent-customer-box" id="agent_customer_box" style="display:none;">
                     <h4>选择该 Agent 的客户</h4>
                     <p class="agent-customer-hint">当角色为 agent 时，创建成功后会把所选客户的 Recommend 自动设置为该 Agent 的用户名（即归属到此 Agent）。</p>
@@ -561,13 +601,23 @@ $role_opts_platform = ['superadmin', 'admin', 'member', 'agent'];
     (function(){
         var roleEl = document.getElementById('create_role');
         var box = document.getElementById('agent_customer_box');
-        if (!roleEl || !box) return;
+        var companyWrap = document.getElementById('create_company_wrap');
+        var companySel = document.getElementById('create_company_id');
         function sync() {
-            var isAgent = (roleEl.value || '') === 'agent';
-            box.style.display = isAgent ? 'block' : 'none';
+            var v = roleEl ? (roleEl.value || '') : '';
+            if (box) {
+                box.style.display = v === 'agent' ? 'block' : 'none';
+            }
+            if (companyWrap && companySel) {
+                var hideCo = v === 'superadmin';
+                companyWrap.style.display = hideCo ? 'none' : '';
+                companySel.required = !hideCo;
+            }
         }
-        roleEl.addEventListener('change', sync);
-        sync();
+        if (roleEl) {
+            roleEl.addEventListener('change', sync);
+            sync();
+        }
     })();
     </script>
 </body>

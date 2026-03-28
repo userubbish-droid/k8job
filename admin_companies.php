@@ -151,7 +151,7 @@ try {
 
                 <div class="card">
                     <h3>新增分公司</h3>
-                    <p class="agent-customer-hint" style="margin-top:-6px;">登录页的 Company 填这里的<strong>代码</strong>；侧栏切换公司也来自此列表。新建后请在「用户管理」为该公司创建 admin 等账号。<strong>删除</strong>仅当该公司在业务表中无任何引用时可用（模拟空公司可直接删）。</p>
+                    <p class="agent-customer-hint" style="margin-top:-6px;">登录页的 Company 填这里的<strong>代码</strong>；侧栏切换公司也来自此列表。新建后请到「<a href="admin_users.php">用户管理</a>」创建账号，在表单里选择<strong>所属分公司</strong>、角色选 <strong>admin</strong>。<strong>删除</strong>仅当该公司在业务表中无任何引用时可用（模拟空公司可直接删）。</p>
                     <form method="post" class="filters-bar filters-bar-flow" style="margin-bottom:0;">
                         <input type="hidden" name="action" value="create">
                         <div class="filter-group">
