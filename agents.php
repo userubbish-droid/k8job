@@ -248,6 +248,23 @@ try {
             font-variant-numeric: tabular-nums;
         }
         a.agent-winloss-link:hover { text-decoration: underline; }
+        /* 压过 style.css .data-table a { color: var(--primary) }，负数保持红色 */
+        .agent-self-table .data-table a.agent-winloss-link.agent-winloss-loss { color: var(--danger); }
+        .agent-self-table .data-table a.agent-winloss-link.agent-winloss-win { color: #2563eb; }
+        .agent-self-table .data-table a.agent-winloss-link.agent-winloss-even { color: #64748b; }
+        a.agent-summary-customers-link {
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        a.agent-summary-customers-link:hover .agent-summary-name { color: var(--primary); text-decoration: underline; }
+        .agent-view-customers-hint {
+            font-size: 12px;
+            font-weight: 600;
+            color: #2563eb;
+            margin-top: 4px;
+        }
+        a.agent-summary-customers-link:hover .agent-view-customers-hint { text-decoration: underline; }
         .agent-summary-name { font-weight: 700; color: #0f172a; font-size: 15px; }
         .agent-summary-code { font-size: 12px; color: var(--muted); margin-top: 2px; }
         .agent-commission-amt { font-weight: 700; font-variant-numeric: tabular-nums; color: #059669; }
@@ -272,6 +289,14 @@ try {
         .agent-self-table { max-width: 640px; }
         .agent-self-table th,
         .agent-self-table td { font-size: 15px; }
+        .agent-self-table .data-table tbody tr.agent-summary-row-neg,
+        .agent-self-table .data-table tbody tr.agent-summary-row-neg td {
+            background: var(--danger-soft) !important;
+        }
+        .agent-self-table .data-table tbody tr.agent-summary-row-neg:hover,
+        .agent-self-table .data-table tbody tr.agent-summary-row-neg:hover td {
+            background: #fee2e2 !important;
+        }
         .agent-period-pill {
             display: inline-flex;
             align-items: center;
@@ -448,16 +473,19 @@ try {
                                     'day_to' => $day_to,
                                 ]);
                             ?>
-                            <tr>
+                            <tr<?= ($is_agent_user && $winLoss < 0) ? ' class="agent-summary-row-neg"' : '' ?>>
                                 <?php if ($is_agent_user): ?>
                                 <td>
-                                    <div class="agent-summary-name"><?= htmlspecialchars($agent_row_display_name) ?></div>
-                                    <?php
-                                    $code_show = trim((string)$agent);
-                                    if ($code_show !== '' && strcasecmp($code_show, $agent_row_display_name) !== 0):
-                                    ?>
-                                    <div class="agent-summary-code"><?= htmlspecialchars($code_show) ?></div>
-                                    <?php endif; ?>
+                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-summary-customers-link" title="查看各顾客 Total Win(Lose)">
+                                        <div class="agent-summary-name"><?= htmlspecialchars($agent_row_display_name) ?></div>
+                                        <div class="agent-view-customers-hint">View customers</div>
+                                        <?php
+                                        $code_show = trim((string)$agent);
+                                        if ($code_show !== '' && strcasecmp($code_show, $agent_row_display_name) !== 0):
+                                        ?>
+                                        <div class="agent-summary-code"><?= htmlspecialchars($code_show) ?></div>
+                                        <?php endif; ?>
+                                    </a>
                                 </td>
                                 <td class="num">
                                     <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= htmlspecialchars($wl_class_agent) ?>" title="查看各顾客 Total Win(Lose)"><?= number_format($winLoss, 2) ?></a>
