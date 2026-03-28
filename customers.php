@@ -231,10 +231,18 @@ try {
             opacity: .66;
             filter: grayscale(18%);
         }
-        /* Win(Loss) = Total DP − Total WD（与 Agent 页一致）；正=红，负=蓝 */
+        /* Total Win(Lose) = DP − WD；负=红，正=蓝，平=灰 */
         .cust-pnl-cust-wins { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-company-wins { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row,
+        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row td {
+            background: var(--danger-soft) !important;
+        }
+        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row:hover,
+        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row:hover td {
+            background: #fee2e2 !important;
+        }
     </style>
 </head>
 <body>
@@ -255,21 +263,6 @@ try {
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
-        <?php if ($filter_recommend !== ''): ?>
-        <div class="alert" style="background:var(--bg); border:1px solid var(--border);">
-            Filtered by Agent: <strong><?= htmlspecialchars($filter_recommend) ?></strong>
-            <?php if ($agent_pnl_by_range): ?>
-            <span style="margin-left:10px;">统计区间：<strong><?= htmlspecialchars($pnl_day_from) ?></strong> ~ <strong><?= htmlspecialchars($pnl_day_to) ?></strong></span>
-            <a href="customers.php?<?= http_build_query(['recommend' => $filter_recommend]) ?>" style="margin-left:10px;">全部期间</a>
-            <?php endif; ?>
-            <?php if (($_SESSION['user_role'] ?? '') !== 'agent'): ?>
-            <a href="customers.php" style="margin-left:10px;">Clear filter</a>
-            <?php endif; ?>
-            <?php if (has_permission('agent')): ?>
-            <a href="agents.php<?= $agent_pnl_by_range ? '?' . http_build_query(['day_from' => $pnl_day_from, 'day_to' => $pnl_day_to]) : '' ?>" style="margin-left:10px;">返回 Agent</a>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
 
         <div class="summary">
             <div class="summary-item"><strong>T1. Customer</strong><span class="num"><?= $summary['total'] ?></span></div>
@@ -278,10 +271,9 @@ try {
         </div>
 
         <div class="card" style="overflow-x: auto;">
-            <h3>列表</h3>
             <?php if ($agent_view): ?>
-            <p style="color:var(--muted); margin-bottom:10px;">仅显示代号与 Total Win(Lose)（区间内为入款减出款合计），不显示进出分明细与客户资料。</p>
-            <table class="data-table">
+            <h3>list player</h3>
+            <table class="data-table cust-agent-pnl-table">
                 <thead>
                     <tr>
                         <th>CODE</th>
@@ -302,18 +294,19 @@ try {
                     }
                     $win_loss = $all_dp - $all_wd;
                     $agent_total_win_loss += $win_loss;
-                    $wl_cls = $win_loss > 0 ? 'cust-pnl-cust-wins' : ($win_loss < 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
+                    $wl_cls = $win_loss < 0 ? 'cust-pnl-cust-wins' : ($win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                 ?>
-                    <tr>
+                    <tr class="<?= $win_loss < 0 ? 'cust-agent-pnl-neg-row' : '' ?>">
                         <td><?= htmlspecialchars($code) ?></td>
                         <td class="num <?= $wl_cls ?>"><?= number_format($win_loss, 2) ?></td>
                     </tr>
                 <?php endforeach; ?>
                 <?php if ($rows): ?>
                     <?php
-                    $tot_cls = $agent_total_win_loss > 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss < 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
+                    $tot_cls = $agent_total_win_loss < 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
+                    $tot_row_bg = $agent_total_win_loss < 0 ? 'var(--danger-soft)' : ($agent_total_win_loss > 0 ? 'var(--primary-soft)' : 'var(--bg)');
                     ?>
-                    <tr style="font-weight:bold; background:var(--bg);">
+                    <tr class="<?= $agent_total_win_loss < 0 ? 'cust-agent-pnl-neg-row' : '' ?>" style="font-weight:bold; background:<?= htmlspecialchars($tot_row_bg) ?>;">
                         <td>Total</td>
                         <td class="num <?= $tot_cls ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
                     </tr>
@@ -324,6 +317,7 @@ try {
                 </tbody>
             </table>
             <?php else: ?>
+            <h3>列表</h3>
             <?php if ($is_admin): ?>
             <div class="column-toggle-bar">
                 <button type="button" class="btn btn-sm column-toggle-btn is-off" id="toggle-created-by" aria-pressed="false">填写人</button>
