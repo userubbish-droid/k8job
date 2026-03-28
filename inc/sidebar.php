@@ -219,13 +219,13 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
 <div class="sidebar-overlay" id="sidebar-overlay" aria-hidden="true"></div>
 <style>
 /* 确保所有页面都有统一弹窗样式（即使未引入 style.css） */
-.app-modal-mask { position: fixed; inset: 0; background: rgba(8, 16, 40, 0.48); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
+.app-modal-mask { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.45); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px); display: none; align-items: center; justify-content: center; z-index: 2000; padding: 20px; }
 .app-modal-mask.show { display: flex; }
-.app-modal { width: min(92vw, 460px); background: #fff; border-radius: 18px; border: 1px solid #dbeafe; box-shadow: 0 22px 60px rgba(37,99,235,0.28); transform: scale(.92) translateY(10px); opacity: 0; transition: transform .2s ease, opacity .2s ease; overflow: hidden; }
+.app-modal { width: min(92vw, 460px); background: #fff; border-radius: 16px; border: 1px solid rgba(199, 210, 254, 0.65); box-shadow: 0 24px 50px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(255, 255, 255, 0.8) inset; transform: scale(.94) translateY(12px); opacity: 0; transition: transform .28s cubic-bezier(0.33, 1, 0.68, 1), opacity .28s ease; overflow: hidden; }
 .app-modal-mask.show .app-modal { transform: scale(1) translateY(0); opacity: 1; }
-.app-modal-head { padding: 14px 18px; font-weight: 700; color: #1d4ed8; background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%); border-bottom: 1px solid #bfdbfe; }
-.app-modal-body { padding: 20px 18px 12px; color: #0f172a; font-size: 15px; line-height: 1.6; }
-.app-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 0 18px 16px; }
+.app-modal-head { padding: 16px 20px; font-weight: 700; color: #2e3dad; background: linear-gradient(180deg, #eef2ff 0%, #e0e7ff 100%); border-bottom: 1px solid rgba(165, 180, 252, 0.55); }
+.app-modal-body { padding: 20px 20px 14px; color: #0f172a; font-size: 15px; line-height: 1.65; }
+.app-modal-foot { display: flex; justify-content: flex-end; gap: 10px; padding: 0 20px 18px; }
 </style>
 <div class="app-modal-mask" id="app-modal-mask" aria-hidden="true">
     <div class="app-modal" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">

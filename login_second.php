@@ -80,31 +80,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <style>
         * { box-sizing: border-box; }
         body {
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
             margin: 0;
             min-height: 100vh;
-            background: linear-gradient(135deg, #e8f4fc 0%, #f0f7ff 50%, #fff 100%);
+            background:
+                radial-gradient(900px 480px at 0% 0%, rgba(99, 102, 241, 0.12) 0%, transparent 55%),
+                linear-gradient(165deg, #f0f2fa 0%, #f8fafc 100%);
             display: flex;
             align-items: center;
             justify-content: center;
             padding: 20px;
+            color: #334155;
         }
         .card {
-            background: #fff;
-            border-radius: 16px;
-            box-shadow: 0 20px 60px rgba(0, 120, 255, 0.15);
+            background: rgba(255, 255, 255, 0.92);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border-radius: 18px;
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            box-shadow: 0 20px 50px rgba(15, 23, 42, 0.1), 0 0 0 1px rgba(255, 255, 255, 0.75) inset;
             padding: 32px 36px;
             width: 100%;
             max-width: 380px;
         }
         h1 { font-size: 1.15rem; margin: 0 0 20px; color: #0f172a; }
         .err {
-            background: #fef2f2;
-            color: #dc2626;
+            background: #fff1f2;
+            color: #9f1239;
             padding: 10px 12px;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 13px;
             margin-bottom: 16px;
+            border: 1px solid rgba(244, 63, 94, 0.25);
         }
         label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px; }
         input[type="password"] {
@@ -114,30 +121,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             border-radius: 10px;
             font-size: 15px;
         }
-        input:focus { outline: none; border-color: #3b82f6; }
+        input:focus { outline: none; border-color: rgba(77, 100, 248, 0.65); box-shadow: 0 0 0 3px rgba(77, 100, 248, 0.2); }
         .btn {
             width: 100%;
             margin-top: 18px;
             padding: 14px;
-            background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+            background: linear-gradient(180deg, #6378fa 0%, #4d64f8 48%, #2e3dad 100%);
             color: #fff;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
+            box-shadow: 0 6px 20px rgba(77, 100, 248, 0.35);
+            transition: filter 0.2s, box-shadow 0.2s;
         }
-        .btn:hover { opacity: 0.95; }
-        .back { display: inline-block; margin-top: 16px; font-size: 13px; color: #3b82f6; text-decoration: none; }
+        .btn:hover { filter: brightness(1.05); box-shadow: 0 8px 26px rgba(77, 100, 248, 0.4); }
+        .back { display: inline-block; margin-top: 16px; font-size: 13px; color: #4d64f8; font-weight: 600; text-decoration: none; }
         .back:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <?php $login2_lang_to = rawurlencode('login_second.php'); ?>
     <div style="position:fixed; top:14px; right:16px; z-index:2; font-size:13px; font-weight:600;">
-        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none;">Eng</a>
+        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#4d64f8; text-decoration:none; font-weight:600;">Eng</a>
         <span style="color:#94a3b8; margin:0 8px;">|</span>
-        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none;">中文</a>
+        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#4d64f8; text-decoration:none; font-weight:600;">中文</a>
     </div>
     <div class="card">
         <h1><?= htmlspecialchars(__('login2_title'), ENT_QUOTES, 'UTF-8') ?></h1>
