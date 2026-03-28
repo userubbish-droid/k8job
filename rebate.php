@@ -43,6 +43,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     foreach ($given as $code) {
                         if ($code === '') continue;
                         $balance = $balances[$code] ?? 0;
+                        if ($balance < 0) {
+                            continue; // Win/Lose 为负不必给，忽略误勾或篡改
+                        }
                         $pct_val = isset($pct[$code]) ? (float)str_replace(',', '.', trim($pct[$code])) : 0;
                         $rebate_amount = $pct_val > 0 ? round($balance * $pct_val / 100, 2) : 0;
                         $stmt->execute([$company_id, $post_day_to, $code, $uid, $pct_val ?: null, $rebate_amount]);
@@ -141,6 +144,9 @@ $rows_for_sum = $all_rows; // 合计用全部客户
     .rebate-given-label { font-size: 12px; color: var(--success); font-weight: 600; margin-left: 6px; }
     .rebate-code-cell { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
     .rebate-code-cell input[type=checkbox] { margin: 0; accent-color: var(--primary); }
+    .rebate-code-cell input[type=checkbox]:disabled { cursor: not-allowed; opacity: 0.55; }
+    .rebate-winlose-neg { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
+    .rebate-na-muted { color: var(--muted); font-size: 13px; font-weight: 600; }
     </style>
 </head>
 <body>
@@ -211,11 +217,18 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             $out = (float)($r['total_out'] ?? 0);
                             $balance = $in - $out;
                             $is_given = in_array($code, $given_codes, true);
+                            $no_rebate = $balance < 0;
                         ?>
-                        <tr data-balance="<?= $balance ?>" data-row="<?= $i ?>" data-code="<?= htmlspecialchars($code) ?>" class="<?= $is_given ? 'rebate-given-row' : '' ?>">
+                        <tr data-balance="<?= htmlspecialchars((string)$balance) ?>" data-row="<?= $i ?>" data-code="<?= htmlspecialchars($code) ?>" data-no-rebate="<?= $no_rebate ? '1' : '0' ?>" class="<?= $is_given ? 'rebate-given-row' : '' ?>">
                             <td class="rebate-code-cell">
                                 <?php if ($is_given): ?>
                                     <?= htmlspecialchars($code) ?>
+                                <?php elseif ($no_rebate): ?>
+                                    <label style="display:inline-flex;align-items:center;gap:6px;cursor:not-allowed;opacity:.9;">
+                                        <input type="checkbox" name="given[]" value="<?= htmlspecialchars($code) ?>" disabled title="Win/Lose 为负，不必给返点">
+                                        <?= htmlspecialchars($code) ?>
+                                    </label>
+                                    <span class="rebate-na-muted">不必给</span>
                                 <?php else: ?>
                                     <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
                                         <input type="checkbox" name="given[]" value="<?= htmlspecialchars($code) ?>">
@@ -225,9 +238,11 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             </td>
                             <td class="num"><?= number_format($in, 2) ?></td>
                             <td class="num"><?= number_format($out, 2) ?></td>
-                            <td class="num"><?= number_format($balance, 2) ?></td>
+                            <td class="num <?= $no_rebate ? 'rebate-winlose-neg' : '' ?>"><?= number_format($balance, 2) ?></td>
                             <td class="num">
-                                <?php if (!$is_given): ?>
+                                <?php if (!$is_given && $no_rebate): ?>
+                                <span class="rebate-na-muted">—</span>
+                                <?php elseif (!$is_given): ?>
                                 <input type="text" class="form-control percent js-percent" name="pct[<?= htmlspecialchars($code) ?>]" placeholder="%" inputmode="decimal" data-row="<?= $i ?>">
                                 <?php else:
                                     $info = $given_info[$code] ?? [];
@@ -238,19 +253,27 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                                 <?php endif; ?>
                             </td>
                             <td class="num total-amount js-total" data-row="<?= $i ?>">
-                                <?php if ($is_given):
-                                    $info = $given_info[$code] ?? [];
-                                    $amt_val = null;
-                                    if (isset($info['amount']) && $info['amount'] !== null && $info['amount'] !== '') {
-                                        $amt_val = (float)$info['amount'];
+                                <?php
+                                if ($is_given) {
+                                    if ($no_rebate) {
+                                        echo '<span class="rebate-na-muted">不必给</span>';
+                                    } else {
+                                        $info = $given_info[$code] ?? [];
+                                        $amt_val = null;
+                                        if (isset($info['amount']) && $info['amount'] !== null && $info['amount'] !== '') {
+                                            $amt_val = (float)$info['amount'];
+                                        }
+                                        if ($amt_val === null && isset($info['pct']) && $info['pct'] !== null && $info['pct'] !== '') {
+                                            $amt_val = round($balance * (float)$info['pct'] / 100, 2);
+                                        }
+                                        echo $amt_val !== null ? number_format($amt_val, 2) : '—';
                                     }
-                                    if ($amt_val === null && isset($info['pct']) && $info['pct'] !== null && $info['pct'] !== '') {
-                                        $amt_val = round($balance * (float)$info['pct'] / 100, 2);
-                                    }
-                                    $amt_display = $amt_val !== null ? number_format($amt_val, 2) : '—';
+                                } elseif ($no_rebate) {
+                                    echo '<span class="rebate-na-muted">不必给</span>';
+                                } else {
+                                    echo '—';
+                                }
                                 ?>
-                                <?= $amt_display ?>
-                                <?php else: ?>—<?php endif; ?>
                             </td>
                             <?php if ($is_admin && $is_given): ?>
                             <td class="num">
@@ -308,10 +331,14 @@ $rows_for_sum = $all_rows; // 合计用全部客户
         if (!table) return;
         function parseNum(v) { var n = parseFloat(String(v).replace(/[,%\s]/g, '')); return isNaN(n) ? 0 : n; }
         function updateRow(tr) {
-            var balance = parseNum(tr.getAttribute('data-balance'));
             var totalCell = tr.querySelector('.js-total');
-            var pctInput = tr.querySelector('.js-percent');
             if (!totalCell) return;
+            if (tr.getAttribute('data-no-rebate') === '1') {
+                totalCell.innerHTML = '<span class="rebate-na-muted">不必给</span>';
+                return;
+            }
+            var balance = parseNum(tr.getAttribute('data-balance'));
+            var pctInput = tr.querySelector('.js-percent');
             if (!pctInput) { totalCell.textContent = '—'; return; }
             var pct = parseNum(pctInput.value);
             var amount = pct === 0 ? 0 : (balance * pct / 100);
@@ -326,7 +353,10 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                 sumOut += parseNum(cells[2].textContent);
                 sumBalance += parseNum(cells[3].textContent);
                 var totalCell = tr.querySelector('.js-total');
-                if (totalCell && totalCell.textContent !== '—') sumRebate += parseNum(totalCell.textContent);
+                if (totalCell) {
+                    var t = (totalCell.textContent || '').trim();
+                    if (t !== '—' && t.indexOf('不必给') === -1) sumRebate += parseNum(totalCell.textContent);
+                }
             });
             var foot = table.querySelector('tfoot');
             if (foot) {
@@ -335,6 +365,8 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                 fn('.js-sum-out', sumOut);
                 fn('.js-sum-balance', sumBalance);
                 fn('.js-sum-rebate', sumRebate);
+                var balFoot = foot.querySelector('.js-sum-balance');
+                if (balFoot) balFoot.classList.toggle('rebate-winlose-neg', sumBalance < 0);
             }
         }
         table.querySelectorAll('.js-percent').forEach(function(inp){

@@ -103,7 +103,7 @@ function get_agent_win_loss(PDO $pdo, string $agent, string $day_from, string $d
             FROM customers c
             LEFT JOIN (
                 SELECT TRIM(code) AS code,
-                       SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
+                       SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) AS pnl
             FROM transactions
             WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
                 GROUP BY TRIM(code)
@@ -136,8 +136,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
             $post_day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_from'] ?? ''))) ? substr(trim((string)$_POST['day_from']), 0, 10) : $day_from;
             $post_day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_to'] ?? ''))) ? substr(trim((string)$_POST['day_to']), 0, 10) : $day_to;
             $current_win_loss = get_agent_win_loss($pdo, $agent, $post_day_from, $post_day_to, $company_id);
-            if ($current_win_loss >= 0) {
-                // 仅负数可给：正数或 0 一律不可标记已给
+            if ($current_win_loss <= 0) {
+                // 仅正 Win(Loss) 可给：0 或负数一律不可标记已给
                 $is_paid = 0;
             }
             ensure_agent_rebate_table($pdo);
@@ -176,14 +176,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
 }
 
 try {
-    // 本公司输赢 = 该 Agent 下所有顾客的 (withdraw - deposit)；正=公司赢，负=公司输
+    // Win(Loss) = 该 Agent 下所有顾客的 (deposit - withdraw)；与顾客列表一致；正=入款大于出款（可作返水基数）
     $sql = "
         SELECT TRIM(c.recommend) AS agent, COUNT(*) AS cnt,
                COALESCE(SUM(sub.pnl), 0) AS win_loss
         FROM customers c
         LEFT JOIN (
             SELECT TRIM(code) AS code,
-                   SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) AS pnl
+                   SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END) - SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END) AS pnl
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ?
             GROUP BY TRIM(code)
         ) sub ON TRIM(c.code) = sub.code
@@ -242,6 +242,12 @@ try {
         .agent-winloss-win { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
         .agent-winloss-loss { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
         .agent-winloss-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
+        a.agent-winloss-link {
+            text-decoration: none;
+            font-weight: 700;
+            font-variant-numeric: tabular-nums;
+        }
+        a.agent-winloss-link:hover { text-decoration: underline; }
         .agent-summary-name { font-weight: 700; color: #0f172a; font-size: 15px; }
         .agent-summary-code { font-size: 12px; color: var(--muted); margin-top: 2px; }
         .agent-commission-amt { font-weight: 700; font-variant-numeric: tabular-nums; color: #059669; }
@@ -268,7 +274,7 @@ try {
         .agent-self-table td { font-size: 15px; }
         .agent-period-pill {
             display: inline-flex;
-            align-items: flex-start;
+            align-items: center;
             gap: 12px;
             margin-top: 14px;
             padding: 12px 18px 12px 14px;
@@ -283,7 +289,6 @@ try {
             width: 22px;
             height: 22px;
             color: #2563eb;
-            margin-top: 1px;
         }
         .agent-period-pill-body { min-width: 0; }
         .agent-period-pill-dates {
@@ -293,14 +298,6 @@ try {
             font-variant-numeric: tabular-nums;
             letter-spacing: 0.02em;
             line-height: 1.35;
-        }
-        .agent-period-pill-sub {
-            font-size: 12px;
-            font-weight: 600;
-            color: #64748b;
-            margin-top: 4px;
-            letter-spacing: 0.04em;
-            text-transform: uppercase;
         }
     </style>
 </head>
@@ -322,7 +319,6 @@ try {
                         </svg>
                         <div class="agent-period-pill-body">
                             <div class="agent-period-pill-dates"><?= htmlspecialchars($agent_df_show) ?> - <?= htmlspecialchars($agent_dt_show) ?></div>
-                            <div class="agent-period-pill-sub">Win(Loss) &amp; Commission</div>
                         </div>
                     </div>
                     <?php else: ?>
@@ -422,19 +418,19 @@ try {
                                 $setting = $agent_rebate_settings_map[strtolower(trim((string)$agent))] ?? ['pct' => 0, 'rebate_enabled' => true, 'is_paid' => false, 'paid_at' => ''];
                                 $pct = (float)($setting['pct'] ?? 0);
                                 $rebate_enabled = !empty($setting['rebate_enabled']);
-                                $rebate_base = $winLoss < 0 ? abs($winLoss) : 0; // 仅负数时可给（按绝对值计算）
+                                $rebate_base = $winLoss > 0 ? $winLoss : 0; // 仅正数时可给（与 deposit-withdraw 约定一致）
                                 if (!$rebate_enabled) $rebate_base = 0;
                                 $rebate_amount = round($rebate_base * $pct / 100, 2);
                                 $is_paid = !empty($setting['is_paid']);
                                 $paid_at = trim((string)($setting['paid_at'] ?? ''));
                                 $recommend_param = htmlspecialchars(urlencode($agent));
-                                $can_pay = $winLoss < 0 && $rebate_enabled;
+                                $can_pay = $winLoss > 0 && $rebate_enabled;
                                 if (!$can_pay) $is_paid = false;
                                 $paid_disable_title = '';
                                 if (!$rebate_enabled) {
                                     $paid_disable_title = '已暂停反水，无法标记已给';
                                 } elseif (!$can_pay) {
-                                    $paid_disable_title = 'Win/Loss 非负时不能标记已给';
+                                    $paid_disable_title = 'Win/Loss 非正时不能标记已给';
                                 }
                                 $wl_class_agent = 'agent-winloss-even';
                                 if ($winLoss < 0) {
@@ -446,6 +442,11 @@ try {
                                 if ($agent_row_display_name === '') {
                                     $agent_row_display_name = trim((string)$agent) !== '' ? trim((string)$agent) : (string)($agent_code ?: 'Agent');
                                 }
+                                $cust_detail_href = 'customers.php?' . http_build_query([
+                                    'recommend' => trim((string)$agent),
+                                    'day_from' => $day_from,
+                                    'day_to' => $day_to,
+                                ]);
                             ?>
                             <tr>
                                 <?php if ($is_agent_user): ?>
@@ -458,12 +459,16 @@ try {
                                     <div class="agent-summary-code"><?= htmlspecialchars($code_show) ?></div>
                                     <?php endif; ?>
                                 </td>
-                                <td class="num <?= htmlspecialchars($wl_class_agent) ?>"><?= number_format($winLoss, 2) ?></td>
+                                <td class="num">
+                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= htmlspecialchars($wl_class_agent) ?>" title="查看各顾客 Total Win(Lose)"><?= number_format($winLoss, 2) ?></a>
+                                </td>
                                 <td class="num <?= $rebate_amount > 0 ? 'agent-commission-amt' : 'agent-commission-zero' ?>"><?= number_format($rebate_amount, 2) ?></td>
                                 <?php else: ?>
                                 <td><?= htmlspecialchars($agent) ?></td>
                                 <td class="num"><?= $cnt ?></td>
-                                <td class="num <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>"><?= number_format($winLoss, 2) ?></td>
+                                <td class="num">
+                                    <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-winloss-link <?= $winLoss >= 0 ? 'agent-winloss-pos' : 'agent-winloss-neg' ?>" title="查看各顾客 Total Win(Lose)"><?= number_format($winLoss, 2) ?></a>
+                                </td>
                                 <td class="num">
                                     <form method="post" class="js-agent-rebate-form" style="display:inline-flex; align-items:center; gap:6px;">
                                         <input type="hidden" name="action" value="save_rebate_pct">
@@ -550,7 +555,7 @@ try {
                 var pct = toNum(pctInput.value);
                 if (pct < 0) pct = 0;
                 if (pct > 100) pct = 100;
-                var base = winLoss < 0 ? Math.abs(winLoss) : 0;
+                var base = winLoss > 0 ? winLoss : 0;
                 var amount = base * pct / 100;
                 amountCell.textContent = amount.toFixed(2);
             }

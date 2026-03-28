@@ -31,6 +31,25 @@ if (!empty($_GET['pending_customer'])) {
 
 // 从 Agent 页进入（带 recommend 筛选）时不允许 POST 操作，且只显示代号+输赢，不显示客户资料
 $agent_view = $filter_recommend !== '';
+// 与 Agent 页同一区间：带 day_from/day_to 时按区间内流水计算 Total Win(Lose)
+$pnl_day_from = '';
+$pnl_day_to = '';
+if ($agent_view) {
+    $raw_df = isset($_GET['day_from']) ? trim((string)$_GET['day_from']) : '';
+    $raw_dt = isset($_GET['day_to']) ? trim((string)$_GET['day_to']) : '';
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw_df)) {
+        $pnl_day_from = $raw_df;
+    }
+    if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $raw_dt)) {
+        $pnl_day_to = $raw_dt;
+    }
+    if ($pnl_day_from !== '' && $pnl_day_to !== '' && $pnl_day_from > $pnl_day_to) {
+        $tmp = $pnl_day_from;
+        $pnl_day_from = $pnl_day_to;
+        $pnl_day_to = $tmp;
+    }
+}
+$agent_pnl_by_range = ($agent_view && $pnl_day_from !== '' && $pnl_day_to !== '');
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$agent_view) {
     $action = $_POST['action'] ?? '';
@@ -68,6 +87,8 @@ $all_free_withdraw_by_code = [];
 $all_bonus_by_code = [];
 $month_deposit_by_code = [];
 $month_withdraw_by_code = [];
+$agent_range_dp = [];
+$agent_range_wd = [];
 try {
     $where = [];
     $params = [];
@@ -155,6 +176,19 @@ try {
         $month_deposit_by_code[$r['code']] = (float)$r['md'];
         $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
     }
+    if ($agent_pnl_by_range) {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+            AND day >= ? AND day <= ?
+            GROUP BY code");
+        $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
+        foreach ($stmt->fetchAll() as $r) {
+            $agent_range_dp[$r['code']] = (float)$r['ad'];
+            $agent_range_wd[$r['code']] = (float)$r['aw'];
+        }
+    }
     } catch (Throwable $e) {
     $rows = [];
     $all_deposit_by_code = [];
@@ -164,6 +198,8 @@ try {
     $all_free_withdraw_by_code = [];
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
+    $agent_range_dp = [];
+    $agent_range_wd = [];
     $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。') . ' (' . $e->getMessage() . ')';
 }
 ?>
@@ -195,7 +231,7 @@ try {
             opacity: .66;
             filter: grayscale(18%);
         }
-        /* Win(Loss) = Total WD − Total DP（公司视角）：正=顾客净赢/公司输(红)，负=顾客净输/公司赚(蓝) */
+        /* Win(Loss) = Total DP − Total WD（与 Agent 页一致）；正=红，负=蓝 */
         .cust-pnl-cust-wins { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-company-wins { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -222,7 +258,16 @@ try {
         <?php if ($filter_recommend !== ''): ?>
         <div class="alert" style="background:var(--bg); border:1px solid var(--border);">
             Filtered by Agent: <strong><?= htmlspecialchars($filter_recommend) ?></strong>
+            <?php if ($agent_pnl_by_range): ?>
+            <span style="margin-left:10px;">统计区间：<strong><?= htmlspecialchars($pnl_day_from) ?></strong> ~ <strong><?= htmlspecialchars($pnl_day_to) ?></strong></span>
+            <a href="customers.php?<?= http_build_query(['recommend' => $filter_recommend]) ?>" style="margin-left:10px;">全部期间</a>
+            <?php endif; ?>
+            <?php if (($_SESSION['user_role'] ?? '') !== 'agent'): ?>
             <a href="customers.php" style="margin-left:10px;">Clear filter</a>
+            <?php endif; ?>
+            <?php if (has_permission('agent')): ?>
+            <a href="agents.php<?= $agent_pnl_by_range ? '?' . http_build_query(['day_from' => $pnl_day_from, 'day_to' => $pnl_day_to]) : '' ?>" style="margin-left:10px;">返回 Agent</a>
+            <?php endif; ?>
         </div>
         <?php endif; ?>
 
@@ -235,12 +280,12 @@ try {
         <div class="card" style="overflow-x: auto;">
             <h3>列表</h3>
             <?php if ($agent_view): ?>
-            <p style="color:var(--muted); margin-bottom:10px;">仅显示代号与本公司输赢，不显示客户资料。</p>
+            <p style="color:var(--muted); margin-bottom:10px;">仅显示代号与 Total Win(Lose)（区间内为入款减出款合计），不显示进出分明细与客户资料。</p>
             <table class="data-table">
                 <thead>
                     <tr>
                         <th>CODE</th>
-                        <th class="num">Win(Loss)</th>
+                        <th class="num">Total Win(Lose)</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -248,9 +293,14 @@ try {
                     $agent_total_win_loss = 0;
                     foreach ($rows as $r):
                     $code = $r['code'];
-                    $all_dp = $all_deposit_by_code[$code] ?? 0;
-                    $all_wd = $all_withdraw_by_code[$code] ?? 0;
-                    $win_loss = $all_wd - $all_dp;
+                    if ($agent_pnl_by_range) {
+                        $all_dp = $agent_range_dp[$code] ?? 0;
+                        $all_wd = $agent_range_wd[$code] ?? 0;
+                    } else {
+                        $all_dp = $all_deposit_by_code[$code] ?? 0;
+                        $all_wd = $all_withdraw_by_code[$code] ?? 0;
+                    }
+                    $win_loss = $all_dp - $all_wd;
                     $agent_total_win_loss += $win_loss;
                     $wl_cls = $win_loss > 0 ? 'cust-pnl-cust-wins' : ($win_loss < 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                 ?>
