@@ -139,6 +139,8 @@ $rows_for_sum = $all_rows; // 合计用全部客户
     .rebate-table input.percent { width: 72px; text-align: right; padding: 6px 8px; }
     .rebate-table .total-amount { font-weight: 600; color: var(--primary); }
     .rebate-total-row { font-weight: 700; background: var(--primary-soft); }
+    /* Win/Lose 为负且未「已给」：整行浅红底，与合计行整行浅蓝同理 */
+    .rebate-table tr.rebate-no-rebate-row { font-weight: 600; background: var(--danger-soft); }
     .rebate-table tr.rebate-given-row { background: var(--success-soft); }
     .rebate-table tr.rebate-given-row td { color: #0f5132; }
     .rebate-given-label { font-size: 12px; color: var(--success); font-weight: 600; margin-left: 6px; }
@@ -219,7 +221,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             $is_given = in_array($code, $given_codes, true);
                             $no_rebate = $balance < 0;
                         ?>
-                        <tr data-balance="<?= htmlspecialchars((string)$balance) ?>" data-row="<?= $i ?>" data-code="<?= htmlspecialchars($code) ?>" data-no-rebate="<?= $no_rebate ? '1' : '0' ?>" class="<?= $is_given ? 'rebate-given-row' : '' ?>">
+                        <tr data-balance="<?= htmlspecialchars((string)$balance) ?>" data-row="<?= $i ?>" data-code="<?= htmlspecialchars($code) ?>" data-no-rebate="<?= $no_rebate ? '1' : '0' ?>" class="<?= $is_given ? 'rebate-given-row' : '' ?><?= ($no_rebate && !$is_given) ? ' rebate-no-rebate-row' : '' ?>">
                             <td class="rebate-code-cell">
                                 <?php if ($is_given): ?>
                                     <?= htmlspecialchars($code) ?>
