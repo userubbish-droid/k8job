@@ -15,6 +15,7 @@ function ensure_users_login_meta(PDO $pdo): void {
     try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"); } catch (Throwable $e) {}
 }
 ensure_users_login_meta($pdo);
+ensure_users_second_password_hash($pdo);
 
 $msg = '';
 $err = '';
@@ -54,10 +55,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
     }
+    if ($err === '' && user_actor_can_set_second_password($pdo, $id)) {
+        $np2 = (string)($_POST['new_second_password'] ?? '');
+        $cf2 = (string)($_POST['new_second_password_confirm'] ?? '');
+        if ($np2 !== '' || $cf2 !== '') {
+            if (mb_strlen($np2, 'UTF-8') < 4) {
+                $err = '二级密码至少 4 个字符。';
+                $msg = '';
+            } elseif ($np2 !== $cf2) {
+                $err = '二级密码两次输入不一致。';
+                $msg = '';
+            } else {
+                try {
+                    $h2 = password_hash($np2, PASSWORD_DEFAULT);
+                    $pdo->prepare('UPDATE users SET second_password_hash = ? WHERE id = ?')->execute([$h2, $id]);
+                    $msg = ($msg !== '' ? $msg . ' ' : '') . '已更新二级密码。';
+                } catch (Throwable $e) {
+                    $err = '二级密码保存失败：' . $e->getMessage();
+                    $msg = '';
+                }
+            }
+        }
+    }
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT id, username, role, display_name, avatar_url, is_active, last_login_at, last_login_ip, created_at FROM users WHERE id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, username, role, display_name, avatar_url, is_active, last_login_at, last_login_ip, created_at, second_password_hash FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$id]);
     $u = $stmt->fetch();
 } catch (Throwable $e) {
@@ -72,6 +95,8 @@ if (!user_is_manageable_by_current_actor($pdo, $id)) {
     echo '无权限编辑该账号（本公司账号与平台 superadmin 已分开管理）。';
     exit;
 }
+$can_set_second = user_actor_can_set_second_password($pdo, $id);
+$second_is_set = trim((string)($u['second_password_hash'] ?? '')) !== '';
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -140,6 +165,23 @@ if (!user_is_manageable_by_current_actor($pdo, $id)) {
                                 <input class="form-control" value="<?= htmlspecialchars((string)($u['last_login_at'] ?? '')) ?>" disabled>
                             </div>
                         </div>
+
+                        <?php if ($can_set_second): ?>
+                        <div class="form-group" style="margin-top:18px; padding-top:16px; border-top:1px solid var(--border);">
+                            <label>二级密码（Admin / Member 登录）</label>
+                            <p class="form-hint" style="margin-top:0;">仅 Boss 与平台 big boss 可设置。登录时在主密码之后必须再输入一次。当前状态：<strong><?= $second_is_set ? '已设置' : '未设置（无法完成登录）' ?></strong></p>
+                            <div class="form-row-2">
+                                <div class="form-group">
+                                    <label>新二级密码</label>
+                                    <input class="form-control" type="password" name="new_second_password" autocomplete="new-password" placeholder="至少 4 位；留空则不修改">
+                                </div>
+                                <div class="form-group">
+                                    <label>确认二级密码</label>
+                                    <input class="form-control" type="password" name="new_second_password_confirm" autocomplete="new-password" placeholder="再次输入">
+                                </div>
+                            </div>
+                        </div>
+                        <?php endif; ?>
 
                         <div style="display:flex; gap:10px; flex-wrap:wrap; margin-top: 12px;">
                             <button type="submit" class="btn btn-primary">保存</button>

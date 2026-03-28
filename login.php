@@ -3,30 +3,10 @@ require 'config.php';
 require 'auth.php';
 session_start();
 
-function choose_landing_url_for_role(string $role): string {
-    $role = strtolower(trim($role));
-    if ($role === 'agent') return 'agents.php';
-    if ($role === 'superadmin') return 'dashboard.php';
-    if ($role === 'boss') return 'dashboard.php';
-    if ($role === 'admin') return 'dashboard.php';
-
-    // member：不强制 Dashboard；按权限优先跳到可用页面
-    $candidates = [
-        'transaction_create' => 'transaction_create.php',
-        'expense_statement'  => 'expense.php',
-        'kiosk_expense_view' => 'kiosk_expense.php',
-        'statement_balance'  => 'balance_summary.php',
-        'statement_report'   => 'report.php',
-        'kiosk_statement'    => 'kiosk_statement.php',
-        'transaction_list'   => 'transaction_list.php',
-        'customers'          => 'customers.php',
-        'product_library'    => 'product_library.php',
-        'rebate'             => 'rebate.php',
-    ];
-    foreach ($candidates as $perm => $url) {
-        if (has_permission($perm)) return $url;
-    }
-    return '';
+if (!empty($_GET['abandon_second'])) {
+    unset($_SESSION[AUTH_LOGIN_PENDING_SECOND]);
+    header('Location: login.php');
+    exit;
 }
 
 if (isset($_SESSION['user_id'])) {
@@ -41,31 +21,21 @@ if (isset($_SESSION['user_id'])) {
     exit;
 }
 
-function ensure_users_login_meta(PDO $pdo): void {
-    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER is_active"); } catch (Throwable $e) {}
-    try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"); } catch (Throwable $e) {}
-}
-
-function get_login_ip(): string {
-    $ip = '';
-    if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
-        $ip = (string)$_SERVER['HTTP_CF_CONNECTING_IP'];
-    } elseif (!empty($_SERVER['REMOTE_ADDR'])) {
-        $ip = (string)$_SERVER['REMOTE_ADDR'];
-    }
-    $ip = trim($ip);
-    if ($ip !== '' && filter_var($ip, FILTER_VALIDATE_IP)) {
-        return $ip;
-    }
-    return '';
-}
-
 $error = '';
 if (!empty($_GET['no_perm'])) {
     $error = '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。';
 }
 if (!empty($_GET['need_company'])) {
     $error = '请先选择公司再登录。';
+}
+if (!empty($_GET['second_expired'])) {
+    $error = '二级验证已超时，请重新登录。';
+}
+if (!empty($_GET['login_err'])) {
+    $le = urldecode((string)$_GET['login_err']);
+    if ($le !== '') {
+        $error = mb_substr($le, 0, 400, 'UTF-8');
+    }
 }
 
 // 公司列表（用于登录选择）
@@ -91,6 +61,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user === '' || $pass === '') {
         $error = '请输入用户名和密码';
     } else {
+        ensure_users_second_password_hash($pdo);
         $cid_for_branch = 0;
         if ($company_code !== '') {
             try {
@@ -102,13 +73,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $cid_for_branch = $default_company_id;
         }
 
-        $stmt_sa = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND company_id IS NULL LIMIT 1");
+        $stmt_sa = $pdo->prepare("SELECT id, username, password_hash, second_password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND company_id IS NULL LIMIT 1");
         $stmt_sa->execute([$user]);
         $u_sa = $stmt_sa->fetch(PDO::FETCH_ASSOC);
 
         $u_br = null;
         if ($cid_for_branch > 0) {
-            $stmt_br = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND company_id = ? LIMIT 1");
+            $stmt_br = $pdo->prepare("SELECT id, username, password_hash, second_password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE LOWER(TRIM(username)) = LOWER(?) AND company_id = ? LIMIT 1");
             $stmt_br->execute([$user, $cid_for_branch]);
             $u_br = $stmt_br->fetch(PDO::FETCH_ASSOC);
         }
@@ -135,71 +106,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($login_as !== 'admin' && $db_role === 'superadmin') {
             $error = '平台 big boss 请使用 Admin 登录入口。';
         } else {
-            $_SESSION['user_id'] = (int)$u['id'];
-            $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
-            $_SESSION['user_role'] = $db_role;
-            $_SESSION['avatar_url'] = trim((string)($u['avatar_url'] ?? ''));
-            $db_company_id = (int)($u['company_id'] ?? 0);
-
-            // company 绑定规则：
-            // - superadmin：可选公司代码；不填则默认「总公司」汇总（company_id=0）；填了则进入该分公司
-            // - admin/member/agent：必须绑定到自己的 company_id（忽略输入）
-            if ($db_role === 'superadmin') {
-                // superadmin：填公司代码则进入该公司；不填且库里有公司则 session=0 表示总公司合计视图
-                $use_company = 0;
-                if ($company_code !== '') {
-                    try {
-                        $stmtC = $pdo->prepare("SELECT id FROM companies WHERE is_active = 1 AND LOWER(TRIM(code)) = ? LIMIT 1");
-                        $stmtC->execute([$company_code]);
-                        $use_company = (int)$stmtC->fetchColumn();
-                    } catch (Throwable $e) {}
-                }
-                // 未指定公司代码时默认「总公司」汇总视图（0）；指定了有效公司则用该公司
-                if ($use_company <= 0 && $default_company_id > 0) {
-                    $_SESSION['company_id'] = 0;
-                } elseif ($use_company > 0) {
-                    $_SESSION['company_id'] = $use_company;
+            if (in_array($db_role, ['admin', 'member'], true)) {
+                $h2 = trim((string)($u['second_password_hash'] ?? ''));
+                if ($h2 === '') {
+                    $error = '该账号尚未设置二级密码，请联系 Boss 或平台 big boss 在「用户管理 → 编辑」中为该账号设置。';
                 } else {
-                    $error = '暂无可用公司，请先创建公司。';
-                    session_destroy();
-                }
-            } else {
-                if ($db_company_id <= 0) {
-                    session_destroy();
-                    $error = '该账号未绑定公司，请到用户管理里设置 company_id。';
-                } else {
-                    $_SESSION['company_id'] = $db_company_id;
-                }
-            }
-            if ($error !== '') {
-                // fallthrough to show error
-            } else {
-            try {
-                ensure_users_login_meta($pdo);
-                $ip = get_login_ip();
-                $stmt2 = $pdo->prepare("UPDATE users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?");
-                $stmt2->execute([$ip !== '' ? $ip : null, (int)$u['id']]);
-            } catch (Throwable $e) {
-            }
-            if ($remember) {
-                $params = session_get_cookie_params();
-                setcookie(session_name(), session_id(), time() + 86400 * 14, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
-            }
-            if ($db_role === 'agent') {
-                $_SESSION['agent_code'] = $u['username']; // 与 customers.recommend 对应
-                header('Location: agents.php');
-            } else {
-                $target = choose_landing_url_for_role($db_role);
-                if ($target === '') {
-                    // 登录成功但无任何权限：不让进入系统
-                    session_destroy();
-                    $error = '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。';
-                } else {
-                    header('Location: ' . $target);
+                    $_SESSION[AUTH_LOGIN_PENDING_SECOND] = [
+                        'uid' => (int)$u['id'],
+                        'exp' => time() + 600,
+                        'remember' => $remember,
+                    ];
+                    header('Location: login_second.php');
                     exit;
                 }
-            }
-            if ($error === '') exit;
+            } else {
+                $result = auth_commit_login_session($pdo, $u, $remember, $company_code, $default_company_id);
+                if (!$result['ok']) {
+                    $error = $result['error'];
+                } else {
+                    header('Location: ' . $result['location']);
+                    exit;
+                }
             }
         }
     }

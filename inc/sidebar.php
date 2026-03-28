@@ -45,6 +45,18 @@ if ($sidebar_pending > 0 || $sidebar_pending_customers > 0) {
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
 $__ur = $_SESSION['user_role'] ?? '';
 $sidebar_user_role = $__ur === 'superadmin' ? 'Big Boss' : ($__ur === 'boss' ? 'Boss' : ($__ur === 'admin' ? 'Admin' : ($__ur === 'agent' ? 'Agent' : 'Staff')));
+/** Member：侧栏展示尚未开通的权限（与「权限设置」勾选项一致，不含 legacy statement 开关） */
+$sidebar_member_missing = [];
+if ($__ur === 'member' && function_exists('has_permission') && function_exists('get_permission_options')) {
+    foreach (get_permission_options() as $perm_key => $perm_label) {
+        if ($perm_key === 'statement') {
+            continue;
+        }
+        if (!has_permission((string)$perm_key)) {
+            $sidebar_member_missing[] = (string)$perm_label;
+        }
+    }
+}
 $sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
 $sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
 $sidebar_company_id = (int)($_SESSION['company_id'] ?? 0);
@@ -52,7 +64,7 @@ $sidebar_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $sidebar_company_label = '';
 try {
     if (!empty($pdo) && $sidebar_company_id === 0 && $sidebar_is_superadmin) {
-        $sidebar_company_label = '总公司（全部分公司合计）';
+        $sidebar_company_label = '总公司';
     } elseif (!empty($pdo) && $sidebar_company_id > 0) {
         $stmt = $pdo->prepare("SELECT code, name FROM companies WHERE id = ? LIMIT 1");
         $stmt->execute([$sidebar_company_id]);
@@ -85,6 +97,16 @@ if ($sidebar_is_superadmin) {
         </div>
         <div class="sidebar-name"><?= htmlspecialchars($sidebar_user_name) ?></div>
         <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
+        <?php if ($__ur === 'member' && $sidebar_member_missing !== []): ?>
+        <div class="sidebar-perm-missing" role="status" aria-label="当前账号未开通的权限">
+            <div class="sidebar-perm-missing-title">未开通权限</div>
+            <ul class="sidebar-perm-missing-list">
+                <?php foreach ($sidebar_member_missing as $lbl): ?>
+                <li><?= htmlspecialchars($lbl) ?></li>
+                <?php endforeach; ?>
+            </ul>
+        </div>
+        <?php endif; ?>
         <?php if ($sidebar_is_superadmin && $sidebar_company_label !== ''): ?>
             <div class="sidebar-role" style="margin-top:-6px; text-transform:none; letter-spacing:0; font-size:12px; color:rgba(255,255,255,0.78);">
                 <?= htmlspecialchars($sidebar_company_label) ?>
@@ -94,7 +116,7 @@ if ($sidebar_is_superadmin) {
             <form method="post" action="switch_company.php" style="width:100%; margin-top: 8px;">
                 <input type="hidden" name="return_to" value="<?= htmlspecialchars($_SERVER['REQUEST_URI'] ?? 'dashboard.php') ?>">
                 <select name="company_id" class="form-control" onchange="this.form.submit()" style="width:100%; min-height:40px; border-radius:12px; border:1px solid rgba(255,255,255,0.22); background: rgba(255,255,255,0.12); color:#fff;">
-                    <option value="0" <?= $sidebar_company_id === 0 ? 'selected' : '' ?> style="color:#0f172a;">总公司（全部分公司合计）</option>
+                    <option value="0" <?= $sidebar_company_id === 0 ? 'selected' : '' ?> style="color:#0f172a;">总公司</option>
                     <?php foreach ($sidebar_companies as $c): ?>
                         <option value="<?= (int)$c['id'] ?>" <?= (int)$c['id'] === $sidebar_company_id ? 'selected' : '' ?> style="color:#0f172a;">
                             <?= htmlspecialchars((string)$c['code']) ?> - <?= htmlspecialchars((string)$c['name']) ?>

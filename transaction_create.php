@@ -1127,7 +1127,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
                         </div>
                         <div class="expense-modal-col expense-modal-col-right">
                             <h3 class="expense-modal-section-title">Expense 项目</h3>
-                            <p class="expense-modal-hint">填写或点击下方快捷类别填入「Expense 项目」；将用于分类汇总。</p>
                             <div class="form-group" style="margin-bottom:0;">
                                 <label id="product_label">Expense 项目 *</label>
                                 <input type="text" name="product" id="product" class="form-control" required placeholder="例如：Office / Salary" value="<?= $ep_product ?>">

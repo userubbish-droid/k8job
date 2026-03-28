@@ -160,7 +160,8 @@ if ($selected_id > 0) {
         .perm-list li:last-child { border-bottom: none; }
         .perm-list input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
         .member-select { margin-bottom: 20px; }
-        .perm-groups { margin: 0; padding: 0; list-style: none; }
+        /* 与侧栏一致：整行实线分隔，全宽对齐卡片内容区 */
+        .perm-groups { margin: 0 -28px; padding: 0; list-style: none; width: calc(100% + 56px); }
         .perm-group { border-bottom: 1px solid var(--border); }
         .perm-group:last-child { border-bottom: none; }
         .perm-group-toggle {
@@ -168,27 +169,39 @@ if ($selected_id > 0) {
             display: flex;
             align-items: center;
             gap: 10px;
-            padding: 12px 6px;
+            padding: 12px 28px;
             border: none;
             background: transparent;
             color: #0f172a;
             font-weight: 700;
             cursor: pointer;
+            text-align: left;
+            font-size: 15px;
         }
-        .perm-group-toggle:hover { background: rgba(59,130,246,0.06); border-radius: 10px; }
+        .perm-group-toggle:hover { background: rgba(59,130,246,0.06); }
         .perm-group-chevron { margin-left: auto; color: var(--muted); font-weight: 900; }
-        .perm-group-sub { display: none; padding: 0 6px 8px; }
-        .perm-group-sub.show { display: block; }
+        .perm-group-sub { display: none; padding: 0; margin: 0; }
+        .perm-group-sub.show {
+            display: block;
+            border-top: 1px solid var(--border);
+        }
         .perm-item {
             display: flex;
             align-items: center;
-            gap: 10px;
-            padding: 9px 4px;
-            border-bottom: 1px dashed rgba(148,163,184,0.45);
+            gap: 12px;
+            padding: 12px 28px;
+            margin: 0;
+            border-bottom: 1px solid var(--border);
         }
         .perm-item:last-child { border-bottom: none; }
-        .perm-label { font-weight: 600; color: #1f2937; }
+        .perm-label { font-weight: 600; color: #1f2937; font-size: 15px; }
         .perm-legacy { color: var(--muted); font-weight: 600; }
+        .perm-item-plain { border: none; padding: 12px 0; }
+        @media (max-width: 768px) {
+            .perm-groups { margin: 0 -16px; width: calc(100% + 32px); }
+            .perm-group-toggle,
+            .perm-item { padding-left: 16px; padding-right: 16px; }
+        }
     </style>
 </head>
 <body>
@@ -285,7 +298,6 @@ if ($selected_id > 0) {
         <?php if ($actor_can_set_admin_month): ?>
         <div class="card" style="margin-top: 20px;">
             <h3 style="margin-top:0;">Admin · 首页本月数据</h3>
-            <p class="form-hint" style="margin-bottom:16px;">默认 Admin 看不到首页「显示本月数据」及本月汇总；勾选并保存后，该 Admin 即可查看。仅 Boss / 平台 big boss 可设置。</p>
             <form method="get" class="member-select">
                 <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
                 <div class="form-group">
@@ -309,7 +321,7 @@ if ($selected_id > 0) {
                 <input type="hidden" name="action" value="save_admin_month">
                 <input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>">
                 <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
-                <div class="perm-item" style="border:none; padding-left:0;">
+                <div class="perm-item perm-item-plain">
                     <input type="checkbox" name="dashboard_month_data" value="1" id="admin_dash_month" <?= $admin_has_month ? 'checked' : '' ?>>
                     <label class="perm-label" for="admin_dash_month">允许查看首页本月数据</label>
                 </div>

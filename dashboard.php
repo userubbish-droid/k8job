@@ -157,9 +157,6 @@ try {
                     ?>
                     <span class="role-badge"><?= htmlspecialchars($__badge) ?></span>
                 </p>
-                <?php if (!empty($dashboard_all_companies)): ?>
-                    <p class="form-hint" style="margin-top:8px;">当前为<strong>总公司</strong>视图：下方统计为<strong>全部分公司数据加总</strong>。录入流水、查看客户等请在侧栏选择具体分公司。</p>
-                <?php endif; ?>
             </div>
 
             <?php if ($db_error): ?>
@@ -285,7 +282,6 @@ try {
                         <div class="value" style="color: #0891b2;"><?= number_format($month_bonus, 2) ?></div>
                     </div>
                 </div>
-                <p class="form-hint" style="margin-top:8px; margin-bottom:0;">本月利润 = 入账 − 出账 − 开销</p>
             </div>
             <?php endif; ?>
         </main>

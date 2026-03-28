@@ -59,13 +59,6 @@ function kiosk_stmt_fmt_in(float $v): string {
                 <?php endif; ?>
 
                 <div class="card">
-                    <p class="form-hint" style="margin-bottom:8px;">
-                        数据与 <a href="balance_summary.php">statement</a> 中 <strong>Game Platform</strong> 一致；本页将区间内「入平台」流水按
-                        <strong>DEPOSIT / REBATE / FREE / FREE WITHDRAW</strong> 拆分，并单独列出各笔流水 <strong>bonus</strong> 字段合计。
-                    </p>
-                    <p class="form-hint" style="margin-bottom:12px;">
-                        显示日期：<?= htmlspecialchars($day_from) ?><?= $is_range ? ' 至 ' . htmlspecialchars($day_to) : '' ?><?= !$is_range && $day_from === date('Y-m-d') ? '（当天）' : '' ?>
-                    </p>
                     <div class="statement-filter-wrap" style="margin-bottom:16px;">
                         <button type="button" class="btn btn-outline" id="stmt-date-toggle">筛选日期</button>
                         <form method="get" class="stmt-date-form" id="stmt-date-form" style="display:none; margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">

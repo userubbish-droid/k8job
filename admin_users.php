@@ -13,6 +13,7 @@ $status_filter = trim((string)($_GET['status_filter'] ?? 'all'));
 if (!in_array($status_filter, ['all', 'active', 'inactive'], true)) {
     $status_filter = 'all';
 }
+$search_q = trim((string)($_GET['q'] ?? ''));
 
 function redirect_self(): void {
     header('Location: admin_users.php');
@@ -299,6 +300,22 @@ $users_primary_list = $actor_is_superadmin ? $all_company_users : $company_users
 $users_primary_show_company_col = $actor_is_superadmin;
 $users_primary_colspan = $users_primary_show_company_col ? 10 : 9;
 
+if ($search_q !== '') {
+    $low = static function (string $s): string {
+        return function_exists('mb_strtolower') ? mb_strtolower($s, 'UTF-8') : strtolower($s);
+    };
+    $needle = $low($search_q);
+    $filter_user_row = static function (array $u) use ($needle, $low): bool {
+        $a = $low((string)($u['username'] ?? ''));
+        $b = $low((string)($u['display_name'] ?? ''));
+        return (strpos($a, $needle) !== false || strpos($b, $needle) !== false);
+    };
+    $users_primary_list = array_values(array_filter($users_primary_list, $filter_user_row));
+    if ($actor_is_superadmin) {
+        $superadmin_users = array_values(array_filter($superadmin_users, $filter_user_row));
+    }
+}
+
 /** 分公司管理员改角色：不可设 boss / superadmin */
 $role_opts_company = ['admin', 'member', 'agent'];
 /** 平台 big boss 改分公司账号角色（顺序：boss → admin → member → agent） */
@@ -385,6 +402,67 @@ if ($actor_is_superadmin) {
         .admin-users-by-company.data-table tbody tr.admin-users-co-b6:hover { background: rgba(236, 252, 203, 0.98) !important; }
         .admin-users-by-company.data-table tbody tr.admin-users-co-b7:hover { background: rgba(255, 237, 213, 0.98) !important; }
         .admin-users-by-company.data-table tbody tr.admin-users-co-orphan:hover { background: rgba(226, 232, 240, 0.98) !important; }
+        .admin-users-toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 14px;
+            padding: 14px 18px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 14px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(148, 163, 184, 0.14);
+            margin-bottom: 16px;
+        }
+        .admin-users-toolbar .btn-add-user {
+            font-weight: 700;
+            box-shadow: 0 4px 14px rgba(79, 125, 255, 0.35);
+            white-space: nowrap;
+        }
+        .admin-users-toolbar .toolbar-search-wrap {
+            position: relative;
+            flex: 1;
+            min-width: 200px;
+            max-width: 380px;
+        }
+        .admin-users-toolbar .toolbar-search-wrap .toolbar-search-input {
+            width: 100%;
+            padding: 10px 12px 10px 40px;
+            border: 1px solid rgba(148, 163, 184, 0.55);
+            border-radius: 10px;
+            font-size: 14px;
+            background: #fff;
+        }
+        .admin-users-toolbar .toolbar-search-wrap .toolbar-search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 0 3px rgba(79, 125, 255, 0.2);
+        }
+        .admin-users-toolbar .toolbar-search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.5;
+            pointer-events: none;
+            font-size: 15px;
+            line-height: 1;
+        }
+        .admin-users-toolbar .toolbar-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            color: #334155;
+            cursor: pointer;
+            user-select: none;
+            white-space: nowrap;
+        }
+        .admin-users-toolbar .toolbar-check input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--primary);
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
@@ -400,18 +478,33 @@ if ($actor_is_superadmin) {
             <?php endif; ?>
         </div>
 
+        <form method="get" action="admin_users.php" class="admin-users-toolbar" id="admin-users-toolbar-form" autocomplete="off">
+            <input type="hidden" name="status_filter" id="toolbar_status_filter" value="<?= htmlspecialchars($status_filter, ENT_QUOTES, 'UTF-8') ?>">
+            <button type="button" class="btn btn-primary btn-add-user" id="btn-add-user">添加用户</button>
+            <div class="toolbar-search-wrap">
+                <span class="toolbar-search-icon" aria-hidden="true">🔍</span>
+                <input type="search" name="q" class="toolbar-search-input" placeholder="按用户名或显示名搜索" value="<?= htmlspecialchars($search_q, ENT_QUOTES, 'UTF-8') ?>">
+            </div>
+            <label class="toolbar-check">
+                <input type="checkbox" id="toolbar_cb_all" <?= $status_filter === 'all' ? 'checked' : '' ?>>
+                显示全部
+            </label>
+            <label class="toolbar-check">
+                <input type="checkbox" id="toolbar_cb_inactive" <?= $status_filter === 'inactive' ? 'checked' : '' ?>>
+                显示已禁用
+            </label>
+            <button type="submit" class="btn btn-outline btn-sm" style="margin-left:auto;">搜索</button>
+        </form>
+
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-        <div class="card">
+        <div class="card" id="create-account">
             <h3>创建账号</h3>
             <?php if ($actor_is_superadmin): ?>
-            <p class="agent-customer-hint" style="margin-top:-6px;">新建 <strong>boss / admin / member / agent</strong> 时请选<strong>所属分公司</strong>；创建平台 <strong>big boss（superadmin）</strong> 时不选公司。分公司老板（boss）与 admin 权限相同且不受权限表限制。</p>
             <?php if (!$companies_for_create): ?>
             <div class="alert alert-error" role="status">当前没有「启用」的分公司，请先到 <a href="admin_companies.php">分公司管理</a> 新增。</div>
             <?php endif; ?>
-            <?php else: ?>
-            <p class="agent-customer-hint" style="margin-top:-6px;">新账号仅可创建在本公司（admin / member / agent）；平台 big boss 与 boss 仅可由平台创建。</p>
             <?php endif; ?>
             <form method="post">
                 <input type="hidden" name="action" value="create">
@@ -493,19 +586,8 @@ if ($actor_is_superadmin) {
             </form>
         </div>
 
-        <?php
-        $filter_links = '<div class="admin-users-actions" style="margin-bottom:10px;">'
-            . '<a class="btn btn-sm ' . ($status_filter === 'all' ? 'btn-primary' : 'btn-outline') . '" href="admin_users.php?status_filter=all">显示全部</a>'
-            . '<a class="btn btn-sm ' . ($status_filter === 'active' ? 'btn-primary' : 'btn-outline') . '" href="admin_users.php?status_filter=active">仅启用</a>'
-            . '<a class="btn btn-sm ' . ($status_filter === 'inactive' ? 'btn-primary' : 'btn-outline') . '" href="admin_users.php?status_filter=inactive">仅禁用</a>'
-            . '</div>';
-        ?>
         <div class="card">
             <h3><?= $actor_is_superadmin ? '全部分公司账号' : '本公司账号' ?><?= !$actor_is_superadmin && $view_company_label !== '' ? '（' . htmlspecialchars($view_company_label) . '）' : '' ?></h3>
-            <p class="agent-customer-hint" style="margin-top:-6px;"><?= $actor_is_superadmin
-                ? '汇总各分公司的 boss / admin / member / agent；平台 big boss（superadmin）仅在下方单独列表。<strong>左侧色条按分公司区分</strong>。'
-                : '不含平台 big boss；与当前侧栏所选公司一致。' ?></p>
-            <?= $filter_links ?>
             <?php if (!$actor_is_superadmin && $view_company_id <= 0): ?>
                 <div class="alert alert-error" role="status">无法加载本公司账号（缺少公司上下文），请重新登录。</div>
             <?php endif; ?>
@@ -591,8 +673,6 @@ if ($actor_is_superadmin) {
         <?php if ($actor_is_superadmin): ?>
         <div class="card">
             <h3>平台 big boss（superadmin）</h3>
-            <p class="agent-customer-hint" style="margin-top:-6px;">不归属任何公司；与上方各分公司账号分开。将账号改为分公司角色时，将归入侧栏当前所选公司。</p>
-            <?= $filter_links ?>
             <div style="overflow-x:auto;">
             <table class="data-table">
                 <thead>
@@ -664,6 +744,48 @@ if ($actor_is_superadmin) {
     </div>
     <script>
     (function(){
+        var btnAdd = document.getElementById('btn-add-user');
+        var createEl = document.getElementById('create-account');
+        if (btnAdd && createEl) {
+            btnAdd.addEventListener('click', function(){
+                createEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                var firstInput = createEl.querySelector('input[name="username"]');
+                if (firstInput) {
+                    setTimeout(function(){ firstInput.focus(); }, 400);
+                }
+            });
+        }
+        var tbForm = document.getElementById('admin-users-toolbar-form');
+        if (tbForm) {
+            var hiddenSf = document.getElementById('toolbar_status_filter');
+            var cbAll = document.getElementById('toolbar_cb_all');
+            var cbInact = document.getElementById('toolbar_cb_inactive');
+            function applyToolbarStatus() {
+                if (!hiddenSf || !cbAll || !cbInact) return;
+                if (cbAll.checked) {
+                    hiddenSf.value = 'all';
+                    cbInact.checked = false;
+                } else if (cbInact.checked) {
+                    hiddenSf.value = 'inactive';
+                } else {
+                    hiddenSf.value = 'active';
+                }
+            }
+            if (cbAll) {
+                cbAll.addEventListener('change', function(){
+                    if (cbAll.checked && cbInact) cbInact.checked = false;
+                    applyToolbarStatus();
+                    tbForm.submit();
+                });
+            }
+            if (cbInact) {
+                cbInact.addEventListener('change', function(){
+                    if (cbInact.checked && cbAll) cbAll.checked = false;
+                    applyToolbarStatus();
+                    tbForm.submit();
+                });
+            }
+        }
         var roleEl = document.getElementById('create_role');
         var box = document.getElementById('agent_customer_box');
         var companyWrap = document.getElementById('create_company_wrap');

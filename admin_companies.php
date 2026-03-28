@@ -122,6 +122,8 @@ try {
 } catch (Throwable $e) {
     $companies = [];
 }
+
+$open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create' && $err !== '');
 ?>
 <!doctype html>
 <html lang="zh-CN">
@@ -131,6 +133,22 @@ try {
     <title>分公司管理 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        .companies-toolbar {
+            display: flex;
+            align-items: center;
+            padding: 14px 18px;
+            background: #fff;
+            border-radius: 12px;
+            box-shadow: 0 2px 14px rgba(15, 23, 42, 0.08), 0 0 0 1px rgba(148, 163, 184, 0.14);
+            margin-bottom: 16px;
+        }
+        .companies-toolbar .btn-add-company {
+            font-weight: 700;
+            box-shadow: 0 4px 14px rgba(79, 125, 255, 0.35);
+            white-space: nowrap;
+        }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -146,12 +164,15 @@ try {
                     </p>
                 </div>
 
+                <div class="companies-toolbar">
+                    <button type="button" class="btn btn-primary btn-add-company" id="btn-add-company" aria-expanded="<?= $open_create_panel ? 'true' : 'false' ?>" aria-controls="company-create-panel">Add Company</button>
+                </div>
+
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-                <div class="card">
+                <div class="card" id="company-create-panel" style="display:<?= $open_create_panel ? 'block' : 'none' ?>;">
                     <h3>新增分公司</h3>
-                    <p class="agent-customer-hint" style="margin-top:-6px;">登录页的 Company 填这里的<strong>代码</strong>；侧栏切换公司也来自此列表。新建后请到「<a href="admin_users.php">用户管理</a>」创建账号，在表单里选择<strong>所属分公司</strong>、角色选 <strong>admin</strong>。<strong>删除</strong>仅当该公司在业务表中无任何引用时可用（模拟空公司可直接删）。</p>
                     <form method="post" class="filters-bar filters-bar-flow" style="margin-bottom:0;">
                         <input type="hidden" name="action" value="create">
                         <div class="filter-group">
@@ -222,5 +243,22 @@ try {
             </div>
         </main>
     </div>
+    <script>
+    (function(){
+        var btn = document.getElementById('btn-add-company');
+        var panel = document.getElementById('company-create-panel');
+        if (!btn || !panel) return;
+        btn.addEventListener('click', function(){
+            var open = panel.style.display === 'none' || panel.style.display === '';
+            panel.style.display = open ? 'block' : 'none';
+            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+            if (open) {
+                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                var first = panel.querySelector('input[name="code"]');
+                if (first) setTimeout(function(){ first.focus(); }, 200);
+            }
+        });
+    })();
+    </script>
 </body>
 </html>

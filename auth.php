@@ -226,4 +226,152 @@ function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
     return (int)($row['company_id'] ?? 0) === $cid;
 }
 
+/** 主密码通过后、待输入二级密码时的 session 标记（仅 admin / member） */
+const AUTH_LOGIN_PENDING_SECOND = '__login_pending_second';
 
+function ensure_users_second_password_hash(PDO $pdo): void
+{
+    try {
+        $pdo->exec('ALTER TABLE users ADD COLUMN second_password_hash VARCHAR(255) NULL COMMENT \'二级密码 admin/member\' AFTER password_hash');
+    } catch (Throwable $e) {
+    }
+}
+
+function choose_landing_url_for_role(string $role): string
+{
+    $role = strtolower(trim($role));
+    if ($role === 'agent') {
+        return 'agents.php';
+    }
+    if ($role === 'superadmin' || $role === 'boss' || $role === 'admin') {
+        return 'dashboard.php';
+    }
+    $candidates = [
+        'transaction_create' => 'transaction_create.php',
+        'expense_statement'  => 'expense.php',
+        'kiosk_expense_view' => 'kiosk_expense.php',
+        'statement_balance'  => 'balance_summary.php',
+        'statement_report'   => 'report.php',
+        'kiosk_statement'    => 'kiosk_statement.php',
+        'transaction_list'   => 'transaction_list.php',
+        'customers'          => 'customers.php',
+        'product_library'    => 'product_library.php',
+        'rebate'             => 'rebate.php',
+    ];
+    foreach ($candidates as $perm => $url) {
+        if (has_permission($perm)) {
+            return $url;
+        }
+    }
+    return '';
+}
+
+/**
+ * 主密码（及二级密码若需要）已全部通过：写入 session、更新 last_login、可选 remember。
+ *
+ * @return array{ok: true, location: string}|array{ok: false, error: string}
+ */
+function auth_commit_login_session(PDO $pdo, array $u, bool $remember, string $company_code_lower, int $default_company_id): array
+{
+    $db_role = strtolower(trim((string)($u['role'] ?? '')));
+    unset($_SESSION[AUTH_LOGIN_PENDING_SECOND]);
+
+    $_SESSION['user_id'] = (int)$u['id'];
+    $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
+    $_SESSION['user_role'] = $db_role;
+    $_SESSION['avatar_url'] = trim((string)($u['avatar_url'] ?? ''));
+    $db_company_id = (int)($u['company_id'] ?? 0);
+    $error = '';
+
+    if ($db_role === 'superadmin') {
+        $use_company = 0;
+        if ($company_code_lower !== '') {
+            try {
+                $stmtC = $pdo->prepare('SELECT id FROM companies WHERE is_active = 1 AND LOWER(TRIM(code)) = ? LIMIT 1');
+                $stmtC->execute([$company_code_lower]);
+                $use_company = (int)$stmtC->fetchColumn();
+            } catch (Throwable $e) {
+            }
+        }
+        if ($use_company <= 0 && $default_company_id > 0) {
+            $_SESSION['company_id'] = 0;
+        } elseif ($use_company > 0) {
+            $_SESSION['company_id'] = $use_company;
+        } else {
+            $error = '暂无可用公司，请先创建公司。';
+        }
+    } else {
+        if ($db_company_id <= 0) {
+            $error = '该账号未绑定公司，请到用户管理里设置 company_id。';
+        } else {
+            $_SESSION['company_id'] = $db_company_id;
+        }
+    }
+
+    if ($error !== '') {
+        foreach (['user_id', 'user_name', 'user_role', 'company_id', 'avatar_url', 'agent_code'] as $k) {
+            unset($_SESSION[$k]);
+        }
+        return ['ok' => false, 'error' => $error];
+    }
+
+    try {
+        try {
+            $pdo->exec('ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER is_active');
+        } catch (Throwable $e) {
+        }
+        try {
+            $pdo->exec('ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at');
+        } catch (Throwable $e) {
+        }
+        $ip = '';
+        if (!empty($_SERVER['HTTP_CF_CONNECTING_IP'])) {
+            $ip = trim((string)$_SERVER['HTTP_CF_CONNECTING_IP']);
+        } elseif (!empty($_SERVER['REMOTE_ADDR'])) {
+            $ip = trim((string)$_SERVER['REMOTE_ADDR']);
+        }
+        if ($ip !== '' && !filter_var($ip, FILTER_VALIDATE_IP)) {
+            $ip = '';
+        }
+        $stmt2 = $pdo->prepare('UPDATE users SET last_login_at = NOW(), last_login_ip = ? WHERE id = ?');
+        $stmt2->execute([$ip !== '' ? $ip : null, (int)$u['id']]);
+    } catch (Throwable $e) {
+    }
+
+    if ($remember) {
+        $params = session_get_cookie_params();
+        setcookie(session_name(), session_id(), time() + 86400 * 14, $params['path'], $params['domain'], $params['secure'], $params['httponly']);
+    }
+
+    if ($db_role === 'agent') {
+        $_SESSION['agent_code'] = $u['username'];
+        return ['ok' => true, 'location' => 'agents.php'];
+    }
+
+    $target = choose_landing_url_for_role($db_role);
+    if ($target === '') {
+        foreach (['user_id', 'user_name', 'user_role', 'company_id', 'avatar_url', 'agent_code'] as $k) {
+            unset($_SESSION[$k]);
+        }
+        return ['ok' => false, 'error' => '该账号未开通任何功能权限，请联系管理员在「Permissions」中勾选。'];
+    }
+    return ['ok' => true, 'location' => $target];
+}
+
+/**
+ * 仅 Boss / 平台 big boss 可为他人设置二级密码；对象须为 admin 或 member 且可被当前操作者管理。
+ */
+function user_actor_can_set_second_password(PDO $pdo, int $target_user_id): bool
+{
+    $actor = (string)($_SESSION['user_role'] ?? '');
+    if (!in_array($actor, ['boss', 'superadmin'], true)) {
+        return false;
+    }
+    if (!user_is_manageable_by_current_actor($pdo, $target_user_id)) {
+        return false;
+    }
+    $stmt = $pdo->prepare('SELECT role FROM users WHERE id = ? LIMIT 1');
+    $stmt->execute([$target_user_id]);
+    $r = strtolower(trim((string)$stmt->fetchColumn()));
+    return in_array($r, ['admin', 'member'], true);
+}

@@ -585,7 +585,6 @@ try {
                         </tbody>
                     </table>
                     </div>
-                    <p class="form-hint" style="margin-top:10px;">「更改」仅可修改 <strong>Starting Balance</strong>。公式与 Statement 一致：<strong>Balance = Starting Balance + In − Out</strong>（In=DEPOSIT；Out=WITHDRAW + <strong>EXPENSE</strong>（从该银行支出），均为已审核流水）。</p>
                 </div>
 
                 <div class="card">
