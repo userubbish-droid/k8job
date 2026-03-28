@@ -18,6 +18,10 @@ $day_to   = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw)   ? substr($day_to_r
 if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 $day = $day_to; // 提交「已给」时写入 rebate_given 的 day（区间结束日）
 
+// 与 dashboard 一致：入账/出账只计「有银行」且排除 remark 银行互转（转至%/来自%）；出款列另含 FREE WITHDRAW。按 TRIM(code) 汇总避免代号空格拆行。
+$rebate_case_dep = "CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END";
+$rebate_case_wd = "CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END";
+
 // 提交勾选的「已给了」或 取消单个（仅 admin）
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
@@ -33,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uid = (int)($_SESSION['user_id'] ?? 0);
                 if (!empty($given)) {
                     $placeholders = implode(',', array_fill(0, count($given), '?'));
-                    $stmt_bal = $pdo->prepare("SELECT code, COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY code");
+                    $stmt_bal = $pdo->prepare("SELECT TRIM(code) AS code, COALESCE(SUM($rebate_case_dep), 0) - COALESCE(SUM($rebate_case_wd), 0) AS balance FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY TRIM(code)");
                     $stmt_bal->execute(array_merge([$company_id, $post_day_from, $post_day_to], $given));
                     $balances = [];
                     while ($row = $stmt_bal->fetch(PDO::FETCH_ASSOC)) {
@@ -100,15 +104,15 @@ try {
     } catch (Throwable $e2) {}
 }
 
-// 区间内按客户汇总：进、出、对扣(余额)。只统计已批准流水
+// 区间内按客户汇总：进、出、Win/Lose（与上方 $rebate_case_* 一致）。只统计已批准流水
 $stmt = $pdo->prepare("
-    SELECT code,
-           COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
-           COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+    SELECT TRIM(code) AS code,
+           COALESCE(SUM($rebate_case_dep), 0) AS total_in,
+           COALESCE(SUM($rebate_case_wd), 0) AS total_out
     FROM transactions
     WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) <> ''
-    GROUP BY code
-    ORDER BY code ASC
+    GROUP BY TRIM(code)
+    ORDER BY TRIM(code) ASC
 ");
 $stmt->execute([$company_id, $day_from, $day_to]);
 $all_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -139,9 +143,20 @@ $rows_for_sum = $all_rows; // 合计用全部客户
     .rebate-table input.percent { width: 72px; text-align: right; padding: 6px 8px; }
     .rebate-table .total-amount { font-weight: 600; color: var(--primary); }
     .rebate-total-row { font-weight: 700; background: var(--primary-soft); }
-    /* Win/Lose 为负且未「已给」：整行浅红底，与合计行整行浅蓝同理 */
-    .rebate-table tr.rebate-no-rebate-row { font-weight: 600; background: var(--danger-soft); }
-    .rebate-table tr.rebate-given-row { background: var(--success-soft); }
+    /* Win/Lose 为负且未「已给」：整行浅红底（需压过 style.css 里 tbody 斑马纹 :nth-child(even)） */
+    .data-table.rebate-table tbody tr.rebate-no-rebate-row,
+    .data-table.rebate-table tbody tr.rebate-no-rebate-row td {
+        background: var(--danger-soft) !important;
+    }
+    .data-table.rebate-table tbody tr.rebate-no-rebate-row { font-weight: 600; }
+    .data-table.rebate-table tbody tr.rebate-no-rebate-row:hover,
+    .data-table.rebate-table tbody tr.rebate-no-rebate-row:hover td {
+        background: #fee2e2 !important;
+    }
+    .data-table.rebate-table tbody tr.rebate-given-row,
+    .data-table.rebate-table tbody tr.rebate-given-row td {
+        background: var(--success-soft) !important;
+    }
     .rebate-table tr.rebate-given-row td { color: #0f5132; }
     .rebate-given-label { font-size: 12px; color: var(--success); font-weight: 600; margin-left: 6px; }
     .rebate-code-cell { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
