@@ -89,17 +89,49 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($user === '' || $pass === '') {
         $error = '请输入用户名和密码';
     } else {
-        $stmt = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE username = ? LIMIT 1");
-        $stmt->execute([$user]);
-        $u = $stmt->fetch();
+        $cid_for_branch = 0;
+        if ($company_code !== '') {
+            try {
+                $stmtC0 = $pdo->prepare("SELECT id FROM companies WHERE is_active = 1 AND LOWER(TRIM(code)) = ? LIMIT 1");
+                $stmtC0->execute([$company_code]);
+                $cid_for_branch = (int)$stmtC0->fetchColumn();
+            } catch (Throwable $e) {}
+        } else {
+            $cid_for_branch = $default_company_id;
+        }
+
+        $stmt_sa = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE username = ? AND company_id IS NULL LIMIT 1");
+        $stmt_sa->execute([$user]);
+        $u_sa = $stmt_sa->fetch(PDO::FETCH_ASSOC);
+
+        $u_br = null;
+        if ($cid_for_branch > 0) {
+            $stmt_br = $pdo->prepare("SELECT id, username, password_hash, role, display_name, avatar_url, company_id, is_active FROM users WHERE username = ? AND company_id = ? LIMIT 1");
+            $stmt_br->execute([$user, $cid_for_branch]);
+            $u_br = $stmt_br->fetch(PDO::FETCH_ASSOC);
+        }
+
+        $u = null;
+        if ($u_sa && password_verify($pass, (string)($u_sa['password_hash'] ?? ''))) {
+            if (strtolower(trim((string)($u_sa['role'] ?? ''))) === 'superadmin') {
+                $u = $u_sa;
+            }
+        }
+        if (!$u && $u_br && password_verify($pass, (string)($u_br['password_hash'] ?? ''))) {
+            $u = $u_br;
+        }
 
         $db_role = strtolower(trim((string)($u['role'] ?? '')));
-        if (!$u || (int)$u['is_active'] !== 1 || !password_verify($pass, $u['password_hash'])) {
+        if (!$u) {
             $error = '用户名或密码错误';
+        } elseif ((int)$u['is_active'] !== 1) {
+            $error = '该账号已禁用';
         } elseif ($login_as === 'admin' && !in_array($db_role, ['admin', 'superadmin'], true)) {
             $error = '请使用 Admin 登录入口，或该账号不是管理员';
         } elseif ($login_as === 'member' && !in_array($db_role, ['member', 'agent'], true)) {
             $error = '当前账号角色为 ' . ($db_role !== '' ? $db_role : '未设置') . '，Member / Agent 入口仅允许 member 或 agent。请到「用户管理」修改角色。';
+        } elseif ($login_as !== 'admin' && $db_role === 'superadmin') {
+            $error = '平台 superadmin 请使用 Admin 登录入口。';
         } else {
             $_SESSION['user_id'] = (int)$u['id'];
             $_SESSION['user_name'] = $u['display_name'] ?: $u['username'];
@@ -370,8 +402,9 @@ $login_as = $_POST['login_as'] ?? 'admin';
 
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" /></svg>
-                <input type="text" name="company_code" placeholder="Company" value="<?= htmlspecialchars((string)($_POST['company_code'] ?? '')) ?>">
+                <input type="text" name="company_code" placeholder="Company（分公司代码）" value="<?= htmlspecialchars((string)($_POST['company_code'] ?? '')) ?>" autocomplete="organization">
             </div>
+            <p style="margin:-4px 0 12px 44px;font-size:12px;color:#64748b;line-height:1.45;">多分公司时必填或建议填写，与「分公司管理」中的代码一致；各分公司可有相同用户名。留空则按默认第一家匹配。</p>
             <div class="input-wrap">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" /></svg>
                 <input type="text" name="user" placeholder="Username" required value="<?= htmlspecialchars($_POST['user'] ?? '') ?>">

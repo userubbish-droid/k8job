@@ -59,6 +59,24 @@ try { $pdo->exec("CREATE INDEX idx_users_company_id ON users(company_id)"); } ca
 // 旧账号兜底：非 superadmin 默认归到 k8（company_id=1）
 try { $pdo->exec("UPDATE users SET company_id = 1 WHERE (company_id IS NULL OR company_id = 0) AND role IN ('admin','member','agent')"); } catch (Throwable $e) {}
 
+// users：同一用户名可在不同分公司各有一条；平台 superadmin 仍为 company_id IS NULL（login_scope_key = SA:用户名）
+try {
+    $__lsk = (int)$pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'login_scope_key'")->fetchColumn();
+    if ($__lsk === 0) {
+        $pdo->exec("ALTER TABLE users ADD COLUMN login_scope_key VARCHAR(191) GENERATED ALWAYS AS (
+            CASE WHEN company_id IS NULL
+                THEN CONCAT('SA:', LOWER(username))
+                ELSE CONCAT('C', company_id, ':', LOWER(username))
+            END
+        ) STORED");
+    }
+} catch (Throwable $e) {}
+try { $pdo->exec('ALTER TABLE users ADD UNIQUE KEY uq_users_login_scope_key (login_scope_key)'); } catch (Throwable $e) {}
+foreach (['username', 'users_username_unique'] as $__uk) {
+    try { $pdo->exec("ALTER TABLE users DROP INDEX `{$__uk}`"); } catch (Throwable $e) {}
+}
+try { $pdo->exec('CREATE INDEX idx_users_company_username ON users(company_id, username)'); } catch (Throwable $e) {}
+
 // 业务表 company_id（旧数据默认归到 1）
 foreach (['customers','transactions','banks','products','expenses','customer_product_accounts','balance_adjust','user_permissions','rebate_given','agent_rebate_settings'] as $__t) {
     try { $pdo->exec("ALTER TABLE {$__t} ADD COLUMN company_id INT UNSIGNED NOT NULL DEFAULT 1"); } catch (Throwable $e) {}

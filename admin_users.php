@@ -211,8 +211,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
     } catch (Throwable $e) {
         $raw = (string)$e->getMessage();
-        if (strpos($raw, 'Duplicate entry') !== false && strpos($raw, "for key 'username'") !== false) {
-            $err = '创建失败：用户名已存在，请直接在下方账号列表修改角色或重置密码。';
+        if (strpos($raw, 'Duplicate entry') !== false) {
+            if (strpos($raw, 'login_scope_key') !== false || strpos($raw, 'uq_users_login_scope') !== false) {
+                $err = '创建失败：该分公司下此用户名已存在；其他分公司可使用相同用户名。';
+            } elseif (strpos($raw, "for key 'username'") !== false) {
+                $err = '创建失败：用户名已存在，请直接在下方账号列表修改角色或重置密码。';
+            } else {
+                $err = '创建失败：数据冲突（可能为重复用户名），请检查分公司与用户名组合。';
+            }
         } else {
             $err = $raw;
         }

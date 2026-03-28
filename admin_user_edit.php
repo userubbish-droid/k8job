@@ -41,8 +41,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $msg = '已保存。';
         } catch (Throwable $e) {
             $raw = (string)$e->getMessage();
-            if (strpos($raw, 'Duplicate entry') !== false && strpos($raw, "for key 'username'") !== false) {
-                $err = '保存失败：用户名已存在。';
+            if (strpos($raw, 'Duplicate entry') !== false) {
+                if (strpos($raw, 'login_scope_key') !== false || strpos($raw, 'uq_users_login_scope') !== false) {
+                    $err = '保存失败：该分公司下此用户名已被占用。';
+                } elseif (strpos($raw, "for key 'username'") !== false) {
+                    $err = '保存失败：用户名已存在。';
+                } else {
+                    $err = '保存失败：' . $raw;
+                }
             } else {
                 $err = '保存失败：' . $raw;
             }
