@@ -101,7 +101,7 @@ try {
     $banks = $stb->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $banks = []; }
 try {
-    $stp = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stp = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
     $stp->execute([$company_id]);
     $products = $stp->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $products = []; }

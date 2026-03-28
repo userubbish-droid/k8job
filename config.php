@@ -105,6 +105,15 @@ foreach (['customers','transactions','banks','products','expenses','customer_pro
     try { $pdo->exec("ALTER TABLE {$__t} ADD COLUMN company_id INT UNSIGNED NOT NULL DEFAULT 1"); } catch (Throwable $e) {}
     try { $pdo->exec("CREATE INDEX idx_{$__t}_company_id ON {$__t}(company_id)"); } catch (Throwable $e) {}
 }
+// 产品删除：先禁用 → 申请删除（待审）→ Boss 批准后物理删行
+try {
+    $pdo->exec('ALTER TABLE products ADD COLUMN delete_pending_at DATETIME NULL DEFAULT NULL');
+} catch (Throwable $e) {
+}
+try {
+    $pdo->exec('ALTER TABLE products ADD COLUMN delete_pending_by INT UNSIGNED NULL DEFAULT NULL');
+} catch (Throwable $e) {
+}
 
 // 银行/产品/Expense：名称改为「分区内唯一」
 foreach ([['banks', 'uq_banks_company_name'], ['products', 'uq_products_company_name'], ['expenses', 'uq_expenses_company_name']] as $__pair) {

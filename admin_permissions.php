@@ -92,7 +92,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && ($_POST['action'] ?? '') !== 'save_admin_month') {
     if (!user_is_manageable_by_current_actor($pdo, $selected_id)) {
-        $err = '无权限保存该员工的权限（仅可管理本公司 Member；平台总管理员可管理全部）。';
+        $err = __('perm_err_save_scope_member');
     } else {
         $checked = $_POST['perms'] ?? [];
         if (!is_array($checked)) {
@@ -214,7 +214,7 @@ if ($selected_id > 0) {
             <p class="breadcrumb">
                 <a href="dashboard.php">首页</a><span>·</span>
                 <a href="admin_users.php">用户管理</a>
-                <?= $actor_is_superadmin ? '' : '<span>·</span><span>列表仅含本公司 Member</span>' ?>
+                <?= $actor_is_superadmin ? '' : '<span>·</span><span>' . htmlspecialchars(__('perm_breadcrumb_co_extra'), ENT_QUOTES, 'UTF-8') . '</span>' ?>
             </p>
         </div>
 
@@ -222,7 +222,7 @@ if ($selected_id > 0) {
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <h3 style="margin-top:0;">Member 权限</h3>
+            <h3 style="margin-top:0;"><?= htmlspecialchars(__('perm_card_member_title'), ENT_QUOTES, 'UTF-8') ?></h3>
             <form method="get" class="member-select">
                 <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
                 <div class="form-group">
@@ -295,11 +295,11 @@ if ($selected_id > 0) {
 
         <?php if ($actor_can_set_admin_month): ?>
         <div class="card" style="margin-top: 20px;">
-            <h3 style="margin-top:0;">Admin · 首页本月数据</h3>
+            <h3 style="margin-top:0;"><?= htmlspecialchars(__('perm_card_admin_month_title'), ENT_QUOTES, 'UTF-8') ?></h3>
             <form method="get" class="member-select">
                 <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
                 <div class="form-group">
-                    <label>选择 Admin</label>
+                    <label><?= htmlspecialchars(__('perm_select_admin_label'), ENT_QUOTES, 'UTF-8') ?></label>
                     <select name="admin_user_id" class="form-control" onchange="this.form.submit()">
                         <option value="">-- 请选 --</option>
                         <?php foreach ($admins_for_month as $a):
@@ -326,7 +326,7 @@ if ($selected_id > 0) {
                 <button type="submit" class="btn btn-primary" style="margin-top: 12px;">保存</button>
             </form>
             <?php elseif (empty($admins_for_month)): ?>
-            <p class="form-hint">当前范围内没有 Admin 账号。</p>
+            <p class="form-hint"><?= htmlspecialchars(__('perm_empty_admin_hint'), ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
         <?php endif; ?>

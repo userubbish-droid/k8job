@@ -203,7 +203,7 @@ try {
 } catch (Throwable $e) {
 }
 try {
-    $st = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $st = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
     $st->execute([$gpc_cid]);
     $all_products = $st->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {

@@ -325,9 +325,6 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
         <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
     </div>
-    <?php if ($has_deleted_at): ?>
-    <p class="form-hint" style="margin-top:8px;">汇总为<strong>未删除</strong>流水；已删除行在表中<strong>红色底</strong>显示删除人与时间，满 <strong>100 天</strong>后系统自动清除。</p>
-    <?php endif; ?>
     </div>
     <?php endif; ?>
 

@@ -313,7 +313,7 @@ try {
     $banks = [];
 }
 try {
-    $stmtPr = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stmtPr = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
     $stmtPr->execute([$company_id]);
     $products = $stmtPr->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
@@ -397,7 +397,7 @@ if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
     $kiosk_gp_out = $range_out_product;
     ensure_products_kiosk_columns($pdo);
     try {
-        $km = $pdo->prepare('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE company_id = ? AND is_active = 1');
+        $km = $pdo->prepare('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL)');
         $km->execute([$company_id]);
         foreach ($km->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $k = strtolower(trim((string)$r['name']));

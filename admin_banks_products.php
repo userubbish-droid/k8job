@@ -4,6 +4,8 @@ require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_banks_products';
 $company_id = current_company_id();
+$actor_role = (string)($_SESSION['user_role'] ?? '');
+$actor_is_boss_like = in_array($actor_role, ['boss', 'superadmin'], true);
 
 function _ensure_balance_adjust_table(PDO $pdo) {
     $pdo->exec("CREATE TABLE IF NOT EXISTS balance_adjust (
@@ -41,7 +43,7 @@ $bank_status_filter = trim((string)($_GET['bank_status_filter'] ?? 'all'));
 $product_status_filter = trim((string)($_GET['product_status_filter'] ?? 'all'));
 $expense_status_filter = trim((string)($_GET['expense_status_filter'] ?? 'all'));
 if (!in_array($bank_status_filter, ['all', 'active', 'inactive'], true)) $bank_status_filter = 'all';
-if (!in_array($product_status_filter, ['all', 'active', 'inactive'], true)) $product_status_filter = 'all';
+if (!in_array($product_status_filter, ['all', 'active', 'inactive', 'pending_delete'], true)) $product_status_filter = 'all';
 if (!in_array($expense_status_filter, ['all', 'active', 'inactive'], true)) $expense_status_filter = 'all';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -99,9 +101,76 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'toggle_product') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
+            $chk = $pdo->prepare('SELECT is_active, delete_pending_at FROM products WHERE id = ? AND company_id = ? LIMIT 1');
+            $chk->execute([$id, $company_id]);
+            $pr = $chk->fetch(PDO::FETCH_ASSOC);
+            if (!$pr) {
+                throw new RuntimeException('未找到该产品。');
+            }
+            if ((int)($pr['is_active'] ?? 0) === 0 && !empty($pr['delete_pending_at'])) {
+                throw new RuntimeException('该产品已申请删除，请先撤销删除申请后再启用。');
+            }
             $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
             $msg = '已更新状态。';
+        } elseif ($action === 'request_product_delete') {
+            $id = (int)($_POST['id'] ?? 0);
+            if ($id <= 0) {
+                throw new RuntimeException('参数错误。');
+            }
+            $chk = $pdo->prepare('SELECT is_active, delete_pending_at, name FROM products WHERE id = ? AND company_id = ? LIMIT 1');
+            $chk->execute([$id, $company_id]);
+            $pr = $chk->fetch(PDO::FETCH_ASSOC);
+            if (!$pr) {
+                throw new RuntimeException('未找到该产品。');
+            }
+            if ((int)($pr['is_active'] ?? 0) !== 0) {
+                throw new RuntimeException('请先将产品设为「禁用」，再申请删除。');
+            }
+            if (!empty($pr['delete_pending_at'])) {
+                throw new RuntimeException('已提交删除申请，请等待老板审批。');
+            }
+            $uid = (int)($_SESSION['user_id'] ?? 0);
+            $pdo->prepare('UPDATE products SET delete_pending_at = NOW(), delete_pending_by = ? WHERE id = ? AND company_id = ?')->execute([$uid > 0 ? $uid : null, $id, $company_id]);
+            $msg = '已提交删除申请：该产品已从记账/下拉中隐藏，待老板批准后将彻底删除。';
+        } elseif ($action === 'cancel_product_delete') {
+            $id = (int)($_POST['id'] ?? 0);
+            if ($id <= 0) {
+                throw new RuntimeException('参数错误。');
+            }
+            $st = $pdo->prepare('UPDATE products SET delete_pending_at = NULL, delete_pending_by = NULL WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL');
+            $st->execute([$id, $company_id]);
+            if ($st->rowCount() === 0) {
+                throw new RuntimeException('无待审删除记录或产品不存在。');
+            }
+            $msg = '已撤销删除申请。';
+        } elseif ($action === 'approve_product_delete') {
+            if (!$actor_is_boss_like) {
+                throw new RuntimeException('仅老板或平台总管理可批准彻底删除产品。');
+            }
+            $id = (int)($_POST['id'] ?? 0);
+            if ($id <= 0) {
+                throw new RuntimeException('参数错误。');
+            }
+            $chk = $pdo->prepare('SELECT name FROM products WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL LIMIT 1');
+            $chk->execute([$id, $company_id]);
+            $pr = $chk->fetch(PDO::FETCH_ASSOC);
+            if (!$pr) {
+                throw new RuntimeException('未找到待批准删除的产品。');
+            }
+            $pname = trim((string)($pr['name'] ?? ''));
+            $pdo->beginTransaction();
+            try {
+                $pdo->prepare('DELETE FROM balance_adjust WHERE company_id = ? AND adjust_type = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))')->execute([$company_id, 'product', $pname]);
+                $pdo->prepare('DELETE FROM products WHERE id = ? AND company_id = ?')->execute([$id, $company_id]);
+                $pdo->commit();
+            } catch (Throwable $e) {
+                if ($pdo->inTransaction()) {
+                    $pdo->rollBack();
+                }
+                throw $e;
+            }
+            $msg = '已批准：产品「' . $pname . '」已从系统移除。';
         } elseif ($action === 'toggle_expense') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException('参数错误。');
@@ -249,14 +318,31 @@ try {
     $banks = $stmt->fetchAll();
 } catch (Throwable $e) {}
 try {
-    $sql = "SELECT id, name, is_active, sort_order, created_at FROM products WHERE company_id = ?";
-    if ($product_status_filter === 'active') $sql .= " AND is_active = 1";
-    elseif ($product_status_filter === 'inactive') $sql .= " AND is_active = 0";
-    $sql .= " ORDER BY sort_order ASC, name ASC";
+    $sql = "SELECT id, name, is_active, sort_order, created_at, delete_pending_at, delete_pending_by FROM products WHERE company_id = ?";
+    if ($product_status_filter === 'active') {
+        $sql .= ' AND is_active = 1 AND (delete_pending_at IS NULL)';
+    } elseif ($product_status_filter === 'inactive') {
+        $sql .= ' AND is_active = 0 AND (delete_pending_at IS NULL)';
+    } elseif ($product_status_filter === 'pending_delete') {
+        $sql .= ' AND delete_pending_at IS NOT NULL';
+    }
+    $sql .= ' ORDER BY sort_order ASC, name ASC';
     $stmt = $pdo->prepare($sql);
     $stmt->execute([$company_id]);
     $products = $stmt->fetchAll();
-} catch (Throwable $e) {}
+} catch (Throwable $e) {
+    $products = [];
+}
+$products_full = [];
+try {
+    $stpf = $pdo->prepare('SELECT id, name, is_active, sort_order, created_at, delete_pending_at, delete_pending_by FROM products WHERE company_id = ? ORDER BY sort_order ASC, name ASC');
+    $stpf->execute([$company_id]);
+    $products_full = $stpf->fetchAll();
+} catch (Throwable $e) {
+}
+$products_usable = array_values(array_filter($products_full, static function ($p) {
+    return (int)($p['is_active'] ?? 0) === 1 && empty($p['delete_pending_at']);
+}));
 try {
     _ensure_expenses_table($pdo);
     $sql = "SELECT id, name, is_active, sort_order, created_at FROM expenses WHERE company_id = ?";
@@ -374,8 +460,11 @@ foreach ($banks as $b) {
     $tout = (float)($total_out_bank[$bkey] ?? 0);
     $bank_balances_for_notify[$bname] = $start + $tin - $tout;
 }
-foreach ($products as $p) {
+foreach ($products_full as $p) {
     if ((int)($p['is_active'] ?? 1) !== 1) continue;
+    if (!empty($p['delete_pending_at'])) {
+        continue;
+    }
     $pname = trim((string)$p['name']);
     $pkey = strtolower($pname);
     $start = (float)($balance_product[$pkey] ?? 0);
@@ -492,7 +581,7 @@ try {
                                             </div>
                                             <div class="balance-notify-group">
                                                 <span class="bank-contra-label">产品（低于即通知）</span>
-                                                <?php foreach ($products as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
+                                                <?php foreach ($products_full as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
                                                 <div class="balance-notify-row">
                                                     <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
                                                     <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
@@ -593,6 +682,26 @@ try {
                         产品管理
                         <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="product-add-wrap" aria-label="展开加额与添加">+</button>
                     </h3>
+                    <?php
+                    $pf_q = static function (string $pf) use ($bank_status_filter, $expense_status_filter): string {
+                        $q = ['product_status_filter' => $pf];
+                        if ($bank_status_filter !== 'all') {
+                            $q['bank_status_filter'] = $bank_status_filter;
+                        }
+                        if ($expense_status_filter !== 'all') {
+                            $q['expense_status_filter'] = $expense_status_filter;
+                        }
+                        return htmlspecialchars(http_build_query($q), ENT_QUOTES, 'UTF-8');
+                    };
+                    ?>
+                    <p class="muted" style="font-size:13px;margin:6px 0 12px;line-height:1.6;">
+                        列表筛选：
+                        <a href="admin_banks_products.php?<?= $pf_q('all') ?>"<?= $product_status_filter === 'all' ? ' style="font-weight:700;"' : '' ?>>全部</a>
+                        · <a href="admin_banks_products.php?<?= $pf_q('active') ?>"<?= $product_status_filter === 'active' ? ' style="font-weight:700;"' : '' ?>>仅启用</a>
+                        · <a href="admin_banks_products.php?<?= $pf_q('inactive') ?>"<?= $product_status_filter === 'inactive' ? ' style="font-weight:700;"' : '' ?>>仅禁用</a>
+                        · <a href="admin_banks_products.php?<?= $pf_q('pending_delete') ?>"<?= $product_status_filter === 'pending_delete' ? ' style="font-weight:700;"' : '' ?>>待删审核</a>
+                        <span style="color:#94a3b8;">（删除须先禁用，再申请；老板批准后才会从库中删除）</span>
+                    </p>
                     <div id="product-add-wrap" style="display:none; margin-bottom:16px;">
                         <div class="product-topup-box" style="margin-bottom:16px; padding:12px 14px; background:rgba(248,250,252,0.9); border:1px solid var(--border); border-radius:6px;">
                             <div style="font-weight:600; margin-bottom:8px; font-size:13px;">产品加额（balance 不够时加分）</div>
@@ -601,7 +710,7 @@ try {
                                 <span style="font-size:13px;">选择产品</span>
                                 <select name="product" class="form-control" required style="width:auto; min-width:110px;">
                                     <option value="">— 请选 —</option>
-                                    <?php foreach ($products as $op): $oname = trim((string)$op['name']); ?>
+                                    <?php foreach ($products_usable as $op): $oname = trim((string)$op['name']); ?>
                                     <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
                                     <?php endforeach; ?>
                                 </select>
@@ -645,17 +754,19 @@ try {
                             foreach ($products as $p):
                                 $pname = trim((string)$p['name']);
                                 $pkey = strtolower($pname);
+                                $pend_del = !empty($p['delete_pending_at']);
                                 $cur = $balance_product[$pkey] ?? null;
                                 $start = $cur !== null ? (float)$cur : 0;
                                 $tin = $total_in_product[$pkey] ?? 0;
                                 $topup = $total_topup_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
                                 $balance_now = $start - $tin + $topup + $tout;
+                                $status_cell = $pend_del ? '禁用 · 待删审核' : (((int)$p['is_active'] === 1) ? '启用' : '禁用');
                             ?>
-                            <tr>
+                            <tr<?= $pend_del ? ' style="background:rgba(254,242,242,0.88);"' : '' ?>>
                                 <td><?= (int)$p['id'] ?></td>
                                 <td><?= htmlspecialchars($pname) ?></td>
-                                <td><?= ((int)$p['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                                <td><?= htmlspecialchars($status_cell) ?></td>
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
@@ -675,11 +786,34 @@ try {
                                             <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
                                         </form>
                                     </span>
+                                    <?php if (!$pend_del): ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_product">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
                                         <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$p['is_active'] === 1) ? '禁用' : '启用' ?></button>
                                     </form>
+                                    <?php endif; ?>
+                                    <?php if (!$pend_del && (int)$p['is_active'] === 0): ?>
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;" data-confirm="提交后该产品将从业务下拉中隐藏，需老板批准后才从系统彻底删除。确定申请？">
+                                        <input type="hidden" name="action" value="request_product_delete">
+                                        <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline" style="border-color:#dc2626;color:#b91c1c;">申请删除</button>
+                                    </form>
+                                    <?php endif; ?>
+                                    <?php if ($pend_del): ?>
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;">
+                                        <input type="hidden" name="action" value="cancel_product_delete">
+                                        <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-outline">撤销申请</button>
+                                    </form>
+                                    <?php if ($actor_is_boss_like): ?>
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;" data-confirm="将永久删除该产品及对应期初余额（balance_adjust）记录，历史流水中的产品名仍会保留。不可恢复，确定？">
+                                        <input type="hidden" name="action" value="approve_product_delete">
+                                        <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
+                                        <button type="submit" class="btn btn-sm btn-primary">批准删除</button>
+                                    </form>
+                                    <?php endif; ?>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>

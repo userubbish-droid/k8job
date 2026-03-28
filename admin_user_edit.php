@@ -58,6 +58,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
             }
             $msg = '已保存。';
+            if ($id === (int)($_SESSION['user_id'] ?? 0)) {
+                $_SESSION['avatar_url'] = $avatar_url !== '' ? $avatar_url : '';
+            }
         } catch (Throwable $e) {
             $raw = (string)$e->getMessage();
             if (strpos($raw, 'Duplicate entry') !== false) {
