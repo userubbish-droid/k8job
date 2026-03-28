@@ -136,10 +136,11 @@ function kiosk_stmt_fmt_in(float $v): string {
                     </div>
                     <?php if ($is_admin): ?>
                         <p class="form-hint" style="margin-top:12px;">
-                            <strong>In 合计</strong> 与 statement 中 Game Platform 的 <strong>In</strong> 相同（DEPOSIT+REBATE+FREE+FREE WITHDRAW，按 total 或 amount+bonus）。
-                            <strong>Out</strong> 为 <strong>WITHDRAW + EXPENSE</strong> 按产品汇总（与银行侧「出账」口径一致；含开销类流水，此前仅统计 WITHDRAW 会漏算）。
-                            <strong>Bonus</strong> 列为上述入账模式下 <code>bonus</code> 字段之和（便于与 In 核对）。
-                            未计入 In/Out 的模式：<strong>BANK / OTHER</strong> 等若未带上述 mode，不会出现在本表；若有需要可再扩展规则。
+                            <strong>In 合计</strong> 与 statement 中 Game Platform 的 <strong>In</strong> 相同（DEPOSIT+REBATE+FREE+FREE WITHDRAW，按 total 或 amount+bonus；<code>mode</code> 会做 TRIM 以兼容旧数据）。
+                            <strong>Out</strong> 为 <strong>WITHDRAW + EXPENSE</strong> 按平台汇总。
+                            若流水未填产品但填了客户代号，会按该客户在「产品账号」里 <strong>最早一条</strong> 的产品名归入对应平台（REBATE/FREE 等常见）；无代号或账号表无记录则仍无法归类。
+                            <strong>Bonus</strong> 列仅为数据库 <code>bonus</code> 字段之和；若奖励只写在 <code>amount</code>/<code>total</code> 而未填 <code>bonus</code>，该列会为「—」，但金额已计入对应模式的列或 In 合计。
+                            未计入 In/Out 的模式：<strong>BANK / OTHER</strong> 等不会出现在本表，除非以后扩展规则。
                         </p>
                     <?php endif; ?>
                 </div>

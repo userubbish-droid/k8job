@@ -12,6 +12,8 @@ if ($gpc_cid <= 0) {
     $gpc_cid = -1;
 }
 
+$gpc_gp_key_sql = require __DIR__ . '/gpc_effective_product_key_sql.php';
+
 $cum_in_bank = [];
 $cum_out_bank = [];
 $cum_in_product = [];
@@ -35,14 +37,14 @@ try {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '—') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
-        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved' AND deleted_at IS NULL GROUP BY product");
+    $stmt = $pdo->prepare("SELECT {$gpc_gp_key_sql} AS gp,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS topup,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('WITHDRAW','EXPENSE') THEN t.amount ELSE 0 END), 0) AS tout
+        FROM transactions t WHERE t.company_id = ? AND t.day < ? AND t.status = 'approved' AND t.deleted_at IS NULL GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from]);
     foreach ($stmt->fetchAll() as $r) {
-        $p = strtolower(trim((string)($r['product'] ?? '')));
+        $p = strtolower(trim((string)($r['gp'] ?? '')));
         if ($p !== '' && $p !== '—') {
             $cum_in_product[$p] = ($cum_in_product[$p] ?? 0) + (float)$r['ti'];
             $cum_topup_product[$p] = ($cum_topup_product[$p] ?? 0) + (float)($r['topup'] ?? 0);
@@ -74,18 +76,18 @@ try {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS total_in,
-        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
-        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
-        GROUP BY product");
+    $stmt = $pdo->prepare("SELECT {$gpc_gp_key_sql} AS gp,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS total_in,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS topup,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('WITHDRAW','EXPENSE') THEN t.amount ELSE 0 END), 0) AS total_out
+        FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
+        GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from, $day_to]);
     $range_in_product = [];
     $range_topup_product = [];
     $range_out_product = [];
     foreach ($stmt->fetchAll() as $r) {
-        $p = strtolower(trim((string)($r['product'] ?? '')));
+        $p = strtolower(trim((string)($r['gp'] ?? '')));
         if ($p !== '' && $p !== '—') {
             $range_in_product[$p] = ($range_in_product[$p] ?? 0) + (float)$r['total_in'];
             $range_topup_product[$p] = ($range_topup_product[$p] ?? 0) + (float)($r['topup'] ?? 0);
@@ -101,18 +103,18 @@ try {
 /** 区间内按模式拆分（与 statement In 使用同一套 total/amount+bonus 规则） */
 $range_breakdown_product = [];
 try {
-    $line = '(CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END)';
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN $line ELSE 0 END), 0) AS dep,
-        COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN $line ELSE 0 END), 0) AS reb,
-        COALESCE(SUM(CASE WHEN mode = 'FREE' THEN $line ELSE 0 END), 0) AS fr,
-        COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN $line ELSE 0 END), 0) AS fwd,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN COALESCE(bonus,0) ELSE 0 END), 0) AS bns
-        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL
-        GROUP BY product");
+    $line = '(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END)';
+    $stmt = $pdo->prepare("SELECT {$gpc_gp_key_sql} AS gp,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'DEPOSIT' THEN $line ELSE 0 END), 0) AS dep,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'REBATE' THEN $line ELSE 0 END), 0) AS reb,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE' THEN $line ELSE 0 END), 0) AS fr,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN $line ELSE 0 END), 0) AS fwd,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN COALESCE(t.bonus,0) ELSE 0 END), 0) AS bns
+        FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
+        GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from, $day_to]);
     foreach ($stmt->fetchAll() as $r) {
-        $p = strtolower(trim((string)($r['product'] ?? '')));
+        $p = strtolower(trim((string)($r['gp'] ?? '')));
         if ($p !== '' && $p !== '—') {
             $range_breakdown_product[$p] = [
                 'dep' => (float)$r['dep'],

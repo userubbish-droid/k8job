@@ -319,16 +319,17 @@ try {
 } catch (Throwable $e) {
     $diag_error = $e->getMessage();
 }
+$__gpc_gp_key = require __DIR__ . '/inc/gpc_effective_product_key_sql.php';
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS product,
-        COALESCE(SUM(CASE WHEN mode IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode = 'TOPUP' THEN (CASE WHEN total IS NOT NULL AND total != 0 THEN total ELSE amount + COALESCE(bonus,0) END) ELSE 0 END), 0) AS topup,
-        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE status = 'approved' AND company_id = ? GROUP BY COALESCE(product, '')");
+    $stmt = $pdo->prepare("SELECT {$__gpc_gp_key} AS gp,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS topup,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('WITHDRAW','EXPENSE') THEN t.amount ELSE 0 END), 0) AS tout
+        FROM transactions t WHERE t.status = 'approved' AND t.company_id = ? GROUP BY gp");
     $stmt->execute([$company_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     foreach ($rows as $r) {
-        $prodVal = $r['product'] ?? $r['Product'] ?? '';
+        $prodVal = $r['gp'] ?? $r['GP'] ?? '';
         $k = strtolower(trim((string)$prodVal));
         if ($k === '') continue;
         $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
