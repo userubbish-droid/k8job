@@ -126,11 +126,12 @@ try {
 }
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>首页 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <?php $dash_site = defined('SITE_TITLE') ? SITE_TITLE : 'K8'; ?>
+    <title><?= htmlspecialchars(__f('dash_page_title', $dash_site), ENT_QUOTES, 'UTF-8') ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -148,43 +149,43 @@ try {
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main dashboard-compact">
             <div class="page-header dashboard-header">
-                <h1>K8 欢迎（<?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?>）</h1>
+                <?php $dash_uname = $_SESSION['user_name'] ?? __('user_default'); ?>
+                <h1><?= htmlspecialchars(__f('dash_title', $dash_uname), ENT_QUOTES, 'UTF-8') ?></h1>
                 <p class="welcome-role">
-                    欢迎，<strong><?= htmlspecialchars($_SESSION['user_name'] ?? '用户') ?></strong>
+                    <?= htmlspecialchars(__('dash_greet'), ENT_QUOTES, 'UTF-8') ?><strong><?= htmlspecialchars($dash_uname, ENT_QUOTES, 'UTF-8') ?></strong>
                     <?php
                     $__r = $_SESSION['user_role'] ?? '';
-                    $__badge = $__r === 'superadmin' ? 'Big Boss' : ($__r === 'boss' ? 'Boss' : ($__r === 'admin' ? '管理员' : '员工'));
+                    $__badge = $__r === 'superadmin' ? __('role_bb') : ($__r === 'boss' ? __('role_boss') : ($__r === 'admin' ? __('role_admin') : ($__r === 'member' ? __('role_member') : ($__r === 'agent' ? __('role_agent') : __('role_staff')))));
                     ?>
-                    <span class="role-badge"><?= htmlspecialchars($__badge) ?></span>
+                    <span class="role-badge"><?= htmlspecialchars($__badge, ENT_QUOTES, 'UTF-8') ?></span>
                 </p>
             </div>
 
             <?php if ($db_error): ?>
                 <div class="card alert-error">
-                    <h3 style="margin-top:0; color:#991b1b;">系统提示：数据库还没升级完成</h3>
+                    <h3 style="margin-top:0; color:#991b1b;"><?= htmlspecialchars(__('dash_db_err_title'), ENT_QUOTES, 'UTF-8') ?></h3>
                     <div style="font-size: 13px; line-height: 1.6;">
-                        <div><b>错误信息</b>：<?= htmlspecialchars($db_error) ?></div>
+                        <div><b><?= htmlspecialchars(__('dash_db_err_msg'), ENT_QUOTES, 'UTF-8') ?></b>：<?= htmlspecialchars($db_error) ?></div>
                         <div style="margin-top:10px;">
-                            <b>解决方法</b>：到 Hostinger 的 phpMyAdmin 执行迁移 SQL：<code>migrate_approval.sql</code>（新增 status 等字段）。<br>
-                            另外如果你要用客户下拉，也执行：<code>migrate_customers.sql</code>（新增 customers 表）。
+                            <b><?= htmlspecialchars(__('dash_db_fix'), ENT_QUOTES, 'UTF-8') ?></b>：<?= __('dash_db_fix_body') ?>
                         </div>
                     </div>
                 </div>
             <?php endif; ?>
 
             <div class="card">
-                <h3>今日（<?= htmlspecialchars($today) ?>）</h3>
+                <h3><?= htmlspecialchars(__f('dash_today', $today), ENT_QUOTES, 'UTF-8') ?></h3>
                 <div class="stat-cards">
                     <div class="stat-card in">
-                        <div class="label">今日入账</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_today_in'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format((float)$day_in, 2) ?></div>
                     </div>
                     <div class="stat-card out">
-                        <div class="label">今日出账</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_today_out'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format((float)$day_out, 2) ?></div>
                     </div>
                     <div class="stat-card profit">
-                        <div class="label">今日利润</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_today_profit'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format($day_profit, 2) ?></div>
                     </div>
                 </div>
@@ -208,30 +209,30 @@ try {
                 </div>
                 <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-top: 16px;">
                 <?php if (($_SESSION['user_role'] ?? '') === 'member'): ?>
-                <p class="form-hint" style="margin-top:0; grid-column: 1 / -1;">以下为只读汇总，银行与产品的增删改仅管理员可操作。</p>
+                <p class="form-hint" style="margin-top:0; grid-column: 1 / -1;"><?= htmlspecialchars(__('dash_member_hint'), ENT_QUOTES, 'UTF-8') ?></p>
                 <?php endif; ?>
                     <div>
-                        <h4>今日客户与单数</h4>
+                        <h4><?= htmlspecialchars(__('dash_sec_customers_today'), ENT_QUOTES, 'UTF-8') ?></h4>
                         <div class="stat-cards" style="margin-top:8px;">
                             <div class="stat-card" style="border-left-color: var(--primary);">
-                                <div class="label">上线客户数</div>
+                                <div class="label"><?= htmlspecialchars(__('dash_active_customers'), ENT_QUOTES, 'UTF-8') ?></div>
                                 <div class="value" style="color: var(--primary);"><?= (int)$day_customers_count ?></div>
                             </div>
                             <div class="stat-card" style="border-left-color: var(--muted);">
-                                <div class="label">几张单</div>
+                                <div class="label"><?= htmlspecialchars(__('dash_orders_count'), ENT_QUOTES, 'UTF-8') ?></div>
                                 <div class="value" style="color: #475569;"><?= (int)$day_orders_count ?></div>
                             </div>
                         </div>
                     </div>
                     <div>
-                        <h4>今日新顾客与单数</h4>
+                        <h4><?= htmlspecialchars(__('dash_sec_new_customers'), ENT_QUOTES, 'UTF-8') ?></h4>
                         <div class="stat-cards" style="margin-top:8px;">
                             <div class="stat-card" style="border-left-color: var(--success);">
-                                <div class="label">几个新顾客</div>
+                                <div class="label"><?= htmlspecialchars(__('dash_new_customers'), ENT_QUOTES, 'UTF-8') ?></div>
                                 <div class="value" style="color: var(--success);"><?= (int)$day_new_customers ?></div>
                             </div>
                             <div class="stat-card" style="border-left-color: var(--primary);">
-                                <div class="label">新客户进多少单</div>
+                                <div class="label"><?= htmlspecialchars(__('dash_new_customer_orders'), ENT_QUOTES, 'UTF-8') ?></div>
                                 <div class="value" style="color: var(--primary);"><?= (int)$day_new_customer_orders ?></div>
                             </div>
                         </div>
@@ -242,25 +243,25 @@ try {
             <?php if ($show_dashboard_month): ?>
             <label class="month-toggle">
                 <input type="checkbox" id="show_month" onchange="document.getElementById('month-card').classList.toggle('visible', this.checked)">
-                显示本月数据
+                <?= htmlspecialchars(__('dash_show_month'), ENT_QUOTES, 'UTF-8') ?>
             </label>
             <div class="card" id="month-card">
-                <h3>本月（<?= $month_start ?> ~ <?= $month_end ?>）</h3>
+                <h3><?= htmlspecialchars(__f('dash_month', $month_start, $month_end), ENT_QUOTES, 'UTF-8') ?></h3>
                 <div class="stat-cards">
                     <div class="stat-card in">
-                        <div class="label">本月入账</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_month_in'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format((float)$month_in, 2) ?></div>
                     </div>
                     <div class="stat-card out">
-                        <div class="label">本月出账</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_month_out'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format((float)$month_out, 2) ?></div>
                     </div>
                     <div class="stat-card expense">
-                        <div class="label">本月开销</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_month_expense'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format((float)$month_expenses, 2) ?></div>
                     </div>
                     <div class="stat-card profit">
-                        <div class="label">本月利润</div>
+                        <div class="label"><?= htmlspecialchars(__('dash_month_profit'), ENT_QUOTES, 'UTF-8') ?></div>
                         <div class="value"><?= number_format($month_profit, 2) ?></div>
                     </div>
                 </div>

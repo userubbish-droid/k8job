@@ -109,7 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (in_array($db_role, ['admin', 'member'], true)) {
                 $h2 = trim((string)($u['second_password_hash'] ?? ''));
                 if ($h2 === '') {
-                    $error = '该账号尚未设置二级密码，请联系 Boss 或平台 big boss 在「用户管理 → 编辑」中为该账号设置。';
+                    $error = '此账号尚未开通二级验证，请联系管理员处理。';
                 } else {
                     $_SESSION[AUTH_LOGIN_PENDING_SECOND] = [
                         'uid' => (int)$u['id'],

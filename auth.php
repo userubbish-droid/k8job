@@ -5,6 +5,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
     session_start();
 }
 
+require_once __DIR__ . '/inc/i18n.php';
+i18n_bootstrap();
+
 /** 权限 key => 显示名称（供 admin 打勾设置 member 用） */
 function get_permission_options(): array
 {

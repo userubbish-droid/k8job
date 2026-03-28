@@ -289,14 +289,6 @@ try {
         .agent-self-table { max-width: 640px; }
         .agent-self-table th,
         .agent-self-table td { font-size: 15px; }
-        .agent-self-table .data-table tbody tr.agent-summary-row-neg,
-        .agent-self-table .data-table tbody tr.agent-summary-row-neg td {
-            background: var(--danger-soft) !important;
-        }
-        .agent-self-table .data-table tbody tr.agent-summary-row-neg:hover,
-        .agent-self-table .data-table tbody tr.agent-summary-row-neg:hover td {
-            background: #fee2e2 !important;
-        }
         .agent-period-pill {
             display: inline-flex;
             align-items: center;
@@ -415,7 +407,7 @@ try {
                 </div>
                 <?php endif; ?>
                 <div class="card<?= $is_agent_user ? ' agent-self-table' : '' ?>" style="overflow-x: auto;">
-                    <h3><?= $is_agent_user ? 'Summary' : '列表' ?></h3>
+                    <h3><?= $is_agent_user ? 'list player' : '列表' ?></h3>
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -473,7 +465,7 @@ try {
                                     'day_to' => $day_to,
                                 ]);
                             ?>
-                            <tr<?= ($is_agent_user && $winLoss < 0) ? ' class="agent-summary-row-neg"' : '' ?>>
+                            <tr>
                                 <?php if ($is_agent_user): ?>
                                 <td>
                                     <a href="<?= htmlspecialchars($cust_detail_href) ?>" class="agent-summary-customers-link" title="查看各顾客 Total Win(Lose)">

@@ -247,6 +247,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
+$show_create_modal_on_load = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'create' && $err !== '');
+
 $status_sql = '';
 if ($status_filter === 'active') {
     $status_sql = ' AND is_active = 1';
@@ -463,6 +465,74 @@ if ($actor_is_superadmin) {
             accent-color: var(--primary);
             cursor: pointer;
         }
+        .admin-users-modal {
+            display: none;
+            position: fixed;
+            inset: 0;
+            z-index: 2500;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .admin-users-modal.is-open {
+            display: flex;
+        }
+        .admin-users-modal-backdrop {
+            position: absolute;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.48);
+            cursor: pointer;
+        }
+        .admin-users-modal-panel {
+            position: relative;
+            z-index: 1;
+            width: 100%;
+            max-width: 560px;
+            max-height: min(90vh, 720px);
+            overflow: auto;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 24px 64px rgba(15, 23, 42, 0.22);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .admin-users-modal-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 16px 18px;
+            border-bottom: 1px solid var(--border-light);
+            position: sticky;
+            top: 0;
+            background: #fff;
+            z-index: 2;
+        }
+        .admin-users-modal-head h3 {
+            margin: 0;
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+        .admin-users-modal-x {
+            flex-shrink: 0;
+            width: 36px;
+            height: 36px;
+            border: none;
+            border-radius: 10px;
+            background: rgba(241, 245, 249, 0.95);
+            color: #475569;
+            font-size: 22px;
+            line-height: 1;
+            cursor: pointer;
+        }
+        .admin-users-modal-x:hover {
+            background: #e2e8f0;
+            color: #0f172a;
+        }
+        .admin-users-modal-body {
+            padding: 18px 20px 22px;
+        }
     </style>
 </head>
 <body>
@@ -497,16 +567,25 @@ if ($actor_is_superadmin) {
         </form>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
-        <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+        <?php if ($err && !($show_create_modal_on_load ?? false)): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
-        <div class="card" id="create-account">
-            <h3>创建账号</h3>
+        <div id="create-account-modal" class="admin-users-modal<?= !empty($show_create_modal_on_load) ? ' is-open' : '' ?>" aria-hidden="<?= !empty($show_create_modal_on_load) ? 'false' : 'true' ?>">
+            <div class="admin-users-modal-backdrop" id="create-account-modal-backdrop" tabindex="-1"></div>
+            <div class="admin-users-modal-panel" role="dialog" aria-modal="true" aria-labelledby="create-account-title">
+                <div class="admin-users-modal-head">
+                    <h3 id="create-account-title">创建账号</h3>
+                    <button type="button" class="admin-users-modal-x" id="create-account-modal-close" aria-label="关闭">×</button>
+                </div>
+                <div class="admin-users-modal-body">
+            <?php if ($show_create_modal_on_load ?? false): ?>
+            <div class="alert alert-error" style="margin-bottom:14px;"><?= htmlspecialchars($err) ?></div>
+            <?php endif; ?>
             <?php if ($actor_is_superadmin): ?>
             <?php if (!$companies_for_create): ?>
             <div class="alert alert-error" role="status">当前没有「启用」的分公司，请先到 <a href="admin_companies.php">分公司管理</a> 新增。</div>
             <?php endif; ?>
             <?php endif; ?>
-            <form method="post">
+            <form method="post" id="create-account-form">
                 <input type="hidden" name="action" value="create">
                 <div class="admin-users-grid">
                     <div class="form-group">
@@ -581,9 +660,11 @@ if ($actor_is_superadmin) {
                 </div>
                 <div class="admin-users-actions" style="margin-top: 12px;">
                     <button type="submit" class="btn btn-primary">创建</button>
-                    <a href="dashboard.php" class="btn btn-outline">返回首页</a>
+                    <button type="button" class="btn btn-outline" id="create-account-cancel">取消</button>
                 </div>
             </form>
+                </div>
+            </div>
         </div>
 
         <div class="card">
@@ -744,16 +825,40 @@ if ($actor_is_superadmin) {
     </div>
     <script>
     (function(){
+        var modal = document.getElementById('create-account-modal');
         var btnAdd = document.getElementById('btn-add-user');
-        var createEl = document.getElementById('create-account');
-        if (btnAdd && createEl) {
-            btnAdd.addEventListener('click', function(){
-                createEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-                var firstInput = createEl.querySelector('input[name="username"]');
-                if (firstInput) {
-                    setTimeout(function(){ firstInput.focus(); }, 400);
-                }
-            });
+        var btnClose = document.getElementById('create-account-modal-close');
+        var btnCancel = document.getElementById('create-account-cancel');
+        var backdrop = document.getElementById('create-account-modal-backdrop');
+        function openCreateModal() {
+            if (!modal) return;
+            modal.classList.add('is-open');
+            modal.setAttribute('aria-hidden', 'false');
+            var firstInput = modal.querySelector('input[name="username"]');
+            if (firstInput) {
+                setTimeout(function(){ firstInput.focus(); }, 50);
+            }
+        }
+        function closeCreateModal() {
+            if (!modal) return;
+            modal.classList.remove('is-open');
+            modal.setAttribute('aria-hidden', 'true');
+            if (btnAdd) btnAdd.focus();
+        }
+        if (btnAdd && modal) {
+            btnAdd.addEventListener('click', function(){ openCreateModal(); });
+        }
+        if (btnClose) btnClose.addEventListener('click', closeCreateModal);
+        if (btnCancel) btnCancel.addEventListener('click', closeCreateModal);
+        if (backdrop) backdrop.addEventListener('click', closeCreateModal);
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape' && modal && modal.classList.contains('is-open')) {
+                closeCreateModal();
+            }
+        });
+        if (modal && modal.classList.contains('is-open')) {
+            var firstInput = modal.querySelector('input[name="username"]');
+            if (firstInput) setTimeout(function(){ firstInput.focus(); }, 80);
         }
         var tbForm = document.getElementById('admin-users-toolbar-form');
         if (tbForm) {

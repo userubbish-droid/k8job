@@ -235,14 +235,6 @@ try {
         .cust-pnl-cust-wins { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-company-wins { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
-        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row,
-        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row td {
-            background: var(--danger-soft) !important;
-        }
-        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row:hover,
-        .cust-agent-pnl-table tbody tr.cust-agent-pnl-neg-row:hover td {
-            background: #fee2e2 !important;
-        }
     </style>
 </head>
 <body>
@@ -273,7 +265,7 @@ try {
         <div class="card" style="overflow-x: auto;">
             <?php if ($agent_view): ?>
             <h3>list player</h3>
-            <table class="data-table cust-agent-pnl-table">
+            <table class="data-table">
                 <thead>
                     <tr>
                         <th>CODE</th>
@@ -296,7 +288,7 @@ try {
                     $agent_total_win_loss += $win_loss;
                     $wl_cls = $win_loss < 0 ? 'cust-pnl-cust-wins' : ($win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                 ?>
-                    <tr class="<?= $win_loss < 0 ? 'cust-agent-pnl-neg-row' : '' ?>">
+                    <tr>
                         <td><?= htmlspecialchars($code) ?></td>
                         <td class="num <?= $wl_cls ?>"><?= number_format($win_loss, 2) ?></td>
                     </tr>
@@ -304,9 +296,8 @@ try {
                 <?php if ($rows): ?>
                     <?php
                     $tot_cls = $agent_total_win_loss < 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
-                    $tot_row_bg = $agent_total_win_loss < 0 ? 'var(--danger-soft)' : ($agent_total_win_loss > 0 ? 'var(--primary-soft)' : 'var(--bg)');
                     ?>
-                    <tr class="<?= $agent_total_win_loss < 0 ? 'cust-agent-pnl-neg-row' : '' ?>" style="font-weight:bold; background:<?= htmlspecialchars($tot_row_bg) ?>;">
+                    <tr style="font-weight:bold;">
                         <td>Total</td>
                         <td class="num <?= $tot_cls ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
                     </tr>

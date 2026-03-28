@@ -69,10 +69,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 
-$stmt = $pdo->prepare('SELECT username, display_name, role FROM users WHERE id = ? LIMIT 1');
-$stmt->execute([$uid]);
-$show = $stmt->fetch(PDO::FETCH_ASSOC) ?: ['username' => '', 'display_name' => '', 'role' => ''];
-$show_name = trim((string)($show['display_name'] ?? '')) !== '' ? (string)$show['display_name'] : (string)($show['username'] ?? '');
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -101,8 +97,7 @@ $show_name = trim((string)($show['display_name'] ?? '')) !== '' ? (string)$show[
             width: 100%;
             max-width: 380px;
         }
-        h1 { font-size: 1.15rem; margin: 0 0 8px; color: #0f172a; }
-        .sub { font-size: 13px; color: #64748b; margin-bottom: 20px; }
+        h1 { font-size: 1.15rem; margin: 0 0 20px; color: #0f172a; }
         .err {
             background: #fef2f2;
             color: #dc2626;
@@ -140,7 +135,6 @@ $show_name = trim((string)($show['display_name'] ?? '')) !== '' ? (string)$show[
 <body>
     <div class="card">
         <h1>二级密码</h1>
-        <p class="sub">账号 <strong><?= htmlspecialchars($show_name) ?></strong>（<?= htmlspecialchars((string)($show['role'] ?? '')) ?>）请输入 Boss 设置的二级密码。</p>
         <?php if ($error): ?><div class="err"><?= htmlspecialchars($error) ?></div><?php endif; ?>
         <form method="post" autocomplete="off">
             <label for="second_pass">二级密码</label>
