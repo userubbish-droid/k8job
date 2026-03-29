@@ -586,7 +586,7 @@ try {
                                         <?php endif; ?>
                                     </form>
                                 </td>
-                                <td><a href="customers.php?recommend=<?= $recommend_param ?>"><?= htmlspecialchars(__('agent_view_customers'), ENT_QUOTES, 'UTF-8') ?></a></td>
+                                <td><a href="<?= htmlspecialchars($cust_detail_href) ?>"><?= htmlspecialchars(__('agent_view_customers'), ENT_QUOTES, 'UTF-8') ?></a></td>
                                 <?php endif; ?>
                             </tr>
                             <?php endforeach; ?>

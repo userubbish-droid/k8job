@@ -177,16 +177,21 @@ try {
         $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
     }
     if ($agent_pnl_by_range) {
-        $stmt = $pdo->prepare("SELECT code,
+        // 与 agents.php Win/Loss 同源：按 TRIM(code) 汇总区间内 DEPOSIT−WITHDRAW
+        $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
             COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
             AND day >= ? AND day <= ?
-            GROUP BY code");
+            GROUP BY TRIM(code)");
         $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
         foreach ($stmt->fetchAll() as $r) {
-            $agent_range_dp[$r['code']] = (float)$r['ad'];
-            $agent_range_wd[$r['code']] = (float)$r['aw'];
+            $ck = trim((string)($r['code'] ?? ''));
+            if ($ck === '') {
+                continue;
+            }
+            $agent_range_dp[$ck] = (float)$r['ad'];
+            $agent_range_wd[$ck] = (float)$r['aw'];
         }
     }
     } catch (Throwable $e) {
@@ -265,6 +270,19 @@ try {
         <div class="card" style="overflow-x: auto;">
             <?php if ($agent_view): ?>
             <h3>list player</h3>
+            <?php if ($agent_pnl_by_range): ?>
+            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(sprintf(
+                app_lang() === 'en'
+                    ? 'Win/Loss below is for %s – %s (same range as Agent Rebate).'
+                    : '以下输赢为 %s 至 %s 区间（与 Agent Rebate 所选日期一致）。',
+                $pnl_day_from,
+                $pnl_day_to
+            ), ENT_QUOTES, 'UTF-8') ?></p>
+            <?php else: ?>
+            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(app_lang() === 'en'
+                ? 'No date range in URL — totals are all-time (deposit − withdraw). Open from Agent Rebate or add ?day_from=&day_to= to match a period.'
+                : '未带日期参数时为全期累计（入款−出款）。从 Agent Rebate 点入或自行加上 ?day_from= 与 ?day_to= 可与该页区间一致。', ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
             <table class="data-table">
                 <thead>
                     <tr>
@@ -276,7 +294,7 @@ try {
                 <?php
                     $agent_total_win_loss = 0;
                     foreach ($rows as $r):
-                    $code = $r['code'];
+                    $code = trim((string)($r['code'] ?? ''));
                     if ($agent_pnl_by_range) {
                         $all_dp = $agent_range_dp[$code] ?? 0;
                         $all_wd = $agent_range_wd[$code] ?? 0;
