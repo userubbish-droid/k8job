@@ -378,6 +378,10 @@ window.__APP_I18N = <?= json_encode([
         var btn = document.getElementById('sidebar-avatar-btn');
         var pop = document.getElementById('avatar-picker-popover');
         if (!btn || !pop) return;
+        /* 抽屉侧栏带 transform 时，fixed 会相对侧栏定位导致弹层被裁成 ~280px；挂到 body 才相对视口 */
+        if (pop.parentNode !== document.body) {
+            document.body.appendChild(pop);
+        }
         var imgEl = document.getElementById('sidebar-avatar-img');
         var letterEl = document.getElementById('sidebar-avatar-letter');
         var I = window.__APP_I18N || {};
