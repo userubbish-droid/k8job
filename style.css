@@ -665,7 +665,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     top: calc(100% + 10px);
     transform: translateX(-50%);
     z-index: 120;
-    width: min(300px, calc(100vw - 32px));
+    width: min(360px, calc(100vw - 32px));
     padding: 14px 14px 12px;
     background: #fff;
     border-radius: 14px;
@@ -708,14 +708,11 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .avatar-picker-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
+    gap: 12px;
 }
 /* 预设头像：与 .avatar-picker-grid 一致，3 列 × 3 行共 9 个 */
 .avatar-picker-grid-presets {
     margin-bottom: 4px;
-}
-.avatar-picker-grid-presets .avatar-picker-cell img {
-    object-fit: cover;
 }
 .avatar-picker-cell {
     aspect-ratio: 1;
@@ -726,6 +723,12 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     overflow: hidden;
     background: #f1f5f9;
     transition: border-color 0.15s, transform 0.12s;
+    /* 避免各图固有宽高不同导致格子视觉大小不一 */
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+    box-sizing: border-box;
+    display: block;
 }
 .avatar-picker-cell:hover {
     transform: scale(1.04);
@@ -737,7 +740,10 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .avatar-picker-cell img {
     width: 100%;
     height: 100%;
+    min-width: 100%;
+    min-height: 100%;
     object-fit: cover;
+    object-position: center;
     display: block;
 }
 .avatar-picker-upload {
