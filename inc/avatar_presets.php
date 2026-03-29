@@ -1,15 +1,15 @@
 <?php
 /**
- * 侧栏预设头像：本地 assets/avatars/preset-1.png ~ preset-3.png（共 3 张，无男/女分栏）
+ * 侧栏预设头像：本地 assets/avatars/preset-1.png ~ preset-9.png（共 9 张，自上而下顺序；无男/女分栏）
  */
 function avatar_presets_map(): array
 {
     $base = 'assets/avatars';
-    return [
-        'p1' => $base . '/preset-1.png',
-        'p2' => $base . '/preset-2.png',
-        'p3' => $base . '/preset-3.png',
-    ];
+    $map = [];
+    for ($i = 1; $i <= 9; $i++) {
+        $map['p' . $i] = $base . '/preset-' . $i . '.png';
+    }
+    return $map;
 }
 
 function avatar_preset_url(string $id): ?string

@@ -473,6 +473,24 @@ if ($search_q !== '') {
     }
 }
 
+/** 主表按分公司着色：同一 company_id 同色，便于区分员工归属 */
+$um_company_row_colors = [
+    '#dbeafe', '#fef3c7', '#bbf7d0', '#fbcfe8', '#e9d5ff', '#fed7aa',
+    '#a5f3fc', '#fde68a', '#c7d2fe', '#fecdd3', '#d9f99d', '#e2e8f0',
+];
+$um_company_bg_by_id = [];
+$um_company_ids_ordered = [];
+foreach ($users_primary_list as $u) {
+    $cid = (int)($u['company_id'] ?? 0);
+    if ($cid > 0 && !in_array($cid, $um_company_ids_ordered, true)) {
+        $um_company_ids_ordered[] = $cid;
+    }
+}
+sort($um_company_ids_ordered, SORT_NUMERIC);
+foreach ($um_company_ids_ordered as $i => $cid) {
+    $um_company_bg_by_id[$cid] = $um_company_row_colors[$i % count($um_company_row_colors)];
+}
+
 /** 分公司管理员改角色：不可设 boss / superadmin */
 $role_opts_company = ['admin', 'member', 'agent'];
 /** 平台 big boss 改分公司账号角色（顺序：boss → admin → member → agent） */
@@ -584,6 +602,9 @@ if ($bulk_none_json === false) {
         }
         table.um-table tbody tr:nth-child(even) { background: #eff6ff; }
         table.um-table tbody tr:nth-child(odd) { background: #fff; }
+        /* 主表行色由内联 background-color（按 company_id）决定，取消斑马纹覆盖 */
+        #um-table-primary tbody tr.um-row-company:nth-child(even),
+        #um-table-primary tbody tr.um-row-company:nth-child(odd) { background-color: transparent; }
         table.um-table tbody tr:hover { filter: brightness(0.98); }
         table.um-table tbody td { padding: 11px; border-bottom: 1px solid rgba(148, 163, 184, 0.22); vertical-align: middle; color: #1e293b; }
         .um-col-narrow { width: 44px; text-align: center; }
@@ -948,8 +969,13 @@ if ($bulk_none_json === false) {
                     $em = trim((string)($u['email'] ?? ''));
                     $cb = trim((string)($u['created_by_username'] ?? ''));
                     $ll = trim((string)($u['last_login_at'] ?? ''));
+                    $co_id_row = (int)($u['company_id'] ?? 0);
+                    $tr_bg = '#f8fafc';
+                    if ($co_id_row > 0 && isset($um_company_bg_by_id[$co_id_row])) {
+                        $tr_bg = $um_company_bg_by_id[$co_id_row];
+                    }
                 ?>
-                    <tr>
+                    <tr class="um-row-company" style="background-color:<?= htmlspecialchars($tr_bg, ENT_QUOTES, 'UTF-8') ?>;">
                         <td class="um-col-narrow"><input type="checkbox" class="um-row-chk um-row-chk-primary" form="um-bulk-delete-form" name="bulk_ids[]" value="<?= $uid ?>"<?= $is_self ? ' disabled' : '' ?>></td>
                         <td class="um-col-narrow"><?= (int)($idx + 1) ?></td>
                         <?php if ($users_primary_show_company_col): ?><td><?= htmlspecialchars($co_disp) ?></td><?php endif; ?>
