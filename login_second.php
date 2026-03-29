@@ -85,12 +85,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             min-height: 100vh;
             position: relative;
             overflow: hidden;
-            color: #3d5a54;
+            color: #3d4f63;
             background:
-                radial-gradient(ellipse 125% 95% at 88% -8%, rgba(45, 212, 191, 0.22) 0%, transparent 52%),
-                radial-gradient(ellipse 95% 85% at -5% 55%, rgba(16, 185, 129, 0.14) 0%, transparent 48%),
-                radial-gradient(ellipse 70% 55% at 50% 100%, rgba(110, 231, 183, 0.12) 0%, transparent 50%),
-                linear-gradient(165deg, #f4fdf9 0%, #f0fdf9 28%, #ecfeff 55%, #f3faf6 100%);
+                radial-gradient(ellipse 125% 95% at 88% -8%, rgba(59, 130, 246, 0.2) 0%, transparent 52%),
+                radial-gradient(ellipse 95% 85% at -5% 55%, rgba(96, 165, 250, 0.14) 0%, transparent 48%),
+                radial-gradient(ellipse 70% 55% at 50% 100%, rgba(125, 211, 252, 0.12) 0%, transparent 50%),
+                linear-gradient(165deg, #eef4fb 0%, #e8f0f8 28%, #f0f7ff 55%, #edf2fa 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -102,9 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             inset: 0;
             z-index: 0;
             background-image:
-                repeating-linear-gradient(125deg, transparent, transparent 22px, rgba(45, 212, 191, 0.05) 22px, rgba(45, 212, 191, 0.05) 23px),
-                linear-gradient(rgba(15, 118, 110, 0.038) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(20, 184, 166, 0.032) 1px, transparent 1px);
+                repeating-linear-gradient(125deg, transparent, transparent 22px, rgba(59, 130, 246, 0.048) 22px, rgba(59, 130, 246, 0.048) 23px),
+                linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
             background-size: 100% 100%, 44px 44px, 44px 44px;
             opacity: 0.72;
             pointer-events: none;
@@ -114,7 +114,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             position: absolute;
             inset: 0;
             z-index: 0;
-            background: radial-gradient(ellipse 115% 90% at 48% 22%, transparent 48%, rgba(15, 118, 110, 0.045) 100%);
+            background: radial-gradient(ellipse 115% 90% at 48% 22%, transparent 48%, rgba(30, 64, 175, 0.05) 100%);
             pointer-events: none;
         }
         .card {
@@ -124,16 +124,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-radius: 26px;
-            border: 1px solid rgba(45, 212, 191, 0.24);
+            border: 1px solid rgba(96, 165, 250, 0.28);
             box-shadow:
-                0 28px 64px rgba(15, 118, 110, 0.1),
-                0 2px 12px rgba(15, 118, 110, 0.04),
+                0 28px 64px rgba(37, 99, 235, 0.1),
+                0 2px 12px rgba(37, 99, 235, 0.045),
                 inset 0 1px 0 rgba(255, 255, 255, 0.95);
             padding: 36px 40px;
             width: 100%;
             max-width: 390px;
         }
-        h1 { font-size: 1.15rem; margin: 0 0 20px; color: #134e4a; }
+        h1 { font-size: 1.15rem; margin: 0 0 20px; color: #1e3a5f; }
         .err {
             background: #fff1f2;
             color: #9f1239;
@@ -143,42 +143,42 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             margin-bottom: 16px;
             border: 1px solid rgba(244, 63, 94, 0.25);
         }
-        label { display: block; font-size: 13px; font-weight: 600; color: #334155; margin-bottom: 8px; }
+        label { display: block; font-size: 13px; font-weight: 600; color: #3d4f63; margin-bottom: 8px; }
         input[type="password"] {
             width: 100%;
             padding: 14px 18px;
-            border: 1.5px solid rgba(45, 212, 191, 0.52);
+            border: 1.5px solid rgba(96, 165, 250, 0.55);
             border-radius: 999px;
             font-size: 15px;
             background: #fff;
         }
-        input::placeholder { color: #6b9a93; }
-        input:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); }
+        input::placeholder { color: #6b7c99; }
+        input:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22); }
         .btn {
             width: 100%;
             margin-top: 18px;
             padding: 15px;
-            background: linear-gradient(90deg, #0f766e 0%, #14b8a6 52%, #2dd4bf 100%);
+            background: linear-gradient(90deg, #2563eb 0%, #3b82f6 52%, #60a5fa 100%);
             color: #fff;
             border: none;
             border-radius: 999px;
             font-size: 15px;
             font-weight: 600;
             cursor: pointer;
-            box-shadow: 0 8px 28px rgba(15, 118, 110, 0.32);
+            box-shadow: 0 8px 28px rgba(37, 99, 235, 0.3);
             transition: filter 0.2s, box-shadow 0.2s;
         }
-        .btn:hover { filter: brightness(1.04); box-shadow: 0 10px 34px rgba(15, 118, 110, 0.38); }
-        .back { display: inline-block; margin-top: 16px; font-size: 13px; color: #0f766e; font-weight: 600; text-decoration: none; }
+        .btn:hover { filter: brightness(1.04); box-shadow: 0 10px 34px rgba(37, 99, 235, 0.36); }
+        .back { display: inline-block; margin-top: 16px; font-size: 13px; color: #2563eb; font-weight: 600; text-decoration: none; }
         .back:hover { text-decoration: underline; }
     </style>
 </head>
 <body>
     <?php $login2_lang_to = rawurlencode('login_second.php'); ?>
     <div style="position:fixed; top:14px; right:16px; z-index:2; font-size:13px; font-weight:600;">
-        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#0f766e; text-decoration:none; font-weight:600;">Eng</a>
-        <span style="color:#7a9e97; margin:0 8px;">|</span>
-        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#0f766e; text-decoration:none; font-weight:600;">中文</a>
+        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none; font-weight:600;">Eng</a>
+        <span style="color:#7b8fa8; margin:0 8px;">|</span>
+        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login2_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none; font-weight:600;">中文</a>
     </div>
     <div class="card">
         <h1><?= htmlspecialchars(__('login2_title'), ENT_QUOTES, 'UTF-8') ?></h1>

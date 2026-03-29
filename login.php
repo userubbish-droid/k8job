@@ -146,12 +146,12 @@ $login_as = $_POST['login_as'] ?? 'admin';
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
             margin: 0;
             min-height: 100vh;
-            color: #3d5a54;
+            color: #3d4f63;
             background:
-                radial-gradient(ellipse 125% 95% at 88% -8%, rgba(45, 212, 191, 0.22) 0%, transparent 52%),
-                radial-gradient(ellipse 95% 85% at -5% 55%, rgba(16, 185, 129, 0.14) 0%, transparent 48%),
-                radial-gradient(ellipse 70% 55% at 50% 100%, rgba(110, 231, 183, 0.12) 0%, transparent 50%),
-                linear-gradient(165deg, #f4fdf9 0%, #f0fdf9 28%, #ecfeff 55%, #f3faf6 100%);
+                radial-gradient(ellipse 125% 95% at 88% -8%, rgba(59, 130, 246, 0.2) 0%, transparent 52%),
+                radial-gradient(ellipse 95% 85% at -5% 55%, rgba(96, 165, 250, 0.14) 0%, transparent 48%),
+                radial-gradient(ellipse 70% 55% at 50% 100%, rgba(125, 211, 252, 0.12) 0%, transparent 50%),
+                linear-gradient(165deg, #eef4fb 0%, #e8f0f8 28%, #f0f7ff 55%, #edf2fa 100%);
             background-size: 100% 100%;
             display: flex;
             align-items: center;
@@ -173,9 +173,9 @@ $login_as = $_POST['login_as'] ?? 'admin';
             top: 0; left: 0; right: 0; bottom: 0;
             z-index: 0;
             background-image:
-                repeating-linear-gradient(125deg, transparent, transparent 22px, rgba(45, 212, 191, 0.05) 22px, rgba(45, 212, 191, 0.05) 23px),
-                linear-gradient(rgba(15, 118, 110, 0.038) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(20, 184, 166, 0.032) 1px, transparent 1px);
+                repeating-linear-gradient(125deg, transparent, transparent 22px, rgba(59, 130, 246, 0.048) 22px, rgba(59, 130, 246, 0.048) 23px),
+                linear-gradient(rgba(37, 99, 235, 0.035) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
             background-size: 100% 100%, 44px 44px, 44px 44px;
             opacity: 0.72;
             pointer-events: none;
@@ -185,7 +185,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
             position: absolute;
             inset: 0;
             z-index: 0;
-            background: radial-gradient(ellipse 115% 90% at 48% 22%, transparent 48%, rgba(15, 118, 110, 0.045) 100%);
+            background: radial-gradient(ellipse 115% 90% at 48% 22%, transparent 48%, rgba(30, 64, 175, 0.05) 100%);
             pointer-events: none;
         }
         .login-card {
@@ -193,10 +193,10 @@ $login_as = $_POST['login_as'] ?? 'admin';
             backdrop-filter: blur(16px);
             -webkit-backdrop-filter: blur(16px);
             border-radius: 26px;
-            border: 1px solid rgba(45, 212, 191, 0.24);
+            border: 1px solid rgba(96, 165, 250, 0.28);
             box-shadow:
-                0 28px 64px rgba(15, 118, 110, 0.1),
-                0 2px 12px rgba(15, 118, 110, 0.04),
+                0 28px 64px rgba(37, 99, 235, 0.1),
+                0 2px 12px rgba(37, 99, 235, 0.045),
                 inset 0 1px 0 rgba(255, 255, 255, 0.95);
             padding: 36px 40px;
             width: 100%;
@@ -210,8 +210,8 @@ $login_as = $_POST['login_as'] ?? 'admin';
             border-radius: 999px;
             overflow: hidden;
             padding: 5px;
-            background: linear-gradient(180deg, rgba(204, 251, 241, 0.88) 0%, rgba(236, 253, 245, 0.96) 100%);
-            border: 1px solid rgba(45, 212, 191, 0.3);
+            background: linear-gradient(180deg, rgba(239, 246, 255, 0.92) 0%, rgba(219, 234, 254, 0.95) 100%);
+            border: 1px solid rgba(147, 197, 253, 0.45);
             box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.85);
         }
         .tabs a {
@@ -219,18 +219,18 @@ $login_as = $_POST['login_as'] ?? 'admin';
             padding: 13px 16px;
             text-align: center;
             text-decoration: none;
-            color: #4a6b65;
+            color: #4a5f78;
             font-weight: 600;
             font-size: 14px;
             transition: background 0.22s, color 0.22s, box-shadow 0.22s;
             border-radius: 999px;
         }
         .tabs a.active {
-            background: linear-gradient(90deg, #0f766e 0%, #14b8a6 48%, #2dd4bf 100%);
+            background: linear-gradient(90deg, #2563eb 0%, #3b82f6 48%, #60a5fa 100%);
             color: #fff;
-            box-shadow: 0 6px 20px rgba(15, 118, 110, 0.32);
+            box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
         }
-        .tabs a:not(.active):hover { color: #134e4a; background: rgba(255, 255, 255, 0.5); }
+        .tabs a:not(.active):hover { color: #1e3a5f; background: rgba(255, 255, 255, 0.55); }
         .input-wrap {
             position: relative;
             margin-bottom: 16px;
@@ -242,13 +242,13 @@ $login_as = $_POST['login_as'] ?? 'admin';
             transform: translateY(-50%);
             width: 18px;
             height: 18px;
-            color: #2dd4bf;
+            color: #60a5fa;
             pointer-events: none;
         }
         .input-wrap input {
             width: 100%;
             padding: 14px 18px 14px 48px;
-            border: 1.5px solid rgba(45, 212, 191, 0.52);
+            border: 1.5px solid rgba(96, 165, 250, 0.55);
             border-radius: 999px;
             font-size: 14px;
             background: #fff;
@@ -256,24 +256,24 @@ $login_as = $_POST['login_as'] ?? 'admin';
         }
         .input-wrap input:focus {
             outline: none;
-            border-color: #14b8a6;
-            box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22);
         }
-        .input-wrap input::placeholder { color: #6b9a93; }
+        .input-wrap input::placeholder { color: #6b7c99; }
         .input-wrap input.login-field-upper {
             text-transform: uppercase;
         }
         .input-wrap select {
             width: 100%;
             padding: 14px 18px 14px 48px;
-            border: 1.5px solid rgba(45, 212, 191, 0.52);
+            border: 1.5px solid rgba(96, 165, 250, 0.55);
             border-radius: 999px;
             font-size: 14px;
             transition: border-color 0.2s, box-shadow 0.2s;
             background: #fff;
             appearance: auto;
         }
-        .input-wrap select:focus { outline: none; border-color: #14b8a6; box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.2); }
+        .input-wrap select:focus { outline: none; border-color: #3b82f6; box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.22); }
         .row {
             display: flex;
             align-items: center;
@@ -281,14 +281,14 @@ $login_as = $_POST['login_as'] ?? 'admin';
             margin: 16px 0 24px;
             font-size: 13px;
         }
-        .remember { display: flex; align-items: center; gap: 8px; color: #5b7a74; }
-        .remember input { width: auto; margin: 0; accent-color: #14b8a6; }
-        .forget { color: #0f766e; text-decoration: none; font-weight: 600; }
-        .forget:hover { text-decoration: underline; color: #115e59; }
+        .remember { display: flex; align-items: center; gap: 8px; color: #5a6b82; }
+        .remember input { width: auto; margin: 0; accent-color: #3b82f6; }
+        .forget { color: #2563eb; text-decoration: none; font-weight: 600; }
+        .forget:hover { text-decoration: underline; color: #1d4ed8; }
         .btn-login {
             width: 100%;
             padding: 15px;
-            background: linear-gradient(90deg, #0f766e 0%, #14b8a6 52%, #2dd4bf 100%);
+            background: linear-gradient(90deg, #2563eb 0%, #3b82f6 52%, #60a5fa 100%);
             color: #fff;
             border: none;
             border-radius: 999px;
@@ -296,9 +296,9 @@ $login_as = $_POST['login_as'] ?? 'admin';
             font-weight: 600;
             cursor: pointer;
             transition: filter 0.2s, box-shadow 0.2s;
-            box-shadow: 0 8px 28px rgba(15, 118, 110, 0.32);
+            box-shadow: 0 8px 28px rgba(37, 99, 235, 0.3);
         }
-        .btn-login:hover { filter: brightness(1.04); box-shadow: 0 10px 34px rgba(15, 118, 110, 0.38); }
+        .btn-login:hover { filter: brightness(1.04); box-shadow: 0 10px 34px rgba(37, 99, 235, 0.36); }
         .err {
             background: #fff1f2;
             color: #9f1239;
@@ -311,7 +311,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
         .foot {
             margin-top: 20px;
             font-size: 12px;
-            color: #5b7a74;
+            color: #5a6b82;
             text-align: center;
         }
         .login-modal-mask {
@@ -320,7 +320,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
             display: none;
             align-items: center;
             justify-content: center;
-            background: rgba(17, 94, 89, 0.38);
+            background: rgba(30, 58, 138, 0.36);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
             z-index: 1000;
@@ -331,16 +331,16 @@ $login_as = $_POST['login_as'] ?? 'admin';
             width: min(92vw, 420px);
             background: #fff;
             border-radius: 22px;
-            border: 1px solid rgba(45, 212, 191, 0.38);
-            box-shadow: 0 28px 60px rgba(15, 118, 110, 0.14), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
+            border: 1px solid rgba(147, 197, 253, 0.5);
+            box-shadow: 0 28px 60px rgba(37, 99, 235, 0.13), 0 0 0 1px rgba(255, 255, 255, 0.9) inset;
             overflow: hidden;
         }
         .login-modal-head {
             padding: 14px 18px;
             font-weight: 700;
-            color: #115e59;
-            background: linear-gradient(180deg, #ecfdf5 0%, #d1fae5 100%);
-            border-bottom: 1px solid rgba(45, 212, 191, 0.38);
+            color: #1e40af;
+            background: linear-gradient(180deg, #eff6ff 0%, #dbeafe 100%);
+            border-bottom: 1px solid rgba(147, 197, 253, 0.5);
         }
         .login-modal-body { padding: 18px 18px 10px; color: #0f172a; }
         .login-modal-foot { padding: 0 18px 16px; text-align: right; }
@@ -351,17 +351,17 @@ $login_as = $_POST['login_as'] ?? 'admin';
             font-weight: 700;
             color: #fff;
             cursor: pointer;
-            background: linear-gradient(90deg, #0f766e 0%, #14b8a6 100%);
-            box-shadow: 0 4px 16px rgba(15, 118, 110, 0.3);
+            background: linear-gradient(90deg, #2563eb 0%, #3b82f6 100%);
+            box-shadow: 0 4px 16px rgba(37, 99, 235, 0.28);
         }
     </style>
 </head>
 <body>
     <?php $login_lang_to = rawurlencode('login.php'); ?>
     <div style="position:fixed; top:14px; right:16px; z-index:2; font-size:13px; font-weight:600;">
-        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#0f766e; text-decoration:none; font-weight:600;">Eng</a>
-        <span style="color:#7a9e97; margin:0 8px;">|</span>
-        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#0f766e; text-decoration:none; font-weight:600;">中文</a>
+        <a href="switch_lang.php?lang=en&amp;to=<?= htmlspecialchars($login_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none; font-weight:600;">Eng</a>
+        <span style="color:#7b8fa8; margin:0 8px;">|</span>
+        <a href="switch_lang.php?lang=zh&amp;to=<?= htmlspecialchars($login_lang_to, ENT_QUOTES, 'UTF-8') ?>" style="color:#2563eb; text-decoration:none; font-weight:600;">中文</a>
     </div>
     <div class="login-card">
         <div class="tabs">
