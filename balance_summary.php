@@ -86,8 +86,57 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
         .stmt-pill.active { background: var(--primary, #2563eb); color: #fff; border-color: var(--primary, #2563eb); }
     </style>
     <?php endif; ?>
+    <style>
+        /* Statement 页专用：配色方案 4（杏桃 + 奶油白，低饱和暖底） */
+        body.page-stmt-warm {
+            background:
+                radial-gradient(ellipse 125% 92% at 92% -8%, rgba(251, 191, 36, 0.16) 0%, transparent 52%),
+                radial-gradient(ellipse 100% 88% at -6% 48%, rgba(217, 119, 87, 0.11) 0%, transparent 48%),
+                radial-gradient(ellipse 72% 58% at 52% 100%, rgba(253, 186, 116, 0.13) 0%, transparent 50%),
+                linear-gradient(162deg, #fffaf5 0%, #fff6ed 26%, #fff1e6 54%, #fef3e7 100%);
+            background-attachment: fixed;
+        }
+        body.page-stmt-warm::before {
+            background-image:
+                linear-gradient(rgba(217, 119, 87, 0.065) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(251, 146, 60, 0.055) 1px, transparent 1px);
+            background-size: 40px 40px, 40px 40px;
+            mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, #000 0%, transparent 72%);
+            -webkit-mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, #000 0%, transparent 72%);
+        }
+        body.page-stmt-warm::after {
+            background: linear-gradient(
+                105deg,
+                transparent 0%,
+                rgba(255, 255, 255, 0.38) 24%,
+                transparent 40%,
+                transparent 58%,
+                rgba(255, 247, 237, 0.45) 74%,
+                transparent 90%
+            );
+            opacity: 0.9;
+        }
+        body.page-stmt-warm .stmt-head-office-bar {
+            border-color: rgba(251, 191, 136, 0.42);
+            background: rgba(255, 255, 255, 0.94);
+        }
+        body.page-stmt-warm .stmt-pill {
+            background: rgba(255, 247, 237, 0.95);
+            border-color: rgba(253, 186, 116, 0.5);
+            color: #57534e;
+        }
+        body.page-stmt-warm .stmt-pill small { color: #78716c; }
+        body.page-stmt-warm .stmt-pill:hover { background: #ffedd5; border-color: rgba(251, 146, 60, 0.45); }
+        body.page-stmt-warm .stmt-pill.active {
+            background: linear-gradient(90deg, #b45309 0%, #c05621 28%, #d97757 52%, #f4a261 82%, #fbbf77 100%);
+            color: #fff;
+            border-color: rgba(180, 83, 9, 0.45);
+            box-shadow: 0 4px 16px rgba(217, 119, 87, 0.22);
+        }
+        body.page-stmt-warm .stmt-pill.active small { color: rgba(255, 255, 255, 0.92); }
+    </style>
 </head>
-<body>
+<body class="page-stmt-warm">
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
