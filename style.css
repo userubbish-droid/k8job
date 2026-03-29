@@ -665,15 +665,16 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     left: 0;
     top: 0;
     z-index: 1500;
-    width: min(292px, calc(100vw - 20px));
-    max-width: calc(100vw - 20px);
-    padding: 12px 12px 10px;
+    width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+    padding: 10px 10px 10px;
     margin: 0;
     box-sizing: border-box;
     background: #fff;
     border-radius: 14px;
     box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(148, 163, 184, 0.25);
     color: #0f172a;
+    overflow: visible;
 }
 .avatar-picker-popover[hidden] {
     display: none !important;
@@ -681,7 +682,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .avatar-picker-title {
     font-size: 13px;
     font-weight: 800;
-    margin: 0 0 12px;
+    margin: 0 0 8px;
     text-align: center;
     color: #1e293b;
 }
@@ -713,8 +714,12 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 }
 .avatar-picker-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 8px;
+    /* minmax(0,1fr) 防止大图固有宽度把第 3 列挤出白卡片 */
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+    width: 100%;
+    min-width: 0;
+    box-sizing: border-box;
 }
 /* 预设头像：与 .avatar-picker-grid 一致，3 列 × 3 行共 9 个 */
 .avatar-picker-grid-presets {
@@ -723,31 +728,37 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .avatar-picker-cell {
     aspect-ratio: 1;
     border-radius: 50%;
-    border: 3px solid transparent;
+    border: 2px solid transparent;
     padding: 0;
+    margin: 0;
     cursor: pointer;
     overflow: hidden;
     background: #f1f5f9;
-    transition: border-color 0.15s, transform 0.12s;
-    /* 避免各图固有宽高不同导致格子视觉大小不一 */
+    transition: border-color 0.15s, transform 0.12s, box-shadow 0.15s;
     min-width: 0;
+    min-height: 0;
     width: 100%;
     max-width: 100%;
     box-sizing: border-box;
     display: block;
+    appearance: none;
+    -webkit-appearance: none;
+    font-size: 0;
+    line-height: 0;
 }
 .avatar-picker-cell:hover {
-    transform: scale(1.04);
+    transform: scale(1.03);
+    position: relative;
+    z-index: 1;
 }
 .avatar-picker-cell.is-selected {
     border-color: #2563eb;
-    box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.25);
+    box-shadow: 0 0 0 1px rgba(37, 99, 235, 0.45);
 }
 .avatar-picker-cell img {
     width: 100%;
     height: 100%;
-    min-width: 100%;
-    min-height: 100%;
+    max-width: 100%;
     object-fit: cover;
     object-position: center;
     display: block;

@@ -382,10 +382,10 @@ window.__APP_I18N = <?= json_encode([
         var letterEl = document.getElementById('sidebar-avatar-letter');
         var I = window.__APP_I18N || {};
         function positionAvatarPopover() {
-            var margin = 10;
+            var margin = 8;
             var vw = window.innerWidth;
             var vh = window.innerHeight;
-            var maxW = Math.min(292, vw - margin * 2);
+            var maxW = Math.min(300, vw - margin * 2);
             pop.style.width = maxW + 'px';
             pop.style.maxWidth = (vw - margin * 2) + 'px';
             var r = btn.getBoundingClientRect();
