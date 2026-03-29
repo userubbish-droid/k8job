@@ -9,9 +9,11 @@ $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $msg = '';
 $err = '';
 $customers_for_agent = [];
-$status_filter = trim((string)($_GET['status_filter'] ?? 'active'));
+// 平台总管理默认看「全部」账号（含已停用），避免误以为旧账号消失；分公司 admin 默认仅看启用
+$default_status_filter = $actor_is_superadmin ? 'all' : 'active';
+$status_filter = trim((string)($_GET['status_filter'] ?? $default_status_filter));
 if (!in_array($status_filter, ['all', 'active', 'inactive'], true)) {
-    $status_filter = 'active';
+    $status_filter = $default_status_filter;
 }
 $search_q = trim((string)($_GET['q'] ?? ''));
 
@@ -380,11 +382,11 @@ if (!$actor_is_superadmin && $view_company_id > 0) {
                    COALESCE(ucr.username, '') AS created_by_username
             FROM users u
             LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
-            WHERE u.role != 'superadmin' AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
+            WHERE (u.role IS NULL OR u.role <> 'superadmin') AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
     $sql_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, NULL AS created_by_user_id,
                    '' AS created_by_username
             FROM users u
-            WHERE u.role != 'superadmin' AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
+            WHERE (u.role IS NULL OR u.role <> 'superadmin') AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$view_company_id]);
@@ -408,14 +410,14 @@ if ($actor_is_superadmin) {
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
                 LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
-                WHERE u.role != 'superadmin'" . $status_sql . '
+                WHERE (u.role IS NULL OR u.role <> 'superadmin')" . $status_sql . '
                 ORDER BY u.company_id ASC, u.id DESC';
     $sql_all_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
                        COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name,
                        '' AS created_by_username
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
-                WHERE u.role != 'superadmin'" . $status_sql . '
+                WHERE (u.role IS NULL OR u.role <> 'superadmin')" . $status_sql . '
                 ORDER BY u.company_id ASC, u.id DESC';
     try {
         $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);

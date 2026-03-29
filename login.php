@@ -147,10 +147,10 @@ $login_as = $_POST['login_as'] ?? 'admin';
             margin: 0;
             min-height: 100vh;
             background:
-                radial-gradient(ellipse 120% 90% at 100% -25%, rgba(139, 92, 246, 0.42) 0%, transparent 52%),
-                radial-gradient(ellipse 100% 80% at -10% 50%, rgba(6, 182, 212, 0.35) 0%, transparent 48%),
-                radial-gradient(ellipse 90% 70% at 90% 100%, rgba(236, 72, 153, 0.18) 0%, transparent 45%),
-                linear-gradient(128deg, #dce4ff 0%, #c7d7ff 18%, #b8e8ff 40%, #ddd6fe 68%, #f0e7ff 100%);
+                radial-gradient(ellipse 120% 90% at 100% -25%, rgba(124, 92, 200, 0.20) 0%, transparent 52%),
+                radial-gradient(ellipse 100% 80% at -10% 50%, rgba(14, 116, 144, 0.16) 0%, transparent 48%),
+                radial-gradient(ellipse 90% 70% at 90% 100%, rgba(162, 100, 168, 0.10) 0%, transparent 45%),
+                linear-gradient(128deg, #aeb9cc 0%, #9dadc0 18%, #92aeb8 38%, #a398b8 64%, #b5aac4 100%);
             background-size: 100% 100%;
             display: flex;
             align-items: center;
@@ -171,11 +171,20 @@ $login_as = $_POST['login_as'] ?? 'admin';
             content: '';
             position: absolute;
             top: 0; left: 0; right: 0; bottom: 0;
+            z-index: 0;
             background-image:
-                linear-gradient(rgba(99, 102, 241, 0.08) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(6, 182, 212, 0.06) 1px, transparent 1px);
+                linear-gradient(rgba(51, 65, 85, 0.05) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(51, 65, 85, 0.04) 1px, transparent 1px);
             background-size: 40px 40px;
-            opacity: 0.9;
+            opacity: 0.42;
+            pointer-events: none;
+        }
+        body::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            z-index: 0;
+            background: radial-gradient(ellipse 110% 85% at 50% 30%, transparent 35%, rgba(15, 23, 42, 0.09) 100%);
             pointer-events: none;
         }
         .login-card {
