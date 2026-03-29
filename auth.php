@@ -109,12 +109,33 @@ function require_permission(string $key): void
     }
 }
 
+/**
+ * 从数据库刷新当前用户的头像 URL 到 session（另一台设备上改过头像后，本机 session 仍是旧值）。
+ */
+function auth_sync_session_avatar_from_db(): void
+{
+    global $pdo;
+    $uid = (int)($_SESSION['user_id'] ?? 0);
+    if ($uid <= 0 || !isset($pdo)) {
+        return;
+    }
+    try {
+        $st = $pdo->prepare('SELECT avatar_url FROM users WHERE id = ? LIMIT 1');
+        $st->execute([$uid]);
+        $raw = $st->fetchColumn();
+        $_SESSION['avatar_url'] = trim((string)($raw ?? ''));
+    } catch (Throwable $e) {
+        // 忽略
+    }
+}
+
 function require_login(): void
 {
     if (empty($_SESSION['user_id'])) {
         header('Location: login.php');
         exit;
     }
+    auth_sync_session_avatar_from_db();
     $role = $_SESSION['user_role'] ?? '';
     // 多公司：除平台 superadmin 外必须绑定 company_id（含 boss / admin / member / agent）
     if ($role !== 'superadmin') {

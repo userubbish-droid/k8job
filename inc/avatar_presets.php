@@ -1,6 +1,7 @@
 <?php
 /**
- * 侧栏预设头像：男/女各 9 个，DiceBear SVG（外链需浏览器可访问 api.dicebear.com）
+ * 侧栏预设头像：男/女各 9 个，DiceBear 7.x SVG（需可访问 api.dicebear.com）
+ * 男：personas（偏立体、清爽）；女：avataaars（偏精致、常见应用风）
  */
 function avatar_presets_dicebear_base(): string {
     return 'https://api.dicebear.com/7.x';
@@ -11,8 +12,10 @@ function avatar_presets_map(): array {
     $base = avatar_presets_dicebear_base();
     $out = [];
     for ($i = 0; $i < 9; $i++) {
-        $out['m' . $i] = $base . '/adventurer/svg?seed=' . rawurlencode('k8male' . $i) . '&backgroundColor=f0f9ff';
-        $out['f' . $i] = $base . '/lorelei/svg?seed=' . rawurlencode('k8female' . $i) . '&backgroundColor=fdf2f8';
+        $out['m' . $i] = $base . '/personas/svg?seed=' . rawurlencode('k8m' . $i . 'x7')
+            . '&backgroundColor=dbeafe&radius=50';
+        $out['f' . $i] = $base . '/avataaars/svg?seed=' . rawurlencode('k8f' . $i . 'x7')
+            . '&backgroundColor=fce7f3&radius=50';
     }
     return $out;
 }
