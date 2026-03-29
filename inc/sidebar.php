@@ -118,9 +118,12 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         <div class="avatar-picker-popover" id="avatar-picker-popover" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" hidden>
             <div class="avatar-picker-title" id="avatar-picker-title"><?= htmlspecialchars(__('avatar_pick_title'), ENT_QUOTES, 'UTF-8') ?></div>
             <div class="avatar-picker-grid avatar-picker-grid-presets" role="group" aria-label="<?= htmlspecialchars(__('avatar_pick_title'), ENT_QUOTES, 'UTF-8') ?>">
-                <?php foreach ($avatar_presets_list as $p): ?>
+                <?php foreach ($avatar_presets_list as $p):
+                    $_av_abs = __DIR__ . '/../' . $p['url'];
+                    $_av_src = $p['url'] . (is_file($_av_abs) ? '?v=' . (int)filemtime($_av_abs) : '');
+                ?>
                 <button type="button" class="avatar-picker-cell<?= ($avatar_picker_current_id === $p['id']) ? ' is-selected' : '' ?>" data-preset="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>">
-                    <img src="<?= htmlspecialchars($p['url'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async">
+                    <img src="<?= htmlspecialchars($_av_src, ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async">
                 </button>
                 <?php endforeach; ?>
             </div>
