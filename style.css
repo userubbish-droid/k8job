@@ -710,22 +710,9 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
 }
-/* 预设头像：单列自上而下 9 个，过长时滚动 */
+/* 预设头像：与 .avatar-picker-grid 一致，3 列 × 3 行共 9 个 */
 .avatar-picker-grid-presets {
     margin-bottom: 4px;
-    grid-template-columns: 1fr;
-    justify-items: center;
-    gap: 8px;
-    max-height: min(52vh, 380px);
-    overflow-y: auto;
-    padding-right: 2px;
-    scrollbar-gutter: stable;
-}
-.avatar-picker-grid-presets .avatar-picker-cell {
-    width: 64px;
-    height: 64px;
-    max-width: 100%;
-    flex-shrink: 0;
 }
 .avatar-picker-grid-presets .avatar-picker-cell img {
     object-fit: cover;

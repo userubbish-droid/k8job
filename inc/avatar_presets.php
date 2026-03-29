@@ -1,6 +1,6 @@
 <?php
 /**
- * 侧栏预设头像：本地 assets/avatars/preset-1.png ~ preset-9.png（共 9 张，自上而下顺序；无男/女分栏）
+ * 侧栏预设头像：本地 assets/avatars/preset-1.png ~ preset-9.png（共 9 张，侧栏弹层为 3 列×3 行；无男/女分栏）
  */
 function avatar_presets_map(): array
 {
