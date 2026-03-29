@@ -9,8 +9,8 @@ $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $msg = '';
 $err = '';
 $customers_for_agent = [];
-// 平台总管理默认看「全部」账号（含已停用），避免误以为旧账号消失；分公司 admin 默认仅看启用
-$default_status_filter = $actor_is_superadmin ? 'all' : 'active';
+// 默认仅看启用账号；勾选「显示停用」后改为 all（含已停用）
+$default_status_filter = 'active';
 $status_filter = trim((string)($_GET['status_filter'] ?? $default_status_filter));
 if (!in_array($status_filter, ['all', 'active', 'inactive'], true)) {
     $status_filter = $default_status_filter;
@@ -314,46 +314,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw $e;
             }
             $msg = __('adm_users_msg_deleted');
-        } elseif ($action === 'bulk_delete') {
-            $ids = $_POST['bulk_ids'] ?? [];
-            if (!is_array($ids)) {
-                $ids = [];
-            }
-            $ids = array_values(array_unique(array_map('intval', $ids)));
-            $ids = array_filter($ids, static function ($x) {
-                return $x > 0;
-            });
-            if ($ids === []) {
-                throw new RuntimeException(__('adm_users_bulk_none'));
-            }
-            $self_id = (int)($_SESSION['user_id'] ?? 0);
-            $deleted = 0;
-            foreach ($ids as $bid) {
-                if ($bid === $self_id) {
-                    continue;
-                }
-                if (!user_is_manageable_by_current_actor($pdo, $bid)) {
-                    continue;
-                }
-                $pdo->beginTransaction();
-                try {
-                    try {
-                        $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$bid]);
-                    } catch (Throwable $e) {
-                    }
-                    $pdo->prepare('DELETE FROM users WHERE id = ?')->execute([$bid]);
-                    $pdo->commit();
-                    ++$deleted;
-                } catch (Throwable $e) {
-                    if ($pdo->inTransaction()) {
-                        $pdo->rollBack();
-                    }
-                }
-            }
-            if ($deleted === 0) {
-                throw new RuntimeException(__('adm_users_err_no_perm_account'));
-            }
-            $msg = __('adm_users_msg_bulk_deleted');
         } elseif ($action === 'reset_password') {
             $id = (int)($_POST['id'] ?? 0);
             $new_password = (string) ($_POST['new_password'] ?? '');
@@ -487,7 +447,7 @@ if ($actor_is_superadmin) {
 
 $users_primary_list = $actor_is_superadmin ? $all_company_users : $company_users;
 $users_primary_show_company_col = $actor_is_superadmin;
-$users_primary_colspan = $users_primary_show_company_col ? 12 : 11;
+$users_primary_colspan = $users_primary_show_company_col ? 11 : 10;
 
 if ($search_q !== '') {
     $low = static function (string $s): string {
@@ -543,14 +503,6 @@ if ($actor_is_superadmin) {
 }
 
 $session_user_id = (int)($_SESSION['user_id'] ?? 0);
-$bulk_confirm_tpl_json = json_encode(__('adm_users_bulk_confirm'), JSON_UNESCAPED_UNICODE);
-if ($bulk_confirm_tpl_json === false) {
-    $bulk_confirm_tpl_json = json_encode('Delete selected?', JSON_UNESCAPED_UNICODE);
-}
-$bulk_none_json = json_encode(__('adm_users_bulk_none'), JSON_UNESCAPED_UNICODE);
-if ($bulk_none_json === false) {
-    $bulk_none_json = json_encode('Select at least one.', JSON_UNESCAPED_UNICODE);
-}
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -767,7 +719,6 @@ if ($bulk_none_json === false) {
             cursor: pointer;
         }
         .admin-users-toolbar .toolbar-spacer { flex: 1; min-width: 12px; }
-        .admin-users-toolbar .um-btn-bulk-del { font-weight: 700; white-space: nowrap; }
         .admin-users-modal {
             display: none;
             position: fixed;
@@ -859,10 +810,6 @@ if ($bulk_none_json === false) {
                 <input type="checkbox" id="toolbar_cb_inactive" <?= in_array($status_filter, ['all', 'inactive'], true) ? 'checked' : '' ?>>
                 <?= htmlspecialchars(__('adm_users_include_inactive'), ENT_QUOTES, 'UTF-8') ?>
             </label>
-            <button type="button" class="btn btn-danger um-btn-bulk-del" id="um-bulk-delete-btn"><?= htmlspecialchars(__('adm_users_bulk_delete'), ENT_QUOTES, 'UTF-8') ?></button>
-        </form>
-        <form id="um-bulk-delete-form" method="post" style="display:none;" aria-hidden="true">
-            <input type="hidden" name="action" value="bulk_delete">
         </form>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -982,7 +929,6 @@ if ($bulk_none_json === false) {
             <table class="um-table" id="um-table-primary">
                 <thead>
                     <tr>
-                        <th class="um-col-narrow"><input type="checkbox" id="um-select-all-primary" aria-label="Select all"></th>
                         <th class="um-col-narrow"><?= htmlspecialchars(__('adm_users_th_no'), ENT_QUOTES, 'UTF-8') ?></th>
                         <?php if ($users_primary_show_company_col): ?><th><?= htmlspecialchars(__('lbl_company'), ENT_QUOTES, 'UTF-8') ?></th><?php endif; ?>
                         <th><?= htmlspecialchars(__('adm_users_th_login_id'), ENT_QUOTES, 'UTF-8') ?></th>
@@ -1015,7 +961,6 @@ if ($bulk_none_json === false) {
                     }
                 ?>
                     <tr class="um-row-company" style="background-color:<?= htmlspecialchars($tr_bg, ENT_QUOTES, 'UTF-8') ?>;">
-                        <td class="um-col-narrow"><input type="checkbox" class="um-row-chk um-row-chk-primary" form="um-bulk-delete-form" name="bulk_ids[]" value="<?= $uid ?>"<?= $is_self ? ' disabled' : '' ?>></td>
                         <td class="um-col-narrow"><?= (int)($idx + 1) ?></td>
                         <?php if ($users_primary_show_company_col): ?><td><?= htmlspecialchars($co_disp) ?></td><?php endif; ?>
                         <td><?= htmlspecialchars((string)$u['username']) ?></td>
@@ -1082,14 +1027,13 @@ if ($bulk_none_json === false) {
             </div>
         </div>
         <?php if ($actor_is_superadmin): ?>
-        <?php $superadmin_colspan = 11; ?>
+        <?php $superadmin_colspan = 10; ?>
         <div class="um-table-panel">
             <h3><?= htmlspecialchars(__('adm_users_sa_section'), ENT_QUOTES, 'UTF-8') ?></h3>
             <div class="um-table-wrap">
             <table class="um-table" id="um-table-sa">
                 <thead>
                     <tr>
-                        <th class="um-col-narrow"><input type="checkbox" id="um-select-all-sa" aria-label="Select all"></th>
                         <th class="um-col-narrow"><?= htmlspecialchars(__('adm_users_th_no'), ENT_QUOTES, 'UTF-8') ?></th>
                         <th><?= htmlspecialchars(__('adm_users_th_login_id'), ENT_QUOTES, 'UTF-8') ?></th>
                         <th><?= htmlspecialchars(__('lbl_display_name'), ENT_QUOTES, 'UTF-8') ?></th>
@@ -1111,7 +1055,6 @@ if ($bulk_none_json === false) {
                     $ll = trim((string)($u['last_login_at'] ?? ''));
                 ?>
                     <tr>
-                        <td class="um-col-narrow"><input type="checkbox" class="um-row-chk um-row-chk-sa" form="um-bulk-delete-form" name="bulk_ids[]" value="<?= $uid ?>"<?= $is_self ? ' disabled' : '' ?>></td>
                         <td class="um-col-narrow"><?= (int)($idx + 1) ?></td>
                         <td><?= htmlspecialchars((string)$u['username']) ?></td>
                         <td><?= htmlspecialchars(trim((string)($u['display_name'] ?? ''))) ?></td>
@@ -1216,34 +1159,6 @@ if ($bulk_none_json === false) {
                     tbForm.submit();
                 });
             }
-        }
-        var bulkForm = document.getElementById('um-bulk-delete-form');
-        var bulkBtn = document.getElementById('um-bulk-delete-btn');
-        var bulkTpl = <?= $bulk_confirm_tpl_json ?>;
-        var bulkNone = <?= $bulk_none_json ?>;
-        function umBindSelectAll(masterId, rowClass) {
-            var m = document.getElementById(masterId);
-            if (!m) return;
-            m.addEventListener('change', function(){
-                document.querySelectorAll('.' + rowClass).forEach(function(c){
-                    if (!c.disabled) c.checked = m.checked;
-                });
-            });
-        }
-        umBindSelectAll('um-select-all-primary', 'um-row-chk-primary');
-        umBindSelectAll('um-select-all-sa', 'um-row-chk-sa');
-        if (bulkBtn && bulkForm) {
-            bulkBtn.addEventListener('click', function(){
-                var n = 0;
-                for (var i = 0; i < bulkForm.elements.length; i++) {
-                    var el = bulkForm.elements[i];
-                    if (el.name === 'bulk_ids[]' && el.type === 'checkbox' && el.checked && !el.disabled) n++;
-                }
-                if (n === 0) { alert(bulkNone); return; }
-                var msg = bulkTpl.indexOf('%d') >= 0 ? bulkTpl.replace('%d', String(n)) : bulkTpl;
-                if (!confirm(msg)) return;
-                bulkForm.submit();
-            });
         }
         var roleEl = document.getElementById('create_role');
         var box = document.getElementById('agent_customer_box');
