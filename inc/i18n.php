@@ -263,6 +263,10 @@ function i18n_dictionary(): array
         'adm_users_boss_locked' => ['zh' => '（仅平台总管理可改）', 'en' => ' (only platform superadmin can change)'],
         'adm_users_confirm_delete' => ['zh' => '确定删除该账号？删除后不可恢复。', 'en' => 'Delete this account? This cannot be undone.'],
         'adm_users_empty_sa' => ['zh' => '暂无各分公司账号', 'en' => 'No company accounts'],
+        'adm_users_empty_sa_hint' => [
+            'zh' => '说明：平台总管理（如 BIG BOSS）只在下方「平台总管理」表中显示，不会出现在本表。请点「添加用户」为各分公司新增 boss / admin / member / agent。',
+            'en' => 'Note: Platform superadmins (e.g. BIG BOSS) appear only in the section below, not here. Use “Add user” to create boss / admin / member / agent for each company.',
+        ],
         'adm_users_empty_co' => ['zh' => '暂无本公司账号', 'en' => 'No accounts for this company'],
         'adm_users_empty_no_co' => ['zh' => '未选择公司', 'en' => 'No company selected'],
         'adm_users_sa_section' => ['zh' => '平台总管理（superadmin）', 'en' => 'Platform superadmins'],

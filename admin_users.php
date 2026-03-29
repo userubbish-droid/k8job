@@ -998,7 +998,14 @@ if ($bulk_none_json === false) {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$users_primary_list): ?>
-                    <tr><td colspan="<?= (int)$users_primary_colspan ?>" class="admin-users-center"><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_empty_sa') : ($view_company_id > 0 ? __('adm_users_empty_co') : __('adm_users_empty_no_co')), ENT_QUOTES, 'UTF-8') ?></td></tr>
+                    <tr>
+                        <td colspan="<?= (int)$users_primary_colspan ?>" class="admin-users-center" style="padding: 28px 16px;">
+                            <div style="font-weight: 600; margin-bottom: 8px;"><?= htmlspecialchars($actor_is_superadmin ? __('adm_users_empty_sa') : ($view_company_id > 0 ? __('adm_users_empty_co') : __('adm_users_empty_no_co')), ENT_QUOTES, 'UTF-8') ?></div>
+                            <?php if ($actor_is_superadmin): ?>
+                            <p style="margin: 0 auto; max-width: 520px; font-size: 13px; color: #64748b; line-height: 1.55;"><?= htmlspecialchars(__('adm_users_empty_sa_hint'), ENT_QUOTES, 'UTF-8') ?></p>
+                            <?php endif; ?>
+                        </td>
+                    </tr>
                 <?php endif; ?>
                 </tbody>
             </table>
