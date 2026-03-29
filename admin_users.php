@@ -564,12 +564,16 @@ if ($bulk_none_json === false) {
         .agent-customer-code { font-weight: 800; color: #1e3a8a; min-width: 74px; }
         .agent-customer-name { color: #0f172a; }
         .agent-customer-meta { margin-left: auto; font-size: 12px; color: var(--muted); white-space: nowrap; }
+        /* 勿用 margin 左右负值覆盖 .page-wrap 的 margin:auto，否则整块会贴左不居中 */
         .um-page-bg {
             background: linear-gradient(180deg, #dbeafe 0%, #eff6ff 38%, #f8fafc 100%);
             padding-bottom: 28px;
-            margin: 0 -8px;
-            padding-left: 8px;
-            padding-right: 8px;
+            margin-left: auto;
+            margin-right: auto;
+            margin-top: 0;
+            margin-bottom: 0;
+            width: 100%;
+            box-sizing: border-box;
         }
         .um-page-bg .page-header { text-align: center; }
         .um-page-bg > .alert { text-align: center; }
