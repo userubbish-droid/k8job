@@ -665,7 +665,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     top: calc(100% + 10px);
     transform: translateX(-50%);
     z-index: 120;
-    width: min(280px, calc(100vw - 32px));
+    width: min(300px, calc(100vw - 32px));
     padding: 14px 14px 12px;
     background: #fff;
     border-radius: 14px;
@@ -709,6 +709,12 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     display: grid;
     grid-template-columns: repeat(3, 1fr);
     gap: 10px;
+}
+.avatar-picker-grid-presets {
+    margin-bottom: 4px;
+}
+.avatar-picker-grid-presets .avatar-picker-cell img {
+    object-fit: cover;
 }
 .avatar-picker-cell {
     aspect-ratio: 1;

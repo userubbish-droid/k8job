@@ -50,13 +50,11 @@ $sidebar_user_initial = function_exists('mb_substr')
     : substr((string) $sidebar_user_name, 0, 1);
 $sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
 $sidebar_show_avatar_picker = !empty($_SESSION['user_id']);
-$avatar_presets_ui = ['male' => [], 'female' => []];
-$avatar_picker_default_gender = 'male';
+$avatar_presets_list = [];
 $avatar_picker_current_id = null;
 if ($sidebar_show_avatar_picker) {
     require_once __DIR__ . '/avatar_presets.php';
-    $avatar_presets_ui = avatar_presets_grouped();
-    $avatar_picker_default_gender = avatar_preset_default_gender($sidebar_avatar_url);
+    $avatar_presets_list = avatar_presets_list();
     $avatar_picker_current_id = avatar_preset_id_from_url($sidebar_avatar_url);
 }
 $sidebar_company_id = (int)($_SESSION['company_id'] ?? 0);
@@ -119,25 +117,12 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         </button>
         <div class="avatar-picker-popover" id="avatar-picker-popover" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" hidden>
             <div class="avatar-picker-title" id="avatar-picker-title"><?= htmlspecialchars(__('avatar_pick_title'), ENT_QUOTES, 'UTF-8') ?></div>
-            <div class="avatar-picker-gender" role="tablist">
-                <button type="button" role="tab" class="avatar-picker-seg<?= $avatar_picker_default_gender === 'male' ? ' is-active' : '' ?>" data-gender="male" aria-selected="<?= $avatar_picker_default_gender === 'male' ? 'true' : 'false' ?>"><?= htmlspecialchars(__('avatar_pick_male'), ENT_QUOTES, 'UTF-8') ?></button>
-                <button type="button" role="tab" class="avatar-picker-seg<?= $avatar_picker_default_gender === 'female' ? ' is-active' : '' ?>" data-gender="female" aria-selected="<?= $avatar_picker_default_gender === 'female' ? 'true' : 'false' ?>"><?= htmlspecialchars(__('avatar_pick_female'), ENT_QUOTES, 'UTF-8') ?></button>
-            </div>
-            <div class="avatar-picker-grids">
-                <div class="avatar-picker-grid" data-gender="male" role="tabpanel" style="<?= $avatar_picker_default_gender === 'male' ? '' : 'display:none' ?>">
-                    <?php foreach ($avatar_presets_ui['male'] as $p): ?>
-                    <button type="button" class="avatar-picker-cell<?= ($avatar_picker_current_id === $p['id']) ? ' is-selected' : '' ?>" data-preset="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>">
-                        <img src="<?= htmlspecialchars($p['url'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async" width="72" height="72">
-                    </button>
-                    <?php endforeach; ?>
-                </div>
-                <div class="avatar-picker-grid" data-gender="female" role="tabpanel" style="<?= $avatar_picker_default_gender === 'female' ? '' : 'display:none' ?>">
-                    <?php foreach ($avatar_presets_ui['female'] as $p): ?>
-                    <button type="button" class="avatar-picker-cell<?= ($avatar_picker_current_id === $p['id']) ? ' is-selected' : '' ?>" data-preset="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>">
-                        <img src="<?= htmlspecialchars($p['url'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async" width="72" height="72">
-                    </button>
-                    <?php endforeach; ?>
-                </div>
+            <div class="avatar-picker-grid avatar-picker-grid-presets" role="group" aria-label="<?= htmlspecialchars(__('avatar_pick_title'), ENT_QUOTES, 'UTF-8') ?>">
+                <?php foreach ($avatar_presets_list as $p): ?>
+                <button type="button" class="avatar-picker-cell<?= ($avatar_picker_current_id === $p['id']) ? ' is-selected' : '' ?>" data-preset="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>">
+                    <img src="<?= htmlspecialchars($p['url'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async" width="72" height="72">
+                </button>
+                <?php endforeach; ?>
             </div>
             <div class="avatar-picker-upload">
                 <p class="avatar-picker-upload-hint"><?= htmlspecialchars(__('avatar_upload_hint'), ENT_QUOTES, 'UTF-8') ?></p>
@@ -410,22 +395,12 @@ window.__APP_I18N = <?= json_encode([
             e.stopPropagation();
             toggle();
         });
-        pop.querySelectorAll('.avatar-picker-seg').forEach(function(seg){
-            seg.addEventListener('click', function(){
-                var g = seg.getAttribute('data-gender');
-                pop.querySelectorAll('.avatar-picker-seg').forEach(function(s){
-                    var on = s.getAttribute('data-gender') === g;
-                    s.classList.toggle('is-active', on);
-                    s.setAttribute('aria-selected', on ? 'true' : 'false');
-                });
-                pop.querySelectorAll('.avatar-picker-grid').forEach(function(grid){
-                    grid.style.display = grid.getAttribute('data-gender') === g ? 'grid' : 'none';
-                });
-            });
-        });
         function applyAvatarFromServer(url) {
             if (!url) return;
-            var showUrl = url.indexOf('uploads/avatars/') === 0 ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now()) : url;
+            var showUrl = url;
+            if (url.indexOf('uploads/avatars/') === 0 || url.indexOf('assets/avatars/') === 0) {
+                showUrl = url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now();
+            }
             var im = imgEl;
             if (!im) {
                 im = document.createElement('img');
