@@ -146,8 +146,9 @@ if ($product_other !== '') $product = '其他';
         a { color: #007bff; }
     </style>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <?php include __DIR__ . '/inc/page_bg_txn_lavender.php'; ?>
 </head>
-<body>
+<body class="page-txn-lavender">
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
