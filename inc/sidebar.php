@@ -45,8 +45,20 @@ if ($sidebar_pending > 0 || $sidebar_pending_customers > 0) {
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
 $__ur = $_SESSION['user_role'] ?? '';
 $sidebar_user_role = $__ur === 'superadmin' ? __('role_bb') : ($__ur === 'boss' ? __('role_boss') : ($__ur === 'admin' ? __('role_admin') : ($__ur === 'agent' ? __('role_agent') : __('role_staff'))));
-$sidebar_user_initial = mb_substr($sidebar_user_name, 0, 1, 'UTF-8');
+$sidebar_user_initial = function_exists('mb_substr')
+    ? mb_substr($sidebar_user_name, 0, 1, 'UTF-8')
+    : substr((string) $sidebar_user_name, 0, 1);
 $sidebar_avatar_url = trim((string)($_SESSION['avatar_url'] ?? ''));
+$sidebar_show_avatar_picker = !empty($_SESSION['user_id']);
+$avatar_presets_ui = ['male' => [], 'female' => []];
+$avatar_picker_default_gender = 'male';
+$avatar_picker_current_id = null;
+if ($sidebar_show_avatar_picker) {
+    require_once __DIR__ . '/avatar_presets.php';
+    $avatar_presets_ui = avatar_presets_grouped();
+    $avatar_picker_default_gender = avatar_preset_default_gender($sidebar_avatar_url);
+    $avatar_picker_current_id = avatar_preset_id_from_url($sidebar_avatar_url);
+}
 $sidebar_company_id = (int)($_SESSION['company_id'] ?? 0);
 $sidebar_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $sidebar_company_label = '';
@@ -96,6 +108,39 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         </div>
     </div>
     <div class="sidebar-profile">
+        <?php if ($sidebar_show_avatar_picker): ?>
+        <button type="button" class="sidebar-avatar sidebar-avatar-btn" id="sidebar-avatar-btn" aria-haspopup="dialog" aria-expanded="false" aria-controls="avatar-picker-popover" title="<?= htmlspecialchars(__('avatar_pick_btn'), ENT_QUOTES, 'UTF-8') ?>">
+            <?php if ($sidebar_avatar_url !== ''): ?>
+                <img id="sidebar-avatar-img" class="sidebar-avatar-fill" src="<?= htmlspecialchars($sidebar_avatar_url) ?>" alt="" loading="lazy" decoding="async">
+                <span id="sidebar-avatar-letter" class="sidebar-avatar-letter" hidden aria-hidden="true"><?= htmlspecialchars($sidebar_user_initial) ?></span>
+            <?php else: ?>
+                <span id="sidebar-avatar-letter" class="sidebar-avatar-letter"><?= htmlspecialchars($sidebar_user_initial) ?></span>
+            <?php endif; ?>
+        </button>
+        <div class="avatar-picker-popover" id="avatar-picker-popover" role="dialog" aria-modal="true" aria-labelledby="avatar-picker-title" hidden>
+            <div class="avatar-picker-title" id="avatar-picker-title"><?= htmlspecialchars(__('avatar_pick_title'), ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="avatar-picker-gender" role="tablist">
+                <button type="button" role="tab" class="avatar-picker-seg<?= $avatar_picker_default_gender === 'male' ? ' is-active' : '' ?>" data-gender="male" aria-selected="<?= $avatar_picker_default_gender === 'male' ? 'true' : 'false' ?>"><?= htmlspecialchars(__('avatar_pick_male'), ENT_QUOTES, 'UTF-8') ?></button>
+                <button type="button" role="tab" class="avatar-picker-seg<?= $avatar_picker_default_gender === 'female' ? ' is-active' : '' ?>" data-gender="female" aria-selected="<?= $avatar_picker_default_gender === 'female' ? 'true' : 'false' ?>"><?= htmlspecialchars(__('avatar_pick_female'), ENT_QUOTES, 'UTF-8') ?></button>
+            </div>
+            <div class="avatar-picker-grids">
+                <div class="avatar-picker-grid" data-gender="male" role="tabpanel" style="<?= $avatar_picker_default_gender === 'male' ? '' : 'display:none' ?>">
+                    <?php foreach ($avatar_presets_ui['male'] as $p): ?>
+                    <button type="button" class="avatar-picker-cell<?= ($avatar_picker_current_id === $p['id']) ? ' is-selected' : '' ?>" data-preset="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>">
+                        <img src="<?= htmlspecialchars($p['url'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async" width="72" height="72">
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+                <div class="avatar-picker-grid" data-gender="female" role="tabpanel" style="<?= $avatar_picker_default_gender === 'female' ? '' : 'display:none' ?>">
+                    <?php foreach ($avatar_presets_ui['female'] as $p): ?>
+                    <button type="button" class="avatar-picker-cell<?= ($avatar_picker_current_id === $p['id']) ? ' is-selected' : '' ?>" data-preset="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>" title="<?= htmlspecialchars($p['id'], ENT_QUOTES, 'UTF-8') ?>">
+                        <img src="<?= htmlspecialchars($p['url'], ENT_QUOTES, 'UTF-8') ?>" alt="" loading="lazy" decoding="async" width="72" height="72">
+                    </button>
+                    <?php endforeach; ?>
+                </div>
+            </div>
+        </div>
+        <?php else: ?>
         <div class="sidebar-avatar" aria-hidden="true">
             <?php if ($sidebar_avatar_url !== ''): ?>
                 <img src="<?= htmlspecialchars($sidebar_avatar_url) ?>" alt="" loading="lazy" decoding="async">
@@ -103,6 +148,7 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
                 <?= htmlspecialchars($sidebar_user_initial) ?>
             <?php endif; ?>
         </div>
+        <?php endif; ?>
         <div class="sidebar-name"><?= htmlspecialchars($sidebar_user_name) ?></div>
         <div class="sidebar-role"><?= htmlspecialchars($sidebar_user_role) ?></div>
         <?php if ($sidebar_is_superadmin && $sidebar_company_label !== ''): ?>
@@ -241,6 +287,8 @@ window.__APP_I18N = <?= json_encode([
     'ok' => __('btn_ok'),
     'cancel' => __('btn_cancel'),
     'confirmDefault' => __('confirm_prompt_default'),
+    'avatarSaved' => __('avatar_pick_saved'),
+    'avatarErr' => __('avatar_pick_err'),
 ], JSON_UNESCAPED_UNICODE) ?>;
 (function(){
     var btn = document.getElementById('sidebar-toggle');
@@ -330,5 +378,89 @@ window.__APP_I18N = <?= json_encode([
             window.appModalConfirm(msg, function(){ window.location.href = href; });
         });
     });
+
+    // 侧栏头像选择器
+    (function(){
+        var btn = document.getElementById('sidebar-avatar-btn');
+        var pop = document.getElementById('avatar-picker-popover');
+        if (!btn || !pop) return;
+        var imgEl = document.getElementById('sidebar-avatar-img');
+        var letterEl = document.getElementById('sidebar-avatar-letter');
+        var I = window.__APP_I18N || {};
+        function setOpen(open) {
+            if (open) {
+                pop.removeAttribute('hidden');
+                btn.setAttribute('aria-expanded', 'true');
+            } else {
+                pop.setAttribute('hidden', 'hidden');
+                btn.setAttribute('aria-expanded', 'false');
+            }
+        }
+        function toggle() { setOpen(pop.hasAttribute('hidden')); }
+        btn.addEventListener('click', function(e){
+            e.stopPropagation();
+            toggle();
+        });
+        pop.querySelectorAll('.avatar-picker-seg').forEach(function(seg){
+            seg.addEventListener('click', function(){
+                var g = seg.getAttribute('data-gender');
+                pop.querySelectorAll('.avatar-picker-seg').forEach(function(s){
+                    var on = s.getAttribute('data-gender') === g;
+                    s.classList.toggle('is-active', on);
+                    s.setAttribute('aria-selected', on ? 'true' : 'false');
+                });
+                pop.querySelectorAll('.avatar-picker-grid').forEach(function(grid){
+                    grid.style.display = grid.getAttribute('data-gender') === g ? 'grid' : 'none';
+                });
+            });
+        });
+        pop.querySelectorAll('.avatar-picker-cell').forEach(function(cell){
+            cell.addEventListener('click', function(){
+                var preset = cell.getAttribute('data-preset');
+                if (!preset) return;
+                pop.querySelectorAll('.avatar-picker-cell').forEach(function(c){ c.classList.remove('is-selected'); });
+                cell.classList.add('is-selected');
+                var body = 'preset=' + encodeURIComponent(preset);
+                fetch('avatar_pick_save.php', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                    body: body,
+                    credentials: 'same-origin'
+                }).then(function(r){ return r.json(); }).then(function(data){
+                    if (!data || !data.ok || !data.url) {
+                        window.appModalAlert(I.avatarErr || 'Error');
+                        return;
+                    }
+                    var im = imgEl;
+                    if (!im) {
+                        im = document.createElement('img');
+                        im.id = 'sidebar-avatar-img';
+                        im.className = 'sidebar-avatar-fill';
+                        im.alt = '';
+                        im.decoding = 'async';
+                        btn.insertBefore(im, btn.firstChild);
+                        imgEl = im;
+                    }
+                    im.src = data.url;
+                    im.removeAttribute('hidden');
+                    if (letterEl) {
+                        letterEl.setAttribute('hidden', 'hidden');
+                        letterEl.setAttribute('aria-hidden', 'true');
+                    }
+                    setOpen(false);
+                }).catch(function(){
+                    window.appModalAlert(I.avatarErr || 'Error');
+                });
+            });
+        });
+        document.addEventListener('click', function(e){
+            if (!pop.hasAttribute('hidden') && !pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
+                setOpen(false);
+            }
+        });
+        document.addEventListener('keydown', function(e){
+            if (e.key === 'Escape' && !pop.hasAttribute('hidden')) setOpen(false);
+        });
+    })();
 })();
 </script>

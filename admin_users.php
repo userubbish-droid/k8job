@@ -15,7 +15,7 @@ if (!in_array($status_filter, ['all', 'active', 'inactive'], true)) {
 }
 $search_q = trim((string)($_GET['q'] ?? ''));
 
-function redirect_self(): void {
+function redirect_self() {
     header('Location: admin_users.php');
     exit;
 }
@@ -54,19 +54,32 @@ function um_role_badge_text(string $role): string {
     }
 }
 
-function ensure_users_role_enum(PDO $pdo): void {
+function ensure_users_role_enum(PDO $pdo) {
     try {
         $pdo->exec("ALTER TABLE users MODIFY role ENUM('superadmin','boss','admin','member','agent') NOT NULL DEFAULT 'member'");
     } catch (Throwable $e) {
     }
 }
 
-function ensure_users_login_meta(PDO $pdo): void {
+function ensure_users_login_meta(PDO $pdo) {
     try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_at DATETIME NULL AFTER is_active"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"); } catch (Throwable $e) {}
 }
 
+/** 用户管理列表依赖的列（线上若未跑迁移则在此补全，避免 500） */
+function ensure_users_email_created_columns(PDO $pdo) {
+    try {
+        $pdo->exec('ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL DEFAULT NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE users ADD COLUMN created_by_user_id INT UNSIGNED NULL DEFAULT NULL');
+    } catch (Throwable $e) {
+    }
+}
+
 ensure_users_login_meta($pdo);
+ensure_users_email_created_columns($pdo);
 
 try {
     // Agent 绑定下线用：客户列表（显示 code + name）
@@ -368,9 +381,23 @@ if (!$actor_is_superadmin && $view_company_id > 0) {
             FROM users u
             LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
             WHERE u.role != 'superadmin' AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
-    $stmt = $pdo->prepare($sql);
-    $stmt->execute([$view_company_id]);
-    $company_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    $sql_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, NULL AS created_by_user_id,
+                   '' AS created_by_username
+            FROM users u
+            WHERE u.role != 'superadmin' AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
+    try {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([$view_company_id]);
+        $company_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        try {
+            $stmt = $pdo->prepare($sql_legacy);
+            $stmt->execute([$view_company_id]);
+            $company_users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e2) {
+            $company_users = [];
+        }
+    }
 }
 
 $all_company_users = [];
@@ -383,7 +410,22 @@ if ($actor_is_superadmin) {
                 LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
                 WHERE u.role != 'superadmin'" . $status_sql . '
                 ORDER BY u.company_id ASC, u.id DESC';
-    $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
+    $sql_all_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
+                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name,
+                       '' AS created_by_username
+                FROM users u
+                LEFT JOIN companies c ON c.id = u.company_id
+                WHERE u.role != 'superadmin'" . $status_sql . '
+                ORDER BY u.company_id ASC, u.id DESC';
+    try {
+        $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        try {
+            $all_company_users = $pdo->query($sql_all_legacy)->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e2) {
+            $all_company_users = [];
+        }
+    }
 }
 
 $superadmin_users = [];
@@ -393,7 +435,19 @@ if ($actor_is_superadmin) {
                FROM users u
                LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
                WHERE u.role = 'superadmin'" . $status_sql . ' ORDER BY u.id DESC';
-    $superadmin_users = $pdo->query($sql_sa)->fetchAll(PDO::FETCH_ASSOC);
+    $sql_sa_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, NULL AS created_by_user_id,
+                      '' AS created_by_username
+               FROM users u
+               WHERE u.role = 'superadmin'" . $status_sql . ' ORDER BY u.id DESC';
+    try {
+        $superadmin_users = $pdo->query($sql_sa)->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        try {
+            $superadmin_users = $pdo->query($sql_sa_legacy)->fetchAll(PDO::FETCH_ASSOC);
+        } catch (Throwable $e2) {
+            $superadmin_users = [];
+        }
+    }
 }
 
 $users_primary_list = $actor_is_superadmin ? $all_company_users : $company_users;
@@ -435,7 +489,13 @@ if ($actor_is_superadmin) {
 
 $session_user_id = (int)($_SESSION['user_id'] ?? 0);
 $bulk_confirm_tpl_json = json_encode(__('adm_users_bulk_confirm'), JSON_UNESCAPED_UNICODE);
+if ($bulk_confirm_tpl_json === false) {
+    $bulk_confirm_tpl_json = json_encode('Delete selected?', JSON_UNESCAPED_UNICODE);
+}
 $bulk_none_json = json_encode(__('adm_users_bulk_none'), JSON_UNESCAPED_UNICODE);
+if ($bulk_none_json === false) {
+    $bulk_none_json = json_encode('Select at least one.', JSON_UNESCAPED_UNICODE);
+}
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
