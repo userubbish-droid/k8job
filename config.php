@@ -40,6 +40,15 @@ try {
     $pdo->exec("ALTER TABLE users ADD COLUMN avatar_url VARCHAR(255) NULL DEFAULT NULL AFTER display_name");
 } catch (Throwable $e) {
 }
+// 用户管理列表：邮箱、创建人（可选）
+try {
+    $pdo->exec('ALTER TABLE users ADD COLUMN email VARCHAR(255) NULL DEFAULT NULL');
+} catch (Throwable $e) {
+}
+try {
+    $pdo->exec('ALTER TABLE users ADD COLUMN created_by_user_id INT UNSIGNED NULL DEFAULT NULL');
+} catch (Throwable $e) {
+}
 
 // 代理账号：Agent 页是否显示「期/周」与「月」日期快捷（由管理员在用户编辑中勾选）
 try {
@@ -61,18 +70,16 @@ try {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )");
 } catch (Throwable $e) {}
+// 分公司币种（Statement 总公司视图按币种筛选）
+try {
+    $pdo->exec("ALTER TABLE companies ADD COLUMN currency VARCHAR(8) NOT NULL DEFAULT 'MYR'");
+} catch (Throwable $e) {
+}
 try {
     // 默认公司：k8（id=1）
     $pdo->exec("INSERT IGNORE INTO companies (id, code, name, is_active) VALUES (1, 'k8', 'K8', 1)");
 } catch (Throwable $e) {}
-// 总公司实体（与侧栏 session「总公司」汇总不同）：总部人员绑定此 company_id，便于开 admin/boss/member
-if (!defined('HEAD_OFFICE_COMPANY_CODE')) {
-    define('HEAD_OFFICE_COMPANY_CODE', 'hq');
-}
-try {
-    $st = $pdo->prepare('INSERT IGNORE INTO companies (code, name, is_active) VALUES (?, ?, 1)');
-    $st->execute([HEAD_OFFICE_COMPANY_CODE, '总公司']);
-} catch (Throwable $e) {}
+// 如需单独「总部」分公司账号，请在「分公司/公司」里手动新增（不再自动插入 hq，避免与侧栏「总公司」汇总混淆）
 
 // users.company_id（superadmin 可为空；其他必须有）
 try { $pdo->exec("ALTER TABLE users ADD COLUMN company_id INT UNSIGNED NULL AFTER avatar_url"); } catch (Throwable $e) {}

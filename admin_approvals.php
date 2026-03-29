@@ -5,6 +5,7 @@ require_admin();
 $sidebar_current = 'admin_approvals';
 
 $company_id = current_company_id();
+$head_office_scope = is_superadmin_head_office_scope();
 
 $msg = '';
 $err = '';
@@ -15,12 +16,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if ($id > 0) {
         try {
             if ($action === 'approve') {
-                $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
-                $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
+                if ($head_office_scope) {
+                    $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
+                    $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id]);
+                } else {
+                    $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
+                    $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
+                }
                 $msg = '已批准。';
             } elseif ($action === 'reject') {
-                $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
-                $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
+                if ($head_office_scope) {
+                    $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
+                    $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id]);
+                } else {
+                    $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
+                    $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
+                }
                 $msg = '已拒绝。';
             }
         } catch (Throwable $e) {
@@ -31,15 +42,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $rows = [];
 try {
-    $sql = "SELECT t.id, t.day, t.time, t.mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.staff, t.remark,
-                   t.created_at, u.username AS created_by_name
-            FROM transactions t
-            LEFT JOIN users u ON u.id = t.created_by
-            WHERE t.status = 'pending' AND t.company_id = ?
-            ORDER BY t.created_at ASC";
-    $st = $pdo->prepare($sql);
-    $st->execute([$company_id]);
-    $rows = $st->fetchAll();
+    if ($head_office_scope) {
+        $sql = "SELECT t.id, t.company_id, COALESCE(c.code, '') AS company_code, t.day, t.time, t.mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.staff, t.remark,
+                       t.created_at, u.username AS created_by_name
+                FROM transactions t
+                LEFT JOIN users u ON u.id = t.created_by
+                LEFT JOIN companies c ON c.id = t.company_id
+                WHERE t.status = 'pending'
+                ORDER BY t.created_at ASC";
+        $rows = $pdo->query($sql)->fetchAll();
+    } else {
+        $sql = "SELECT t.id, t.day, t.time, t.mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.staff, t.remark,
+                       t.created_at, u.username AS created_by_name
+                FROM transactions t
+                LEFT JOIN users u ON u.id = t.created_by
+                WHERE t.status = 'pending' AND t.company_id = ?
+                ORDER BY t.created_at ASC";
+        $st = $pdo->prepare($sql);
+        $st->execute([$company_id]);
+        $rows = $st->fetchAll();
+    }
 } catch (Throwable $e) {
     $err = $err ?: $e->getMessage();
 }
@@ -82,6 +104,7 @@ try {
             <thead>
                 <tr>
                     <th>ID</th>
+                    <?php if ($head_office_scope): ?><th>分公司</th><?php endif; ?>
                     <th>创建人</th>
                     <th>日期</th>
                     <th>时间</th>
@@ -99,6 +122,7 @@ try {
                 <?php foreach ($rows as $r): ?>
                 <tr>
                     <td><?= (int)$r['id'] ?></td>
+                    <?php if ($head_office_scope): ?><td><?= htmlspecialchars($r['company_code'] ?? '') ?></td><?php endif; ?>
                     <td><?= htmlspecialchars($r['created_by_name'] ?? '') ?></td>
                     <td><?= htmlspecialchars($r['day']) ?></td>
                     <td><?= htmlspecialchars($r['time']) ?></td>
@@ -125,7 +149,7 @@ try {
                 </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                <tr><td colspan="12">暂无待批准</td></tr>
+                <tr><td colspan="<?= $head_office_scope ? 13 : 12 ?>">暂无待批准</td></tr>
                 <?php endif; ?>
             </tbody>
         </table>

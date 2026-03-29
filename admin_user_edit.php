@@ -23,10 +23,15 @@ $err = '';
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $username = trim((string)($_POST['username'] ?? ''));
     $display_name = trim((string)($_POST['display_name'] ?? ''));
+    $email = trim((string)($_POST['email'] ?? ''));
     $avatar_url = trim((string)($_POST['avatar_url'] ?? ''));
     $is_active = isset($_POST['is_active']) && (string)$_POST['is_active'] === '1' ? 1 : 0;
     if ($username === '') {
         $err = __('user_edit_err_user_empty');
+    } elseif (strlen($email) > 255) {
+        $err = __('adm_users_err_email_len');
+    } elseif ($email !== '' && !filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $err = __('adm_users_err_invalid_email');
     } elseif (!user_is_manageable_by_current_actor($pdo, $id)) {
         $err = __('user_edit_err_no_perm_save');
     } else {
@@ -34,13 +39,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $stmtRole = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
             $stmtRole->execute([$id]);
             $editUserRole = (string)($stmtRole->fetchColumn() ?: '');
+            $emailSave = $email !== '' ? $email : null;
             if ($editUserRole === 'agent') {
                 $agent_ui_show_week = !empty($_POST['agent_ui_show_week']) ? 1 : 0;
                 $agent_ui_show_month = !empty($_POST['agent_ui_show_month']) ? 1 : 0;
-                $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, avatar_url = ?, is_active = ?, agent_ui_show_week = ?, agent_ui_show_month = ? WHERE id = ?");
+                $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, email = ?, avatar_url = ?, is_active = ?, agent_ui_show_week = ?, agent_ui_show_month = ? WHERE id = ?");
                 $stmt->execute([
                     $username,
                     $display_name !== '' ? $display_name : null,
+                    $emailSave,
                     $avatar_url !== '' ? $avatar_url : null,
                     $is_active,
                     $agent_ui_show_week,
@@ -48,10 +55,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $id,
                 ]);
             } else {
-                $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, avatar_url = ?, is_active = ? WHERE id = ?");
+                $stmt = $pdo->prepare("UPDATE users SET username = ?, display_name = ?, email = ?, avatar_url = ?, is_active = ? WHERE id = ?");
                 $stmt->execute([
                     $username,
                     $display_name !== '' ? $display_name : null,
+                    $emailSave,
                     $avatar_url !== '' ? $avatar_url : null,
                     $is_active,
                     $id,
@@ -97,7 +105,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 try {
-    $stmt = $pdo->prepare("SELECT id, username, role, display_name, avatar_url, is_active, COALESCE(agent_ui_show_week, 1) AS agent_ui_show_week, COALESCE(agent_ui_show_month, 1) AS agent_ui_show_month, last_login_at, last_login_ip, created_at, second_password_hash FROM users WHERE id = ? LIMIT 1");
+    $stmt = $pdo->prepare("SELECT id, username, role, display_name, COALESCE(email,'') AS email, avatar_url, is_active, COALESCE(agent_ui_show_week, 1) AS agent_ui_show_week, COALESCE(agent_ui_show_month, 1) AS agent_ui_show_month, last_login_at, last_login_ip, created_at, second_password_hash FROM users WHERE id = ? LIMIT 1");
     $stmt->execute([$id]);
     $u = $stmt->fetch();
 } catch (Throwable $e) {
@@ -150,6 +158,10 @@ $can_set_second = user_actor_can_set_second_password($pdo, $id);
                                 <label><?= htmlspecialchars(__('lbl_display_name'), ENT_QUOTES, 'UTF-8') ?></label>
                                 <input class="form-control" name="display_name" value="<?= htmlspecialchars((string)($u['display_name'] ?? '')) ?>" placeholder="<?= htmlspecialchars(__('user_edit_ph_display'), ENT_QUOTES, 'UTF-8') ?>">
                             </div>
+                        </div>
+                        <div class="form-group">
+                            <label><?= htmlspecialchars(__('user_edit_lbl_email'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <input class="form-control" type="email" name="email" value="<?= htmlspecialchars((string)($u['email'] ?? '')) ?>" maxlength="255" placeholder="name@example.com" autocomplete="off">
                         </div>
                         <div class="form-group">
                             <label><?= htmlspecialchars(__('user_edit_lbl_avatar'), ENT_QUOTES, 'UTF-8') ?></label>

@@ -3,7 +3,7 @@ require 'config.php';
 require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_banks_products';
-$company_id = current_company_id();
+$company_id = effective_admin_company_id($pdo);
 $actor_role = (string)($_SESSION['user_role'] ?? '');
 $actor_is_boss_like = in_array($actor_role, ['boss', 'superadmin'], true);
 

@@ -5,7 +5,7 @@ require_login();
 require_permission('statement_balance');
 
 $sidebar_current = 'balance_summary';
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss'], true);
+$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss', 'superadmin'], true);
 
 $day_from = isset($_GET['day_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_from']) ? $_GET['day_from'] : null;
 $day_to   = isset($_GET['day_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_to']) ? $_GET['day_to'] : null;
@@ -21,8 +21,44 @@ $is_range = ($day_from !== $day_to);
 $msg = '';
 $err = '';
 
+$head_office_stmt = is_superadmin_head_office_scope();
+
+$stmt_co = 0;
+if ($head_office_stmt && isset($_GET['stmt_co'])) {
+    $stmt_co = (int)$_GET['stmt_co'];
+}
+
+$company_rows = [];
+if ($head_office_stmt) {
+    try {
+        $company_rows = $pdo->query('SELECT id, code, name FROM companies WHERE is_active = 1 ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $company_rows = [];
+    }
+}
+
 $company_id = current_company_id();
+if ($head_office_stmt) {
+    $ids_ok = array_map('intval', array_column($company_rows, 'id'));
+    if ($stmt_co > 0 && in_array($stmt_co, $ids_ok, true)) {
+        $company_id = $stmt_co;
+    } elseif ($ids_ok !== []) {
+        $company_id = $ids_ok[0];
+    } else {
+        $company_id = -1;
+    }
+}
+
 require_once __DIR__ . '/inc/game_platform_statement_compute.php';
+
+/** @param array<string, scalar> $extra */
+function balance_summary_stmt_url(string $df, string $dt, array $extra = []): string {
+    $q = array_merge(['day_from' => $df, 'day_to' => $dt], $extra);
+    $q = array_filter($q, static function ($v) {
+        return $v !== null && $v !== '';
+    });
+    return 'balance_summary.php?' . http_build_query($q);
+}
 ?>
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -31,6 +67,25 @@ require_once __DIR__ . '/inc/game_platform_statement_compute.php';
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>statement - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
+    <?php if ($head_office_stmt): ?>
+    <style>
+        .stmt-head-office-bar { margin-bottom: 18px; padding: 14px 16px; background: var(--card-bg, #fff); border-radius: 10px; border: 1px solid rgba(148, 163, 184, 0.25); }
+        .stmt-company-pick-row { display: flex; align-items: flex-start; flex-wrap: wrap; gap: 12px 16px; }
+        .stmt-company-pick-label { font-weight: 700; font-size: 14px; color: var(--text, #1e293b); padding-top: 8px; flex-shrink: 0; }
+        .stmt-company-pills { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+        .stmt-pill {
+            display: inline-flex; flex-direction: column; align-items: center; justify-content: center;
+            min-width: 72px; padding: 10px 16px; border-radius: 999px; font-size: 14px; font-weight: 700;
+            text-decoration: none; color: var(--text, #334155); background: #f1f5f9; border: 1px solid #cbd5e1;
+            transition: background .15s, color .15s, border-color .15s;
+            letter-spacing: 0.02em;
+        }
+        .stmt-pill small { display: block; font-size: 11px; font-weight: 500; color: var(--muted, #64748b); margin-top: 2px; max-width: 140px; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .stmt-pill.active small { color: rgba(255,255,255,0.9); }
+        .stmt-pill:hover { background: #e2e8f0; }
+        .stmt-pill.active { background: var(--primary, #2563eb); color: #fff; border-color: var(--primary, #2563eb); }
+    </style>
+    <?php endif; ?>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -48,6 +103,34 @@ require_once __DIR__ . '/inc/game_platform_statement_compute.php';
                 <?php if (!$is_admin): ?><p class="form-hint" style="margin-bottom:12px;">您仅有查看权限，不可修改任何数据。</p><?php endif; ?>
 
                 <div class="card">
+                    <?php if ($head_office_stmt): ?>
+                    <div class="stmt-head-office-bar">
+                        <div class="stmt-company-pick-row">
+                            <span class="stmt-company-pick-label">公司</span>
+                            <div class="stmt-company-pills" role="tablist" aria-label="选择分公司对账单">
+                                <?php foreach ($company_rows as $cr):
+                                    $cid = (int)$cr['id'];
+                                    $ccode = trim((string)($cr['code'] ?? ''));
+                                    $cname = trim((string)($cr['name'] ?? ''));
+                                    $pill_title = $cname !== '' ? $ccode . ' — ' . $cname : $ccode;
+                                    $is_active_pill = ($cid === $company_id);
+                                ?>
+                                <a class="stmt-pill<?= $is_active_pill ? ' active' : '' ?>"
+                                   role="tab"
+                                   aria-selected="<?= $is_active_pill ? 'true' : 'false' ?>"
+                                   title="<?= htmlspecialchars($pill_title, ENT_QUOTES, 'UTF-8') ?>"
+                                   href="<?= htmlspecialchars(balance_summary_stmt_url($day_from, $day_to, ['stmt_co' => $cid]), ENT_QUOTES, 'UTF-8') ?>">
+                                    <?= htmlspecialchars($ccode !== '' ? $ccode : ('#' . $cid)) ?>
+                                    <?php if ($cname !== ''): ?><small><?= htmlspecialchars($cname) ?></small><?php endif; ?>
+                                </a>
+                                <?php endforeach; ?>
+                            </div>
+                        </div>
+                        <?php if ($company_rows === []): ?>
+                        <p class="form-hint" style="margin:10px 0 0;">暂无启用的分公司，请到「分公司管理」新增或启用公司。</p>
+                        <?php endif; ?>
+                    </div>
+                    <?php endif; ?>
                     <p class="form-hint" style="margin-bottom:12px;">显示日期：<?= $day_from ?><?= $is_range ? ' 至 ' . $day_to : '' ?><?= !$is_range && $day_from === date('Y-m-d') ? '（当天）' : '' ?></p>
                     <div class="statement-filter-wrap" style="margin-bottom:16px;">
                         <button type="button" class="btn btn-outline" id="stmt-date-toggle">筛选日期</button>
@@ -56,6 +139,9 @@ require_once __DIR__ . '/inc/game_platform_statement_compute.php';
                             <input type="date" name="day_from" id="stmt-day-from" value="<?= htmlspecialchars($day_from) ?>">
                             <label style="font-size:13px;">至</label>
                             <input type="date" name="day_to" id="stmt-day-to" value="<?= htmlspecialchars($day_to) ?>">
+                            <?php if ($head_office_stmt && $company_id > 0): ?>
+                            <input type="hidden" name="stmt_co" value="<?= (int)$company_id ?>">
+                            <?php endif; ?>
                             <button type="submit" class="btn btn-primary">查询</button>
                             <div style="flex-basis:100%; height:0;"></div>
                             <span style="font-size:13px; color:var(--muted);">快捷：</span>

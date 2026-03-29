@@ -47,8 +47,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($name === '' || strlen($name) > 120) {
                 throw new RuntimeException('公司显示名称：必填，最长 120 字。');
             }
-            $stmt = $pdo->prepare('INSERT INTO companies (code, name, is_active) VALUES (?, ?, 1)');
-            $stmt->execute([$code, $name]);
+            $currency = strtoupper(trim((string)($_POST['currency'] ?? 'MYR')));
+            if (!preg_match('/^[A-Z]{2,8}$/', $currency)) {
+                $currency = 'MYR';
+            }
+            $stmt = $pdo->prepare('INSERT INTO companies (code, name, currency, is_active) VALUES (?, ?, ?, 1)');
+            $stmt->execute([$code, $name, $currency]);
             $msg = '已新增分公司：' . $code;
         } elseif ($action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
@@ -68,8 +72,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($stmt->fetch()) {
                 throw new RuntimeException('该公司代码已被其他分公司使用。');
             }
-            $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ? WHERE id = ?');
-            $stmt->execute([$code, $name, $id]);
+            $currency = strtoupper(trim((string)($_POST['currency'] ?? 'MYR')));
+            if (!preg_match('/^[A-Z]{2,8}$/', $currency)) {
+                $currency = 'MYR';
+            }
+            $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ?, currency = ? WHERE id = ?');
+            $stmt->execute([$code, $name, $currency, $id]);
             $msg = '已保存。';
         } elseif ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
@@ -118,7 +126,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $companies = [];
 try {
-    $companies = $pdo->query('SELECT id, code, name, is_active, created_at FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    $companies = $pdo->query('SELECT id, code, name, currency, is_active, created_at FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $companies = [];
 }
@@ -183,6 +191,14 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                             <label>显示名称</label>
                             <input class="form-control" name="name" required maxlength="120" placeholder="例如 分公司二">
                         </div>
+                        <div class="filter-group">
+                            <label>币种</label>
+                            <select class="form-control" name="currency">
+                                <?php foreach (['MYR', 'SGD', 'USD', 'CNY', 'EUR', 'THB', 'IDR'] as $cur): ?>
+                                <option value="<?= htmlspecialchars($cur) ?>"<?= $cur === 'MYR' ? ' selected' : '' ?>><?= htmlspecialchars($cur) ?></option>
+                                <?php endforeach; ?>
+                            </select>
+                        </div>
                         <div class="filter-group" style="align-self:flex-end;">
                             <button type="submit" class="btn btn-primary">新增</button>
                         </div>
@@ -196,7 +212,7 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>代码与名称</th>
+                                    <th>代码、名称与币种</th>
                                     <th>状态</th>
                                     <th>创建时间</th>
                                     <th>操作</th>
@@ -212,6 +228,14 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                                             <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
                                             <input class="form-control" name="code" value="<?= htmlspecialchars($c['code']) ?>" maxlength="32" required pattern="[a-z0-9][a-z0-9_-]*" title="小写字母数字，可含 - _" style="width:120px;">
                                             <input class="form-control" name="name" value="<?= htmlspecialchars($c['name']) ?>" maxlength="120" required style="min-width:160px;flex:1;">
+                                            <select class="form-control" name="currency" style="width:88px;" title="币种">
+                                                <?php
+                                                $ccur = strtoupper(trim((string)($c['currency'] ?? 'MYR')));
+                                                foreach (['MYR', 'SGD', 'USD', 'CNY', 'EUR', 'THB', 'IDR'] as $cur):
+                                                ?>
+                                                <option value="<?= htmlspecialchars($cur) ?>"<?= $ccur === $cur ? ' selected' : '' ?>><?= htmlspecialchars($cur) ?></option>
+                                                <?php endforeach; ?>
+                                            </select>
                                             <button type="submit" class="btn btn-sm btn-primary">保存</button>
                                         </form>
                                     </td>

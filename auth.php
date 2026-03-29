@@ -170,6 +170,28 @@ function current_company_id(): int {
     return (int)($_SESSION['company_id'] ?? 0);
 }
 
+/**
+ * 单公司后台（银行/产品等）使用的 company_id：Superadmin 选「总公司」视图 (0) 时，改为第一家启用分公司，
+ * 避免 WHERE company_id=0 无数据；仍可在侧栏切换到指定分公司。汇总视图本身不变（见 current_company_id）。
+ */
+function effective_admin_company_id(PDO $pdo): int {
+    $cid = current_company_id();
+    if (($_SESSION['user_role'] ?? '') === 'superadmin' && $cid === 0) {
+        try {
+            $n = (int) $pdo->query('SELECT id FROM companies WHERE is_active = 1 ORDER BY id ASC LIMIT 1')->fetchColumn();
+            return $n > 0 ? $n : 1;
+        } catch (Throwable $e) {
+            return 1;
+        }
+    }
+    return $cid;
+}
+
+/** Superadmin 且侧栏为「总公司」汇总（session company_id = 0） */
+function is_superadmin_head_office_scope(): bool {
+    return ($_SESSION['user_role'] ?? '') === 'superadmin' && current_company_id() === 0;
+}
+
 /** 界面展示用：数据库存英文 role，superadmin 显示为 big boss */
 function role_label(string $role): string
 {
