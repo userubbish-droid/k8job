@@ -213,9 +213,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     }
     .data-table tbody tr.txn-row-deleted td.num { font-variant-numeric: tabular-nums; }
     </style>
-    <?php include __DIR__ . '/inc/page_bg_txn_lavender.php'; ?>
 </head>
-<body class="page-txn-lavender">
+<body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">

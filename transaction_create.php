@@ -996,9 +996,8 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .kiosk-gp-meta-form .form-control.kiosk-gp-paid[readonly] { background: #f1f5f9; cursor: default; color: #334155; }
         .kiosk-gp-meta-actions { margin-top: 12px; }
     </style>
-    <?php include __DIR__ . '/inc/page_bg_txn_lavender.php'; ?>
 </head>
-<body class="page-txn-lavender">
+<body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">

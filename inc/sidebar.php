@@ -139,6 +139,11 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
                     <?php endforeach; ?>
                 </div>
             </div>
+            <div class="avatar-picker-upload">
+                <p class="avatar-picker-upload-hint"><?= htmlspecialchars(__('avatar_upload_hint'), ENT_QUOTES, 'UTF-8') ?></p>
+                <input type="file" id="avatar-file-input" accept="image/jpeg,image/png,image/webp,image/gif" hidden>
+                <button type="button" class="avatar-upload-btn" id="avatar-upload-btn"><?= htmlspecialchars(__('avatar_upload_btn'), ENT_QUOTES, 'UTF-8') ?></button>
+            </div>
         </div>
         <?php else: ?>
         <div class="sidebar-avatar" aria-hidden="true">
@@ -289,6 +294,10 @@ window.__APP_I18N = <?= json_encode([
     'confirmDefault' => __('confirm_prompt_default'),
     'avatarSaved' => __('avatar_pick_saved'),
     'avatarErr' => __('avatar_pick_err'),
+    'avatarUploadSize' => __('avatar_upload_err_size'),
+    'avatarUploadType' => __('avatar_upload_err_type'),
+    'avatarUploadImage' => __('avatar_upload_err_image'),
+    'avatarUploadDims' => __('avatar_upload_err_dims'),
 ], JSON_UNESCAPED_UNICODE) ?>;
 (function(){
     var btn = document.getElementById('sidebar-toggle');
@@ -414,6 +423,35 @@ window.__APP_I18N = <?= json_encode([
                 });
             });
         });
+        function applyAvatarFromServer(url) {
+            if (!url) return;
+            var showUrl = url.indexOf('uploads/avatars/') === 0 ? (url + (url.indexOf('?') >= 0 ? '&' : '?') + 't=' + Date.now()) : url;
+            var im = imgEl;
+            if (!im) {
+                im = document.createElement('img');
+                im.id = 'sidebar-avatar-img';
+                im.className = 'sidebar-avatar-fill';
+                im.alt = '';
+                im.decoding = 'async';
+                btn.insertBefore(im, btn.firstChild);
+                imgEl = im;
+            }
+            im.src = showUrl;
+            im.removeAttribute('hidden');
+            if (letterEl) {
+                letterEl.setAttribute('hidden', 'hidden');
+                letterEl.setAttribute('aria-hidden', 'true');
+            }
+        }
+        function avatarUploadFail(code) {
+            var map = {
+                toobig: I.avatarUploadSize,
+                type: I.avatarUploadType,
+                image: I.avatarUploadImage,
+                dimensions: I.avatarUploadDims
+            };
+            window.appModalAlert(map[code] || I.avatarErr || 'Error');
+        }
         pop.querySelectorAll('.avatar-picker-cell').forEach(function(cell){
             cell.addEventListener('click', function(){
                 var preset = cell.getAttribute('data-preset');
@@ -431,28 +469,36 @@ window.__APP_I18N = <?= json_encode([
                         window.appModalAlert(I.avatarErr || 'Error');
                         return;
                     }
-                    var im = imgEl;
-                    if (!im) {
-                        im = document.createElement('img');
-                        im.id = 'sidebar-avatar-img';
-                        im.className = 'sidebar-avatar-fill';
-                        im.alt = '';
-                        im.decoding = 'async';
-                        btn.insertBefore(im, btn.firstChild);
-                        imgEl = im;
-                    }
-                    im.src = data.url;
-                    im.removeAttribute('hidden');
-                    if (letterEl) {
-                        letterEl.setAttribute('hidden', 'hidden');
-                        letterEl.setAttribute('aria-hidden', 'true');
-                    }
+                    applyAvatarFromServer(data.url);
                     setOpen(false);
                 }).catch(function(){
                     window.appModalAlert(I.avatarErr || 'Error');
                 });
             });
         });
+        var fileIn = document.getElementById('avatar-file-input');
+        var upBtn = document.getElementById('avatar-upload-btn');
+        if (fileIn && upBtn) {
+            upBtn.addEventListener('click', function(){ fileIn.click(); });
+            fileIn.addEventListener('change', function(){
+                if (!fileIn.files || !fileIn.files[0]) return;
+                var fd = new FormData();
+                fd.append('avatar', fileIn.files[0]);
+                fetch('avatar_upload.php', { method: 'POST', body: fd, credentials: 'same-origin' })
+                    .then(function(r){ return r.json(); })
+                    .then(function(data){
+                        fileIn.value = '';
+                        if (!data || !data.ok || !data.url) {
+                            avatarUploadFail(data && data.error ? data.error : '');
+                            return;
+                        }
+                        pop.querySelectorAll('.avatar-picker-cell').forEach(function(c){ c.classList.remove('is-selected'); });
+                        applyAvatarFromServer(data.url);
+                        setOpen(false);
+                    })
+                    .catch(function(){ fileIn.value = ''; window.appModalAlert(I.avatarErr || 'Error'); });
+            });
+        }
         document.addEventListener('click', function(e){
             if (!pop.hasAttribute('hidden') && !pop.contains(e.target) && e.target !== btn && !btn.contains(e.target)) {
                 setOpen(false);

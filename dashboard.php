@@ -124,13 +124,33 @@ try {
 } catch (Throwable $e) {
     $db_error = $e->getMessage();
 }
+
+$dash_brand = defined('SITE_TITLE') ? SITE_TITLE : 'K8';
+if ($company_id > 0) {
+    try {
+        $stBrand = $pdo->prepare('SELECT TRIM(COALESCE(code, \'\')) AS c, TRIM(COALESCE(name, \'\')) AS n FROM companies WHERE id = ? LIMIT 1');
+        $stBrand->execute([$company_id]);
+        $br = $stBrand->fetch(PDO::FETCH_ASSOC);
+        if ($br) {
+            $bc = (string)($br['c'] ?? '');
+            $bn = (string)($br['n'] ?? '');
+            if ($bc !== '') {
+                $dash_brand = $bc;
+            } elseif ($bn !== '') {
+                $dash_brand = $bn;
+            }
+        }
+    } catch (Throwable $e) {
+        /* 保持 SITE_TITLE */
+    }
+}
 ?>
 <!DOCTYPE html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <?php $dash_site = defined('SITE_TITLE') ? SITE_TITLE : 'K8'; ?>
+    <?php $dash_site = $dash_brand; ?>
     <title><?= htmlspecialchars(__f('dash_page_title', $dash_site), ENT_QUOTES, 'UTF-8') ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
@@ -142,44 +162,15 @@ try {
         .dashboard-compact .stat-card .value { font-size: 1.05rem; }
         .dashboard-compact .card h3 { margin-bottom: 12px; }
         .dashboard-compact .total-table-wrap { margin-top: 12px; }
-        /* 首页专用：配色方案 3（鼠尾草绿 / 抹茶，灰绿植物感） */
-        body.page-home-sage {
-            background:
-                radial-gradient(ellipse 125% 92% at 90% -6%, rgba(107, 143, 113, 0.15) 0%, transparent 52%),
-                radial-gradient(ellipse 100% 88% at -6% 45%, rgba(87, 122, 90, 0.1) 0%, transparent 48%),
-                radial-gradient(ellipse 70% 58% at 48% 100%, rgba(167, 200, 174, 0.12) 0%, transparent 50%),
-                linear-gradient(162deg, #f4f7f4 0%, #ecfdf3 28%, #f0f5f1 54%, #eef6ef 100%);
-            background-attachment: fixed;
-        }
-        body.page-home-sage::before {
-            background-image:
-                linear-gradient(rgba(90, 120, 95, 0.055) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(107, 143, 113, 0.045) 1px, transparent 1px);
-            background-size: 40px 40px, 40px 40px;
-            mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, #000 0%, transparent 72%);
-            -webkit-mask-image: radial-gradient(ellipse 95% 85% at 50% 45%, #000 0%, transparent 72%);
-        }
-        body.page-home-sage::after {
-            background: linear-gradient(
-                105deg,
-                transparent 0%,
-                rgba(255, 255, 255, 0.32) 24%,
-                transparent 40%,
-                transparent 58%,
-                rgba(236, 253, 245, 0.42) 74%,
-                transparent 90%
-            );
-            opacity: 0.88;
-        }
     </style>
 </head>
-<body class="page-home-sage">
+<body>
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main dashboard-compact">
             <div class="page-header dashboard-header">
                 <?php $dash_uname = $_SESSION['user_name'] ?? __('user_default'); ?>
-                <h1><?= htmlspecialchars(__f('dash_title', $dash_uname), ENT_QUOTES, 'UTF-8') ?></h1>
+                <h1><?= htmlspecialchars(__f('dash_title', $dash_brand, $dash_uname), ENT_QUOTES, 'UTF-8') ?></h1>
                 <p class="welcome-role">
                     <?= htmlspecialchars(__('dash_greet'), ENT_QUOTES, 'UTF-8') ?><strong><?= htmlspecialchars($dash_uname, ENT_QUOTES, 'UTF-8') ?></strong>
                     <?php

@@ -1,0 +1,10 @@
+# 禁止在此目录执行 PHP，降低上传文件被当作脚本执行的风险
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php7.c>
+    php_flag engine off
+</IfModule>
+<IfModule mod_php8.c>
+    php_flag engine off
+</IfModule>

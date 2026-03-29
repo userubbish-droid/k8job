@@ -553,6 +553,9 @@ if ($bulk_none_json === false) {
             padding-left: 8px;
             padding-right: 8px;
         }
+        .um-page-bg .page-header { text-align: center; }
+        .um-page-bg > .alert { text-align: center; }
+        .um-table-panel > h3 { text-align: center; }
         .um-table-panel {
             background: #fff;
             border-radius: 14px;
