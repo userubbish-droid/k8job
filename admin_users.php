@@ -56,6 +56,39 @@ function um_role_badge_text(string $role): string {
     }
 }
 
+/**
+ * 主表列表排序：boss → admin → member → agent。
+ * 超管「全公司」视图下同职级再按 company_id，最后按登录名（不区分大小写）。
+ */
+function um_sort_users_primary_list(array $list, bool $superadmin_view): array
+{
+    $order = ['boss' => 0, 'admin' => 1, 'member' => 2, 'agent' => 3];
+    $cmp_user = static function (string $ua, string $ub): int {
+        if (function_exists('mb_strcasecmp')) {
+            return mb_strcasecmp($ua, $ub, 'UTF-8');
+        }
+        return strcasecmp($ua, $ub);
+    };
+    usort($list, static function (array $a, array $b) use ($order, $superadmin_view, $cmp_user): int {
+        $ra = (string)($a['role'] ?? '');
+        $rb = (string)($b['role'] ?? '');
+        $oa = $order[$ra] ?? 99;
+        $ob = $order[$rb] ?? 99;
+        if ($oa !== $ob) {
+            return $oa <=> $ob;
+        }
+        if ($superadmin_view) {
+            $ca = (int)($a['company_id'] ?? 0);
+            $cb = (int)($b['company_id'] ?? 0);
+            if ($ca !== $cb) {
+                return $ca <=> $cb;
+            }
+        }
+        return $cmp_user((string)($a['username'] ?? ''), (string)($b['username'] ?? ''));
+    });
+    return array_values($list);
+}
+
 function ensure_users_role_enum(PDO $pdo) {
     try {
         $pdo->exec("ALTER TABLE users MODIFY role ENUM('superadmin','boss','admin','member','agent') NOT NULL DEFAULT 'member'");
@@ -472,6 +505,8 @@ if ($search_q !== '') {
         $superadmin_users = array_values(array_filter($superadmin_users, $filter_user_row));
     }
 }
+
+$users_primary_list = um_sort_users_primary_list($users_primary_list, $actor_is_superadmin);
 
 /** 主表按分公司着色：同一 company_id 同色，便于区分员工归属 */
 $um_company_row_colors = [
