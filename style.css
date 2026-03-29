@@ -659,18 +659,24 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
     display: block;
     border-radius: 50%;
 }
+/* fixed + JS 定位：避免窄侧栏 overflow-x:hidden 把宽弹层左右裁掉 */
 .avatar-picker-popover {
-    position: absolute;
-    left: 50%;
-    top: calc(100% + 10px);
-    transform: translateX(-50%);
-    z-index: 120;
-    width: min(360px, calc(100vw - 32px));
-    padding: 14px 14px 12px;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 1500;
+    width: min(292px, calc(100vw - 20px));
+    max-width: calc(100vw - 20px);
+    padding: 12px 12px 10px;
+    margin: 0;
+    box-sizing: border-box;
     background: #fff;
     border-radius: 14px;
     box-shadow: 0 16px 48px rgba(15, 23, 42, 0.18), 0 0 0 1px rgba(148, 163, 184, 0.25);
     color: #0f172a;
+}
+.avatar-picker-popover[hidden] {
+    display: none !important;
 }
 .avatar-picker-title {
     font-size: 13px;
@@ -708,7 +714,7 @@ form.inline { display: inline-block; margin-right: 6px; margin-bottom: 0; }
 .avatar-picker-grid {
     display: grid;
     grid-template-columns: repeat(3, 1fr);
-    gap: 12px;
+    gap: 8px;
 }
 /* 预设头像：与 .avatar-picker-grid 一致，3 列 × 3 行共 9 个 */
 .avatar-picker-grid-presets {

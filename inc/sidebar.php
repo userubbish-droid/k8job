@@ -381,16 +381,44 @@ window.__APP_I18N = <?= json_encode([
         var imgEl = document.getElementById('sidebar-avatar-img');
         var letterEl = document.getElementById('sidebar-avatar-letter');
         var I = window.__APP_I18N || {};
+        function positionAvatarPopover() {
+            var margin = 10;
+            var vw = window.innerWidth;
+            var vh = window.innerHeight;
+            var maxW = Math.min(292, vw - margin * 2);
+            pop.style.width = maxW + 'px';
+            pop.style.maxWidth = (vw - margin * 2) + 'px';
+            var r = btn.getBoundingClientRect();
+            var left = r.left + r.width / 2 - maxW / 2;
+            left = Math.max(margin, Math.min(left, vw - maxW - margin));
+            var top = r.bottom + margin;
+            pop.style.left = left + 'px';
+            pop.style.top = top + 'px';
+            var h = pop.offsetHeight;
+            if (top + h > vh - margin) {
+                top = r.top - h - margin;
+                if (top < margin) top = margin;
+                pop.style.top = top + 'px';
+            }
+        }
         function setOpen(open) {
             if (open) {
                 pop.removeAttribute('hidden');
                 btn.setAttribute('aria-expanded', 'true');
+                positionAvatarPopover();
+                requestAnimationFrame(function() { positionAvatarPopover(); });
             } else {
                 pop.setAttribute('hidden', 'hidden');
                 btn.setAttribute('aria-expanded', 'false');
             }
         }
         function toggle() { setOpen(pop.hasAttribute('hidden')); }
+        function onPopoverReposition() {
+            if (!pop.hasAttribute('hidden')) positionAvatarPopover();
+        }
+        window.addEventListener('resize', onPopoverReposition);
+        var sideEl = document.querySelector('.dashboard-sidebar');
+        if (sideEl) sideEl.addEventListener('scroll', onPopoverReposition, { passive: true });
         btn.addEventListener('click', function(e){
             e.stopPropagation();
             toggle();
