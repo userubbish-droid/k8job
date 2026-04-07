@@ -410,7 +410,13 @@ $login_as = $_POST['login_as'] ?? 'admin';
     </div>
 
     <script>
-        window.__LOGIN_I18N = <?= json_encode(['resetContact' => __('login_reset_contact')], JSON_UNESCAPED_UNICODE) ?>;
+        window.__LOGIN_I18N = <?= json_encode([
+            'resetContact' => __('login_reset_contact'),
+            'needCompanyUser' => app_lang() === 'en' ? 'Please enter Company and Username first.' : '请先填写公司和用户名。',
+            'resetSent' => app_lang() === 'en' ? 'Request sent. Please wait for Telegram approval.' : '申请已发送，请等待 Telegram 批准。',
+            'resetPending' => app_lang() === 'en' ? 'A pending request already exists. Please wait for Telegram approval.' : '你已有待处理申请，请等待 Telegram 批准。',
+            'resetFailed' => app_lang() === 'en' ? 'Request failed. Please try again.' : '申请失败，请稍后重试。',
+        ], JSON_UNESCAPED_UNICODE) ?>;
         function showLoginModal(message) {
             var mask = document.getElementById('login-modal-mask');
             var body = document.getElementById('login-modal-body');
@@ -429,7 +435,33 @@ $login_as = $_POST['login_as'] ?? 'admin';
         });
         document.querySelector('.forget').addEventListener('click', function(e) {
             e.preventDefault();
-            showLoginModal((window.__LOGIN_I18N && window.__LOGIN_I18N.resetContact) || '');
+            var i18n = window.__LOGIN_I18N || {};
+            var company = document.querySelector('input[name="company_code"]');
+            var user = document.querySelector('input[name="user"]');
+            var companyVal = company ? String(company.value || '').trim() : '';
+            var userVal = user ? String(user.value || '').trim() : '';
+            if (!companyVal || !userVal) {
+                showLoginModal(i18n.needCompanyUser || '');
+                return;
+            }
+            fetch('request_password_reset.php', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                credentials: 'same-origin',
+                body: 'company_code=' + encodeURIComponent(companyVal) + '&user=' + encodeURIComponent(userVal)
+            }).then(function(r){ return r.json(); }).then(function(data){
+                if (data && data.ok) {
+                    if (data.message === 'already_pending') {
+                        showLoginModal(i18n.resetPending || '');
+                    } else {
+                        showLoginModal(i18n.resetSent || '');
+                    }
+                } else {
+                    showLoginModal(i18n.resetFailed || '');
+                }
+            }).catch(function(){
+                showLoginModal(i18n.resetFailed || '');
+            });
         });
         document.querySelectorAll('input.login-field-upper').forEach(function(el) {
             el.addEventListener('input', function() {

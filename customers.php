@@ -16,6 +16,7 @@ if ($filter_recommend !== '') {
 $sidebar_current = 'customers';
 
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
+$can_view_contact_full = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_MEMBER_CONTACT));
 $company_id = current_company_id();
 $has_customer_status = false;
 try {
@@ -74,6 +75,20 @@ function customer_regular_tier($balance) {
     if ($b <= 3000) return 'sliver';
     if ($b <= 7000) return 'gold';
     return 'platinum';
+}
+
+function customer_mask_contact_for_member(string $phone): string {
+    $p = trim($phone);
+    if ($p === '') {
+        return '';
+    }
+    $len = mb_strlen($p, 'UTF-8');
+    if ($len <= 6) {
+        return str_repeat('*', $len);
+    }
+    $head = mb_substr($p, 0, 3, 'UTF-8');
+    $tail = mb_substr($p, -3, null, 'UTF-8');
+    return $head . str_repeat('*', $len - 6) . $tail;
 }
 
 $summary = ['total' => 0, 'active' => 0];
@@ -374,7 +389,11 @@ try {
                         <td><a href="customer_edit.php?id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($code) ?></a></td>
                         <td><?= htmlspecialchars($r['register_date'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['name'] ?? '') ?></td>
-                        <td class="col-contact"><?= htmlspecialchars($r['phone'] ?? '') ?></td>
+                        <?php
+                            $phone_raw = (string)($r['phone'] ?? '');
+                            $phone_show = $can_view_contact_full ? $phone_raw : customer_mask_contact_for_member($phone_raw);
+                        ?>
+                        <td class="col-contact"><?= htmlspecialchars($phone_show) ?></td>
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
                         <td class="col-total-dp num"><?= number_format($all_dp, 2) ?></td>
                         <td class="col-total-wd num"><?= number_format($all_wd, 2) ?></td>

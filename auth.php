@@ -32,6 +32,7 @@ function get_permission_options(): array
 
 /** Admin 专属：首页「本月数据」须由 Boss / 平台 big boss 在权限页勾选后才有 */
 const PERM_DASHBOARD_MONTH_DATA = 'dashboard_month_data';
+const PERM_VIEW_MEMBER_CONTACT = 'view_member_contact';
 
 /**
  * 当前用户是否拥有某权限。boss / superadmin 全允许；admin 除「本月数据」外全允许；member 查 user_permissions。
@@ -46,7 +47,7 @@ function has_permission(string $key): bool
         return true;
     }
     if ($role === 'admin') {
-        if ($key === PERM_DASHBOARD_MONTH_DATA) {
+        if (in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT], true)) {
             $uid = (int)($_SESSION['user_id'] ?? 0);
             if ($uid <= 0) {
                 return false;

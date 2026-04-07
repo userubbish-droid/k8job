@@ -6,6 +6,7 @@ $sidebar_current = 'admin_permissions';
 
 $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $actor_can_set_admin_month = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
+$actor_can_set_contact_view = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 
 $msg = '';
 $err = '';
@@ -48,6 +49,26 @@ if ($actor_can_set_admin_month) {
     }
 }
 
+$contact_permission_users = [];
+if ($actor_can_set_contact_view) {
+    try {
+        if ($actor_is_superadmin) {
+            $contact_permission_users = $pdo->query("SELECT u.id, u.username, u.display_name, u.role, u.company_id, COALESCE(c.code, '') AS company_code
+                FROM users u
+                LEFT JOIN companies c ON c.id = u.company_id
+                WHERE u.role IN ('admin', 'member')
+                ORDER BY u.role ASC, u.company_id ASC, u.username ASC")->fetchAll();
+        } else {
+            $cid = current_company_id();
+            $stmt = $pdo->prepare("SELECT id, username, display_name, role, company_id FROM users WHERE role IN ('admin', 'member') AND company_id = ? ORDER BY role ASC, username ASC");
+            $stmt->execute([$cid]);
+            $contact_permission_users = $stmt->fetchAll();
+        }
+    } catch (Throwable $e) {
+        $contact_permission_users = [];
+    }
+}
+
 $selected_id = (int)($_REQUEST['user_id'] ?? $_POST['user_id'] ?? 0);
 if ($selected_id > 0 && !in_array($selected_id, array_column($members, 'id'), true)) {
     $selected_id = 0;
@@ -56,6 +77,11 @@ if ($selected_id > 0 && !in_array($selected_id, array_column($members, 'id'), tr
 $selected_admin_id = (int)($_REQUEST['admin_user_id'] ?? $_POST['admin_user_id'] ?? 0);
 if ($selected_admin_id > 0 && !in_array($selected_admin_id, array_column($admins_for_month, 'id'), true)) {
     $selected_admin_id = 0;
+}
+
+$selected_contact_user_id = (int)($_REQUEST['contact_user_id'] ?? $_POST['contact_user_id'] ?? 0);
+if ($selected_contact_user_id > 0 && !in_array($selected_contact_user_id, array_column($contact_permission_users, 'id'), true)) {
+    $selected_contact_user_id = 0;
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_admin_month') {
@@ -90,7 +116,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
     }
 }
 
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && ($_POST['action'] ?? '') !== 'save_admin_month') {
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && !in_array(($_POST['action'] ?? ''), ['save_admin_month', 'save_contact_view'], true)) {
     if (!user_is_manageable_by_current_actor($pdo, $selected_id)) {
         $err = __('perm_err_save_scope_member');
     } else {
@@ -120,6 +146,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && ($_POST['action
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_contact_view') {
+    if (!$actor_can_set_contact_view) {
+        $err = '仅 Boss 或平台 big boss 可设置联系电话查看权限。';
+    } elseif ($selected_contact_user_id <= 0) {
+        $err = '请选择有效的用户。';
+    } elseif (!user_is_manageable_by_current_actor($pdo, $selected_contact_user_id)) {
+        $err = '无权限保存该用户的设置。';
+    } else {
+        try {
+            $chk = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
+            $chk->execute([$selected_contact_user_id]);
+            $rrow = $chk->fetch(PDO::FETCH_ASSOC);
+            $r = strtolower(trim((string)($rrow['role'] ?? '')));
+            if (!in_array($r, ['admin', 'member'], true)) {
+                $err = '仅可为 Admin 或 Member 设置此项。';
+            } else {
+                $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
+                if (!empty($_POST['view_member_contact'])) {
+                    $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
+                }
+                $msg = '已更新该用户的联系电话查看权限。';
+            }
+        } catch (Throwable $e) {
+            $em = $e->getMessage();
+            if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
+                $err = '保存失败：尚未创建权限表。请执行 migrate_user_permissions.sql 中的 SQL 后重试。';
+            } else {
+                $err = '保存失败：' . htmlspecialchars($em);
+            }
+        }
+    }
+}
+
 $admin_has_month = false;
 if ($actor_can_set_admin_month && $selected_admin_id > 0) {
     try {
@@ -128,6 +187,17 @@ if ($actor_can_set_admin_month && $selected_admin_id > 0) {
         $admin_has_month = (bool) $stmt->fetch();
     } catch (Throwable $e) {
         $admin_has_month = false;
+    }
+}
+
+$contact_user_has_view = false;
+if ($actor_can_set_contact_view && $selected_contact_user_id > 0) {
+    try {
+        $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+        $stmt->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
+        $contact_user_has_view = (bool) $stmt->fetch();
+    } catch (Throwable $e) {
+        $contact_user_has_view = false;
     }
 }
 
@@ -327,6 +397,48 @@ if ($selected_id > 0) {
             </form>
             <?php elseif (empty($admins_for_month)): ?>
             <p class="form-hint"><?= htmlspecialchars(__('perm_empty_admin_hint'), ENT_QUOTES, 'UTF-8') ?></p>
+            <?php endif; ?>
+        </div>
+        <?php endif; ?>
+
+        <?php if ($actor_can_set_contact_view): ?>
+        <div class="card" style="margin-top: 20px;">
+            <h3 style="margin-top:0;">联系电话显示权限（Admin / Member）</h3>
+            <form method="get" class="member-select">
+                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
+                <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
+                <div class="form-group">
+                    <label>选择用户（Admin / Member）</label>
+                    <select name="contact_user_id" class="form-control" onchange="this.form.submit()">
+                        <option value="">-- 请选 --</option>
+                        <?php foreach ($contact_permission_users as $u):
+                            $u_cc = trim((string)($u['company_code'] ?? ''));
+                            $co_tag = ($actor_is_superadmin && $u_cc !== '') ? (' [' . $u_cc . ']') : '';
+                            $u_role = strtolower(trim((string)($u['role'] ?? '')));
+                            $role_tag = $u_role !== '' ? ' [' . strtoupper($u_role) . ']' : '';
+                        ?>
+                            <option value="<?= (int)$u['id'] ?>" <?= $selected_contact_user_id === (int)$u['id'] ? 'selected' : '' ?>>
+                                <?= htmlspecialchars($u['username']) ?>
+                                <?= $u['display_name'] ? '（' . htmlspecialchars($u['display_name']) . '）' : '' ?><?= htmlspecialchars($role_tag . $co_tag) ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                </div>
+            </form>
+            <?php if ($selected_contact_user_id > 0): ?>
+            <form method="post">
+                <input type="hidden" name="action" value="save_contact_view">
+                <input type="hidden" name="contact_user_id" value="<?= (int)$selected_contact_user_id ?>">
+                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
+                <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
+                <div class="perm-item perm-item-plain">
+                    <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact" <?= $contact_user_has_view ? 'checked' : '' ?>>
+                    <label class="perm-label" for="view_member_contact">允许查看顾客完整联系电话（customers 页面）</label>
+                </div>
+                <button type="submit" class="btn btn-primary" style="margin-top: 12px;">保存</button>
+            </form>
+            <?php elseif (empty($contact_permission_users)): ?>
+            <p class="form-hint">当前范围内没有可设置的 Admin/Member 账号。</p>
             <?php endif; ?>
         </div>
         <?php endif; ?>

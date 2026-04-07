@@ -138,7 +138,7 @@ try {
 }
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -226,7 +226,7 @@ try {
             <div class="page-wrap report-wrap">
                 <div class="page-header">
                     <h2>Report</h2>
-                    <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span>数据报表</p>
+                    <p class="breadcrumb"><a href="dashboard.php"><?= app_lang() === 'en' ? 'Home' : '首页' ?></a><span>·</span><?= app_lang() === 'en' ? 'Report' : '数据报表' ?></p>
                 </div>
 
                 <form class="filters-bar filters-bar-flow report-filter-card" method="get" style="margin-bottom:16px;">
@@ -258,8 +258,8 @@ try {
 
                 <div class="card report-section-card">
                     <h3 class="report-collapse-head">
-                        <span>模式汇总</span>
-                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-mode-body" aria-expanded="false">展开</button>
+                        <span><?= app_lang() === 'en' ? 'Mode Summary' : '模式汇总' ?></span>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-mode-body" aria-expanded="false"><?= app_lang() === 'en' ? 'Expand' : '展开' ?></button>
                     </h3>
                     <div id="report-mode-body" class="report-collapse-body collapsed" style="overflow-x:auto;">
                     <table class="data-table">
@@ -286,8 +286,8 @@ try {
 
                 <div class="card report-section-card">
                     <h3 class="report-collapse-head">
-                        <span>客户净额 Top 10</span>
-                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-top-body" aria-expanded="false">展开</button>
+                        <span><?= app_lang() === 'en' ? 'Top 10 Net Customers' : '客户净额 Top 10' ?></span>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-top-body" aria-expanded="false"><?= app_lang() === 'en' ? 'Expand' : '展开' ?></button>
                     </h3>
                     <div id="report-top-body" class="report-collapse-body collapsed" style="overflow-x:auto;">
                     <table class="data-table">
@@ -321,7 +321,7 @@ try {
                 <div class="card report-section-card">
                     <h3 class="report-collapse-head">
                         <span>Bank Contra</span>
-                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-contra-body" aria-expanded="false">展开</button>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-contra-body" aria-expanded="false"><?= app_lang() === 'en' ? 'Expand' : '展开' ?></button>
                     </h3>
                     <div id="report-contra-body" class="report-collapse-body collapsed">
                         <div class="summary report-mini-summary">
@@ -362,7 +362,7 @@ try {
                 <div class="card report-section-card">
                     <h3 class="report-collapse-head">
                         <span>Expense</span>
-                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-expense-body" aria-expanded="false">展开</button>
+                        <button type="button" class="report-collapse-btn js-report-toggle" data-target="report-expense-body" aria-expanded="false"><?= app_lang() === 'en' ? 'Expand' : '展开' ?></button>
                     </h3>
                     <div id="report-expense-body" class="report-collapse-body collapsed">
                         <div class="summary report-mini-summary">
@@ -429,6 +429,8 @@ try {
     </div>
     <script>
     (function(){
+        var expandText = <?= json_encode(app_lang() === 'en' ? 'Expand' : '展开', JSON_UNESCAPED_UNICODE) ?>;
+        var collapseText = <?= json_encode(app_lang() === 'en' ? 'Collapse' : '收起', JSON_UNESCAPED_UNICODE) ?>;
         document.querySelectorAll('.js-report-toggle').forEach(function(btn){
             var targetId = btn.getAttribute('data-target');
             var body = targetId ? document.getElementById(targetId) : null;
@@ -437,11 +439,11 @@ try {
                 var collapsed = body.classList.contains('collapsed');
                 if (collapsed) {
                     body.classList.remove('collapsed');
-                    btn.textContent = '收起';
+                    btn.textContent = collapseText;
                     btn.setAttribute('aria-expanded', 'true');
                 } else {
                     body.classList.add('collapsed');
-                    btn.textContent = '展开';
+                    btn.textContent = expandText;
                     btn.setAttribute('aria-expanded', 'false');
                 }
             });

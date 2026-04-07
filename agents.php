@@ -239,6 +239,40 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+    // 保底显示：即使没有下线客户/没有走单，也显示 users.role=agent 的账号（Win/Loss=0）
+    try {
+        $stAgents = $pdo->prepare("SELECT username FROM users WHERE company_id = ? AND role = 'agent' AND is_active = 1");
+        $stAgents->execute([$company_id]);
+        $known = [];
+        foreach ($agents as $row0) {
+            $k0 = strtolower(trim((string)($row0['agent'] ?? '')));
+            if ($k0 !== '') {
+                $known[$k0] = true;
+            }
+        }
+        foreach ($stAgents->fetchAll(PDO::FETCH_ASSOC) as $ua) {
+            $uname = trim((string)($ua['username'] ?? ''));
+            if ($uname === '') {
+                continue;
+            }
+            $ku = strtolower($uname);
+            if (isset($known[$ku])) {
+                continue;
+            }
+            if ($is_agent_user && $agent_code !== '' && strcasecmp($uname, $agent_code) !== 0) {
+                continue;
+            }
+            $agents[] = ['agent' => $uname, 'cnt' => 0, 'win_loss' => 0];
+            $known[$ku] = true;
+        }
+        usort($agents, static function (array $a, array $b): int {
+            return strcasecmp((string)($a['agent'] ?? ''), (string)($b['agent'] ?? ''));
+        });
+    } catch (Throwable $e) {
+        // 不影响主流程
+    }
+
     if ($is_agent_user && $agent_code !== '' && empty($agents)) {
         $agents = [['agent' => $agent_code, 'cnt' => 0, 'win_loss' => 0]];
     }

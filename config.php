@@ -151,6 +151,24 @@ try { $pdo->exec("ALTER TABLE customers ADD COLUMN status ENUM('pending','approv
 try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_by INT UNSIGNED NULL AFTER status"); } catch (Throwable $e) {}
 try { $pdo->exec("ALTER TABLE customers ADD COLUMN approved_at DATETIME NULL AFTER approved_by"); } catch (Throwable $e) {}
 
+// 忘记密码 Telegram 审批：申请记录
+try {
+    $pdo->exec("CREATE TABLE IF NOT EXISTS password_reset_requests (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        company_id INT UNSIGNED NOT NULL,
+        user_id INT UNSIGNED NOT NULL,
+        username VARCHAR(120) NOT NULL,
+        status ENUM('pending','approved','rejected') NOT NULL DEFAULT 'pending',
+        requested_at DATETIME NOT NULL,
+        resolved_at DATETIME NULL,
+        resolved_by_tg VARCHAR(120) NULL,
+        resolved_note VARCHAR(255) NULL,
+        temp_password VARCHAR(64) NULL,
+        KEY idx_prr_user_status (user_id, status),
+        KEY idx_prr_company_status (company_id, status)
+    )");
+} catch (Throwable $e) {}
+
 // Telegram 通知：密钥勿写在此文件（避免进 Git）。复制 notify_config.php.example 为 notify_config.php 并填写（已在 .gitignore）
 $NOTIFY_TELEGRAM_BOT_TOKEN = '';
 $NOTIFY_TELEGRAM_CHAT_ID  = '';

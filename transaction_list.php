@@ -198,11 +198,11 @@ $query_string = http_build_query($q);
 $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' : '?');
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>流水记录 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= app_lang() === 'en' ? 'Transactions' : '流水记录' ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -220,8 +220,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
-            <h2>流水记录</h2>
-            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_create.php">记一笔</a></p>
+            <h2><?= app_lang() === 'en' ? 'Transactions' : '流水记录' ?></h2>
+            <p class="breadcrumb"><a href="dashboard.php"><?= app_lang() === 'en' ? 'Home' : '首页' ?></a><span>·</span><a href="transaction_create.php"><?= app_lang() === 'en' ? 'Add Transaction' : '记一笔' ?></a></p>
         </div>
 
     <?php if ($is_admin):
@@ -238,7 +238,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         $base_q = array_filter(['status' => $status, 'mode' => $mode, 'code' => $code, 'bank' => $bank, 'product' => $product]);
     ?>
     <div class="list-advanced-toggle-wrap" style="margin-bottom:12px;">
-        <button type="button" class="btn btn-outline" id="list-advanced-toggle" aria-expanded="true">收起筛选与汇总</button>
+        <button type="button" class="btn btn-outline" id="list-advanced-toggle" aria-expanded="true"><?= app_lang() === 'en' ? 'Hide filters & summary' : '收起筛选与汇总' ?></button>
     </div>
     <div class="list-advanced-wrap" id="list-advanced-wrap">
     <form class="filters-bar filters-bar-flow" method="get" id="flow-filter-form">
@@ -269,10 +269,10 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <div class="filter-group">
                 <label>All Status</label>
                 <select name="status">
-                    <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>>已批准</option>
-                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>>待批准</option>
-                    <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>>已拒绝</option>
-                    <option value="all" <?= $status === 'all' ? 'selected' : '' ?>>全部</option>
+                    <option value="approved" <?= $status === 'approved' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'Approved' : '已批准' ?></option>
+                    <option value="pending" <?= $status === 'pending' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'Pending' : '待批准' ?></option>
+                    <option value="rejected" <?= $status === 'rejected' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'Rejected' : '已拒绝' ?></option>
+                    <option value="all" <?= $status === 'all' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
                 </select>
             </div>
             <input type="hidden" name="page" value="1">
@@ -286,12 +286,12 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $last_week_start, 'day_to' => $last_week_end])) ?>" class="btn btn-preset">Last Week</a>
             <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $this_month_start, 'day_to' => $this_month_end])) ?>" class="btn btn-preset">This Month</a>
             <a href="transaction_list.php?<?= http_build_query(array_merge($base_q, ['day_from' => $last_month_start, 'day_to' => $last_month_end])) ?>" class="btn btn-preset">Last Month</a>
-            <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" class="btn btn-preset">导出</a>
+            <a href="transaction_list.php?<?= $query_string ? htmlspecialchars($query_string) . '&' : '' ?>export=csv" class="btn btn-preset"><?= app_lang() === 'en' ? 'Export' : '导出' ?></a>
         </div>
         <div class="filters-row filters-row-more collapsed" id="flow-more-wrap">
-            <div class="filter-group"><label>模式</label>
+            <div class="filter-group"><label><?= app_lang() === 'en' ? 'Mode' : '模式' ?></label>
                 <select name="mode">
-                    <option value="">全部</option>
+                    <option value=""><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
                     <option value="DEPOSIT" <?= $mode === 'DEPOSIT' ? 'selected' : '' ?>>DEPOSIT</option>
                     <option value="WITHDRAW" <?= $mode === 'WITHDRAW' ? 'selected' : '' ?>>WITHDRAW</option>
                     <option value="FREE" <?= $mode === 'FREE' ? 'selected' : '' ?>>FREE</option>
@@ -300,30 +300,30 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                     <option value="REBATE" <?= $mode === 'REBATE' ? 'selected' : '' ?>>REBATE</option>
                 </select>
             </div>
-            <div class="filter-group"><label>代码</label>
+            <div class="filter-group"><label><?= app_lang() === 'en' ? 'Code' : '代码' ?></label>
                 <select name="code">
-                    <option value="">全部</option>
+                    <option value=""><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
                     <?php foreach ($codes as $c): ?>
                         <option value="<?= htmlspecialchars($c) ?>" <?= $code === $c ? 'selected' : '' ?>><?= htmlspecialchars($c) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
-            <div class="filter-group"><label>银行</label>
+            <div class="filter-group"><label><?= app_lang() === 'en' ? 'Bank' : '银行' ?></label>
                 <select name="bank">
-                    <option value="">全部</option>
+                    <option value=""><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
                     <?php foreach ($banks as $b): ?>
                         <option value="<?= htmlspecialchars($b) ?>" <?= $bank === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
         </div>
-        <button type="button" class="btn btn-outline btn-more-toggle" id="flow-more-toggle" style="margin-top:8px;">更多筛选</button>
+        <button type="button" class="btn btn-outline btn-more-toggle" id="flow-more-toggle" style="margin-top:8px;"><?= app_lang() === 'en' ? 'More filters' : '更多筛选' ?></button>
     </form>
 
     <div class="summary">
-        <div class="summary-item"><strong>总入</strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
-        <div class="summary-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
-        <div class="summary-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
+        <div class="summary-item"><strong><?= app_lang() === 'en' ? 'Total In' : '总入' ?></strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
+        <div class="summary-item"><strong><?= app_lang() === 'en' ? 'Total Out' : '总出' ?></strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
+        <div class="summary-item"><strong><?= app_lang() === 'en' ? 'Profit' : '利润' ?></strong><span class="num"><?= number_format($profit, 2) ?></span></div>
     </div>
     </div>
     <?php endif; ?>
@@ -427,7 +427,9 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         function updateBtn() {
             var open = !wrap.classList.contains('collapsed');
             btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            btn.textContent = open ? '收起筛选与汇总' : '展开筛选与汇总';
+            btn.textContent = open
+                ? (<?= json_encode(app_lang() === 'en', JSON_UNESCAPED_UNICODE) ?> ? 'Hide filters & summary' : '收起筛选与汇总')
+                : (<?= json_encode(app_lang() === 'en', JSON_UNESCAPED_UNICODE) ?> ? 'Show filters & summary' : '展开筛选与汇总');
         }
         btn.addEventListener('click', function(){ wrap.classList.toggle('collapsed'); updateBtn(); });
         updateBtn();
@@ -437,7 +439,9 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     if (moreBtn && moreWrap) {
         moreBtn.addEventListener('click', function(){
             moreWrap.classList.toggle('collapsed');
-            moreBtn.textContent = moreWrap.classList.contains('collapsed') ? '更多筛选' : '收起更多';
+            moreBtn.textContent = moreWrap.classList.contains('collapsed')
+                ? (<?= json_encode(app_lang() === 'en', JSON_UNESCAPED_UNICODE) ?> ? 'More filters' : '更多筛选')
+                : (<?= json_encode(app_lang() === 'en', JSON_UNESCAPED_UNICODE) ?> ? 'Hide more' : '收起更多');
         });
     }
     var form = document.getElementById('flow-filter-form');

@@ -66,6 +66,7 @@ function i18n_dictionary(): array
         'nav_companies' => ['zh' => '分公司 / 公司', 'en' => 'Companies'],
         'nav_banks_products' => ['zh' => '银行与产品', 'en' => 'Banks & Products'],
         'nav_permissions' => ['zh' => '权限', 'en' => 'Permissions'],
+        'nav_change_password' => ['zh' => '修改密码', 'en' => 'Change Password'],
         'nav_logout' => ['zh' => '退出', 'en' => 'Logout'],
         'avatar_pick_title' => ['zh' => '选择头像', 'en' => 'Choose avatar'],
         'avatar_pick_male' => ['zh' => '男', 'en' => 'Male'],

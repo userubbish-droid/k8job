@@ -61,7 +61,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
 }
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -131,22 +131,22 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                         <?php endif; ?>
                     </div>
                     <?php endif; ?>
-                    <p class="form-hint" style="margin-bottom:12px;">显示日期：<?= $day_from ?><?= $is_range ? ' 至 ' . $day_to : '' ?><?= !$is_range && $day_from === date('Y-m-d') ? '（当天）' : '' ?></p>
+                    <p class="form-hint" style="margin-bottom:12px;"><?= app_lang() === 'en' ? 'Showing date: ' : '显示日期：' ?><?= $day_from ?><?= $is_range ? (app_lang() === 'en' ? ' to ' : ' 至 ') . $day_to : '' ?><?= !$is_range && $day_from === date('Y-m-d') ? (app_lang() === 'en' ? ' (Today)' : '（当天）') : '' ?></p>
                     <div class="statement-filter-wrap" style="margin-bottom:16px;">
-                        <button type="button" class="btn btn-outline" id="stmt-date-toggle">筛选日期</button>
+                        <button type="button" class="btn btn-outline" id="stmt-date-toggle"><?= app_lang() === 'en' ? 'Filter date' : '筛选日期' ?></button>
                         <form method="get" class="stmt-date-form" id="stmt-date-form" style="display:none; margin-top:10px; align-items:center; gap:10px; flex-wrap:wrap;">
-                            <label style="font-size:13px;">从</label>
+                            <label style="font-size:13px;"><?= app_lang() === 'en' ? 'From' : '从' ?></label>
                             <input type="date" name="day_from" id="stmt-day-from" value="<?= htmlspecialchars($day_from) ?>">
-                            <label style="font-size:13px;">至</label>
+                            <label style="font-size:13px;"><?= app_lang() === 'en' ? 'To' : '至' ?></label>
                             <input type="date" name="day_to" id="stmt-day-to" value="<?= htmlspecialchars($day_to) ?>">
                             <?php if ($head_office_stmt && $company_id > 0): ?>
                             <input type="hidden" name="stmt_co" value="<?= (int)$company_id ?>">
                             <?php endif; ?>
-                            <button type="submit" class="btn btn-primary">查询</button>
+                            <button type="submit" class="btn btn-primary"><?= app_lang() === 'en' ? 'Search' : '查询' ?></button>
                             <div style="flex-basis:100%; height:0;"></div>
-                            <span style="font-size:13px; color:var(--muted);">快捷：</span>
-                            <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="7">一个星期</button>
-                            <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="30">一个月</button>
+                            <span style="font-size:13px; color:var(--muted);"><?= app_lang() === 'en' ? 'Quick:' : '快捷：' ?></span>
+                            <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="7"><?= app_lang() === 'en' ? '1 week' : '一个星期' ?></button>
+                            <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="30"><?= app_lang() === 'en' ? '1 month' : '一个月' ?></button>
                         </form>
                     </div>
                     <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">

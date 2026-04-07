@@ -35,6 +35,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $recommend = trim($_POST['recommend'] ?? '');
     $confirm_override = isset($_POST['confirm_override']) && (string)$_POST['confirm_override'] === '1';
 
+    $actor_role = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
+    $is_member_actor = ($actor_role === 'member');
+
     if ($code === '') {
         $err = '请输入客户代码。';
     } else {
@@ -55,13 +58,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $conflicts[] = $row['code'] . ' 银行号码同样';
             }
         }
-        if (!empty($conflicts) && !$confirm_override) {
+        if ($is_member_actor && !empty($conflicts) && !$confirm_override) {
             $need_confirm = true;
             $confirm_message = '发现重复：' . implode('；', $conflicts) . '。是否仍要使用相同资料创建？确认后将进入待审核，管理员通过后才生效。';
         } else {
             try {
                 $register_date = date('Y-m-d');
-                $status = (!empty($conflicts) && $confirm_override) ? 'pending' : 'approved';
+                $status = ($is_member_actor && !empty($conflicts)) ? 'pending' : 'approved';
                 $approved_by = $status === 'approved' ? (int)($_SESSION['user_id'] ?? 0) : null;
                 $approved_at = $status === 'approved' ? date('Y-m-d H:i:s') : null;
                 $stmt = $pdo->prepare("INSERT INTO customers (company_id, code, name, phone, remark, created_by, register_date, bank_details, recommend, status, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
@@ -81,6 +84,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 ]);
                 $new_id = (int) $pdo->lastInsertId();
                 if ($status === 'pending') {
+                    if (file_exists(__DIR__ . '/inc/notify.php')) {
+                        require_once __DIR__ . '/inc/notify.php';
+                        if (function_exists('send_pending_customer_notify')) {
+                            send_pending_customer_notify($pdo, $company_id);
+                        }
+                    }
                     header('Location: customers.php?pending_customer=1');
                 } else {
                     header('Location: customer_edit.php?id=' . $new_id . '&created=1');
@@ -100,11 +109,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>NEW REGISTER CUSTOMER - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= app_lang() === 'en' ? 'New Customer' : '新增客户' ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -165,50 +174,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 860px;">
         <div class="page-header">
-            <h2>新增客户</h2>
-            <p class="breadcrumb"><a href="customers.php">← 返回顾客列表</a></p>
+            <h2><?= app_lang() === 'en' ? 'New Customer' : '新增客户' ?></h2>
+            <p class="breadcrumb"><a href="customers.php"><?= app_lang() === 'en' ? '← Back to customer list' : '← 返回顾客列表' ?></a></p>
         </div>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="form-modal">
             <div class="form-modal-head">
-                <div class="form-modal-title">New Customer</div>
-                <a class="form-modal-close" href="customers.php" aria-label="关闭">×</a>
+                <div class="form-modal-title"><?= app_lang() === 'en' ? 'New Customer' : '新增客户' ?></div>
+                <a class="form-modal-close" href="customers.php" aria-label="<?= app_lang() === 'en' ? 'Close' : '关闭' ?>">×</a>
             </div>
             <form method="post" autocomplete="off" id="customer-create-form">
                 <input type="hidden" name="confirm_override" id="confirm_override" value="0">
                 <div class="form-grid-2">
                     <div class="form-section">
-                        <h4>Personal Information</h4>
+                        <h4><?= app_lang() === 'en' ? 'Personal Information' : '个人信息' ?></h4>
                         <div class="form-group">
-                            <label>客户代码 *</label>
+                            <label><?= app_lang() === 'en' ? 'Customer Code *' : '客户代码 *' ?></label>
                             <input name="code" class="form-control" required placeholder="<?= htmlspecialchars($suggested_code) ?>" value="<?= htmlspecialchars($_POST['code'] ?? $suggested_code) ?>">
                         </div>
                         <div class="form-group">
-                            <label>姓名</label>
+                            <label><?= app_lang() === 'en' ? 'Name' : '姓名' ?></label>
                             <input name="name" class="form-control" placeholder="FULL NAME" value="<?= htmlspecialchars($_POST['name'] ?? '') ?>">
                         </div>
                         <div class="form-group">
-                            <label>联系电话</label>
+                            <label><?= app_lang() === 'en' ? 'Contact' : '联系电话' ?></label>
                             <input name="phone" class="form-control" placeholder="CONTACT" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
                         </div>
                         <div class="form-group">
-                            <label>银行资料</label>
-                            <input name="bank_details" class="form-control" placeholder="例如 TNG 160402395453、PBB 8413574015" value="<?= htmlspecialchars($_POST['bank_details'] ?? '') ?>">
+                            <label><?= app_lang() === 'en' ? 'Bank Details' : '银行资料' ?></label>
+                            <input name="bank_details" class="form-control" placeholder="<?= app_lang() === 'en' ? 'e.g. TNG 160402395453, PBB 8413574015' : '例如 TNG 160402395453、PBB 8413574015' ?>" value="<?= htmlspecialchars($_POST['bank_details'] ?? '') ?>">
                         </div>
                         <div class="form-group">
                             <label>Recommend</label>
-                            <input name="recommend" class="form-control" placeholder="推荐人/推荐码" value="<?= htmlspecialchars($_POST['recommend'] ?? '') ?>">
+                            <input name="recommend" class="form-control" placeholder="<?= app_lang() === 'en' ? 'Referrer / referral code' : '推荐人/推荐码' ?>" value="<?= htmlspecialchars($_POST['recommend'] ?? '') ?>">
                         </div>
                         <div class="form-group">
-                            <label>备注</label>
+                            <label><?= app_lang() === 'en' ? 'Remark' : '备注' ?></label>
                             <textarea name="remark" class="form-control" placeholder="REMARK"><?= htmlspecialchars($_POST['remark'] ?? '') ?></textarea>
                         </div>
                     </div>
                 </div>
                 <div class="form-actions">
                     <a href="customers.php" class="btn btn-outline">Cancel</a>
-                    <button type="submit" class="btn btn-primary">保存并继续</button>
+                    <button type="submit" class="btn btn-primary"><?= app_lang() === 'en' ? 'Save and continue' : '保存并继续' ?></button>
                 </div>
             </form>
         </div>
@@ -225,7 +234,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         window.appModalConfirm("<?= htmlspecialchars($confirm_message, ENT_QUOTES) ?>", function(){
             hidden.value = '1';
             form.submit();
-        }, "重复资料");
+        }, <?= json_encode(app_lang() === 'en' ? 'Duplicate Data' : '重复资料', JSON_UNESCAPED_UNICODE) ?>);
     })();
     </script>
     <?php endif; ?>

@@ -249,6 +249,7 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_permissions'), ENT_QUOTES, 'UTF-8') ?></a>
         <div class="sidebar-nav-divider sidebar-nav-divider--before-logout" role="presentation" aria-hidden="true"></div>
     <?php endif; ?>
+    <a href="change_password.php" class="nav-item <?= $sidebar_current === 'change_password' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_change_password'), ENT_QUOTES, 'UTF-8') ?></a>
     <a href="logout.php" class="nav-item nav-item-logout"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_logout'), ENT_QUOTES, 'UTF-8') ?></a>
 </aside>
 <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-label="<?= htmlspecialchars(__('nav_open_menu'), ENT_QUOTES, 'UTF-8') ?>"><span class="sidebar-toggle-icon">☰</span> <?= htmlspecialchars(__('nav_menu'), ENT_QUOTES, 'UTF-8') ?></button>
