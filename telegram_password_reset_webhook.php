@@ -21,7 +21,7 @@ $cq = $update['callback_query'];
 $cbId = (string)($cq['id'] ?? '');
 $data = (string)($cq['data'] ?? '');
 $msg = $cq['message'] ?? [];
-$chatId = (string)($msg['chat']['id'] ?? '');
+$chatId = trim((string)($msg['chat']['id'] ?? ''));
 $messageId = (int)($msg['message_id'] ?? 0);
 $from = $cq['from'] ?? [];
 $approver = trim((string)($from['username'] ?? ''));
@@ -29,7 +29,8 @@ if ($approver === '') {
     $approver = (string)($from['id'] ?? 'telegram');
 }
 
-if ($chatId !== (string)$NOTIFY_TELEGRAM_CHAT_ID || strpos($data, 'pwreset|') !== 0) {
+$expectedChat = trim((string)$NOTIFY_TELEGRAM_CHAT_ID);
+if ($chatId !== $expectedChat || strpos($data, 'pwreset|') !== 0) {
     if ($cbId !== '') {
         telegram_api_post($NOTIFY_TELEGRAM_BOT_TOKEN, 'answerCallbackQuery', [
             'callback_query_id' => $cbId,

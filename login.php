@@ -414,7 +414,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
             'resetContact' => __('login_reset_contact'),
             'needCompanyUser' => app_lang() === 'en' ? 'Please enter Company and Username first.' : '请先填写公司和用户名。',
             'resetSent' => app_lang() === 'en' ? 'Request sent. Please wait for Telegram approval.' : '申请已发送，请等待 Telegram 批准。',
-            'resetPending' => app_lang() === 'en' ? 'A pending request already exists. Please wait for Telegram approval.' : '你已有待处理申请，请等待 Telegram 批准。',
+            'resetPending' => __('login_reset_pending'),
             'resetFailed' => app_lang() === 'en' ? 'Request failed. Please try again.' : '申请失败，请稍后重试。',
             'resetNotConfigured' => app_lang() === 'en' ? 'Telegram reset is not configured on server.' : '服务器尚未配置 Telegram 重置通知。',
             'resetSendFailed' => app_lang() === 'en' ? 'Telegram message failed to send.' : 'Telegram 消息发送失败。',
