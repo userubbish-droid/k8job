@@ -401,9 +401,9 @@ $login_as = $_POST['login_as'] ?? 'admin';
     </div>
     <div class="login-modal-mask" id="login-modal-mask" aria-hidden="true">
         <div class="login-modal" role="dialog" aria-modal="true" aria-label="<?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?>">
-            <div class="login-modal-head"><?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?></div>
+            <div class="login-modal-head" id="login-modal-head"><?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?></div>
             <div class="login-modal-body" id="login-modal-body"></div>
-            <div class="login-modal-foot">
+            <div class="login-modal-foot" id="login-modal-foot">
                 <button type="button" class="login-modal-ok" id="login-modal-ok"><?= htmlspecialchars(__('btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
             </div>
         </div>
@@ -416,12 +416,99 @@ $login_as = $_POST['login_as'] ?? 'admin';
             'resetSent' => app_lang() === 'en' ? 'Request sent. Please wait for Telegram approval.' : '申请已发送，请等待 Telegram 批准。',
             'resetPending' => app_lang() === 'en' ? 'A pending request already exists. Please wait for Telegram approval.' : '你已有待处理申请，请等待 Telegram 批准。',
             'resetFailed' => app_lang() === 'en' ? 'Request failed. Please try again.' : '申请失败，请稍后重试。',
+            'resetTitle' => app_lang() === 'en' ? 'Request password reset' : '申请重置密码',
+            'companyLabel' => app_lang() === 'en' ? 'Company' : '公司',
+            'usernameLabel' => app_lang() === 'en' ? 'Username' : '用户名',
+            'cancel' => app_lang() === 'en' ? 'Cancel' : '取消',
+            'submit' => app_lang() === 'en' ? 'Submit' : '提交',
+            'submitting' => app_lang() === 'en' ? 'Submitting...' : '提交中...',
         ], JSON_UNESCAPED_UNICODE) ?>;
         function showLoginModal(message) {
             var mask = document.getElementById('login-modal-mask');
+            var head = document.getElementById('login-modal-head');
             var body = document.getElementById('login-modal-body');
+            var foot = document.getElementById('login-modal-foot');
             if (!mask || !body) return;
+            if (head) head.textContent = "<?= htmlspecialchars(__('modal_system_title'), ENT_QUOTES, 'UTF-8') ?>";
             body.textContent = message || '';
+            if (foot) {
+                foot.innerHTML = '<button type="button" class="login-modal-ok" id="login-modal-ok"><?= htmlspecialchars(__('btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>';
+                var okBtn = document.getElementById('login-modal-ok');
+                if (okBtn) okBtn.addEventListener('click', closeLoginModal);
+            }
+            mask.classList.add('show');
+            mask.setAttribute('aria-hidden', 'false');
+        }
+        function closeLoginModal() {
+            var mask = document.getElementById('login-modal-mask');
+            if (!mask) return;
+            mask.classList.remove('show');
+            mask.setAttribute('aria-hidden', 'true');
+        }
+        function showResetRequestModal() {
+            var i18n = window.__LOGIN_I18N || {};
+            var mask = document.getElementById('login-modal-mask');
+            var head = document.getElementById('login-modal-head');
+            var body = document.getElementById('login-modal-body');
+            var foot = document.getElementById('login-modal-foot');
+            if (!mask || !head || !body || !foot) return;
+
+            var preCompany = '';
+            var preUser = '';
+            var companyInput = document.querySelector('input[name="company_code"]');
+            var userInput = document.querySelector('input[name="user"]');
+            if (companyInput) preCompany = String(companyInput.value || '').trim();
+            if (userInput) preUser = String(userInput.value || '').trim();
+
+            head.textContent = i18n.resetTitle || '';
+            body.innerHTML =
+                '<div style="display:flex; flex-direction:column; gap:10px;">' +
+                '<label style="font-size:13px; color:#475569;">' + (i18n.companyLabel || 'Company') + '</label>' +
+                '<input id="reset-company" type="text" class="form-control" style="min-height:40px; border:1px solid rgba(8,145,178,0.45); border-radius:10px; padding:8px 10px;" value="' + preCompany.replace(/"/g, '&quot;') + '">' +
+                '<label style="font-size:13px; color:#475569;">' + (i18n.usernameLabel || 'Username') + '</label>' +
+                '<input id="reset-user" type="text" class="form-control" style="min-height:40px; border:1px solid rgba(8,145,178,0.45); border-radius:10px; padding:8px 10px;" value="' + preUser.replace(/"/g, '&quot;') + '">' +
+                '</div>';
+
+            foot.innerHTML =
+                '<button type="button" class="btn btn-outline" id="reset-cancel-btn">' + (i18n.cancel || 'Cancel') + '</button>' +
+                '<button type="button" class="login-modal-ok" id="reset-submit-btn">' + (i18n.submit || 'Submit') + '</button>';
+
+            var cancelBtn = document.getElementById('reset-cancel-btn');
+            var submitBtn = document.getElementById('reset-submit-btn');
+            if (cancelBtn) cancelBtn.addEventListener('click', closeLoginModal);
+            if (submitBtn) {
+                submitBtn.addEventListener('click', function(){
+                    var cEl = document.getElementById('reset-company');
+                    var uEl = document.getElementById('reset-user');
+                    var companyVal = cEl ? String(cEl.value || '').trim() : '';
+                    var userVal = uEl ? String(uEl.value || '').trim() : '';
+                    if (!companyVal || !userVal) {
+                        showLoginModal(i18n.needCompanyUser || '');
+                        return;
+                    }
+                    submitBtn.disabled = true;
+                    submitBtn.textContent = i18n.submitting || 'Submitting...';
+                    fetch('request_password_reset.php', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                        credentials: 'same-origin',
+                        body: 'company_code=' + encodeURIComponent(companyVal) + '&user=' + encodeURIComponent(userVal)
+                    }).then(function(r){ return r.json(); }).then(function(data){
+                        if (data && data.ok) {
+                            if (data.message === 'already_pending') {
+                                showLoginModal(i18n.resetPending || '');
+                            } else {
+                                showLoginModal(i18n.resetSent || '');
+                            }
+                        } else {
+                            showLoginModal(i18n.resetFailed || '');
+                        }
+                    }).catch(function(){
+                        showLoginModal(i18n.resetFailed || '');
+                    });
+                });
+            }
+
             mask.classList.add('show');
             mask.setAttribute('aria-hidden', 'false');
         }
@@ -435,33 +522,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
         });
         document.querySelector('.forget').addEventListener('click', function(e) {
             e.preventDefault();
-            var i18n = window.__LOGIN_I18N || {};
-            var company = document.querySelector('input[name="company_code"]');
-            var user = document.querySelector('input[name="user"]');
-            var companyVal = company ? String(company.value || '').trim() : '';
-            var userVal = user ? String(user.value || '').trim() : '';
-            if (!companyVal || !userVal) {
-                showLoginModal(i18n.needCompanyUser || '');
-                return;
-            }
-            fetch('request_password_reset.php', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-                credentials: 'same-origin',
-                body: 'company_code=' + encodeURIComponent(companyVal) + '&user=' + encodeURIComponent(userVal)
-            }).then(function(r){ return r.json(); }).then(function(data){
-                if (data && data.ok) {
-                    if (data.message === 'already_pending') {
-                        showLoginModal(i18n.resetPending || '');
-                    } else {
-                        showLoginModal(i18n.resetSent || '');
-                    }
-                } else {
-                    showLoginModal(i18n.resetFailed || '');
-                }
-            }).catch(function(){
-                showLoginModal(i18n.resetFailed || '');
-            });
+            showResetRequestModal();
         });
         document.querySelectorAll('input.login-field-upper').forEach(function(el) {
             el.addEventListener('input', function() {
@@ -477,12 +538,8 @@ $login_as = $_POST['login_as'] ?? 'admin';
             var mask = document.getElementById('login-modal-mask');
             var ok = document.getElementById('login-modal-ok');
             if (!mask || !ok) return;
-            function close() {
-                mask.classList.remove('show');
-                mask.setAttribute('aria-hidden', 'true');
-            }
-            ok.addEventListener('click', close);
-            mask.addEventListener('click', function(e){ if (e.target === mask) close(); });
+            if (ok) ok.addEventListener('click', closeLoginModal);
+            mask.addEventListener('click', function(e){ if (e.target === mask) closeLoginModal(); });
         })();
     </script>
 </body>
