@@ -84,7 +84,7 @@ try {
     $text = '';
 
     if ($action === 'approve') {
-        $temp = substr(str_replace(['+', '/', '='], '', base64_encode(random_bytes(9))), 0, 10);
+        $temp = '12345';
         $hash = password_hash($temp, PASSWORD_DEFAULT);
         $pdo->prepare("UPDATE users SET password_hash = ? WHERE id = ?")->execute([$hash, $uid]);
         $pdo->prepare("UPDATE password_reset_requests SET status='approved', resolved_at=?, resolved_by_tg=?, resolved_note=?, temp_password=? WHERE id=?")
