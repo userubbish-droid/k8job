@@ -8,6 +8,11 @@ $hasToken = !empty($NOTIFY_TELEGRAM_BOT_TOKEN);
 $hasChatId = !empty($NOTIFY_TELEGRAM_CHAT_ID);
 $baseUrl = trim((string)($NOTIFY_BASE_URL ?? ''));
 $expectedWebhook = $baseUrl !== '' ? (rtrim($baseUrl, '/') . '/telegram_password_reset_webhook.php') : '';
+$notifyPath = __DIR__ . '/notify_config.php';
+$notifyExists = is_file($notifyPath);
+$notifySize = $notifyExists ? (int)@filesize($notifyPath) : 0;
+$tokenLen = mb_strlen((string)($NOTIFY_TELEGRAM_BOT_TOKEN ?? ''), 'UTF-8');
+$chatLen = mb_strlen((string)($NOTIFY_TELEGRAM_CHAT_ID ?? ''), 'UTF-8');
 
 $webhookInfoRaw = '';
 $webhookInfoErr = '';
@@ -105,8 +110,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_test'])) {
             </div>
             <div class="card">
                 <p><strong>notify_config loaded:</strong> <?= $configLoaded ? 'YES' : 'NO' ?></p>
+                <p><strong>notify_config path:</strong> <code><?= htmlspecialchars($notifyPath, ENT_QUOTES, 'UTF-8') ?></code></p>
+                <p><strong>notify_config exists:</strong> <?= $notifyExists ? 'YES' : 'NO' ?><?= $notifyExists ? (' (size: ' . $notifySize . ' bytes)') : '' ?></p>
                 <p><strong>BOT token present:</strong> <?= $hasToken ? 'YES' : 'NO' ?></p>
+                <p><strong>BOT token length:</strong> <?= (int)$tokenLen ?></p>
                 <p><strong>Chat ID present:</strong> <?= $hasChatId ? 'YES' : 'NO' ?></p>
+                <p><strong>Chat ID length:</strong> <?= (int)$chatLen ?></p>
                 <p><strong>NOTIFY_BASE_URL:</strong> <?= htmlspecialchars($baseUrl !== '' ? $baseUrl : '(empty)', ENT_QUOTES, 'UTF-8') ?></p>
                 <p><strong>Expected webhook:</strong> <?= htmlspecialchars($expectedWebhook !== '' ? $expectedWebhook : '(cannot build)', ENT_QUOTES, 'UTF-8') ?></p>
             </div>
