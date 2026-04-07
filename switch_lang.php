@@ -6,9 +6,9 @@ if (session_status() !== PHP_SESSION_ACTIVE) {
 require_once __DIR__ . '/inc/i18n.php';
 i18n_bootstrap();
 
-$lang = isset($_GET['lang']) ? strtolower(trim((string)$_GET['lang'])) : 'zh';
+$lang = isset($_GET['lang']) ? strtolower(trim((string)$_GET['lang'])) : 'en';
 if ($lang !== 'en' && $lang !== 'zh') {
-    $lang = 'zh';
+    $lang = 'en';
 }
 i18n_set_lang($lang);
 

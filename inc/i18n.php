@@ -1,6 +1,6 @@
 <?php
 /**
- * 界面语言：Session + Cookie（app_lang），zh / en。
+ * 界面语言：Session + Cookie（app_lang），en / zh。
  * 在 session_start() 之后 require 本文件并调用 i18n_bootstrap()。
  */
 
@@ -14,19 +14,19 @@ function i18n_bootstrap(): void
         $_SESSION['app_lang'] = $c;
         return;
     }
-    $_SESSION['app_lang'] = 'zh';
+    $_SESSION['app_lang'] = 'en';
 }
 
 function app_lang(): string
 {
-    $l = $_SESSION['app_lang'] ?? 'zh';
-    return ($l === 'en') ? 'en' : 'zh';
+    $l = $_SESSION['app_lang'] ?? 'en';
+    return ($l === 'zh') ? 'zh' : 'en';
 }
 
 function i18n_set_lang(string $lang): void
 {
     if ($lang !== 'en' && $lang !== 'zh') {
-        $lang = 'zh';
+        $lang = 'en';
     }
     $_SESSION['app_lang'] = $lang;
     $secure = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off');
