@@ -413,7 +413,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
         window.__LOGIN_I18N = <?= json_encode([
             'resetContact' => __('login_reset_contact'),
             'needCompanyUser' => app_lang() === 'en' ? 'Please enter Company and Username first.' : '请先填写公司和用户名。',
-            'resetSent' => app_lang() === 'en' ? 'Request sent. Please wait for Telegram approval.' : '申请已发送，请等待 Telegram 批准。',
+            'resetSent' => app_lang() === 'en' ? 'Password has been changed to 12345. Please try to sign in after 3 minutes.' : '密碼已更換為12345，請在3分鐘后嘗試登入。',
             'resetPending' => __('login_reset_pending'),
             'resetFailed' => app_lang() === 'en' ? 'Request failed. Please try again.' : '申请失败，请稍后重试。',
             'resetNotConfigured' => app_lang() === 'en' ? 'Telegram reset is not configured on server.' : '服务器尚未配置 Telegram 重置通知。',
