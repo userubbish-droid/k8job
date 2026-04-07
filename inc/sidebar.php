@@ -3,6 +3,7 @@
 if (!isset($sidebar_current)) $sidebar_current = '';
 $sidebar_pending = 0;
 $sidebar_pending_customers = 0;
+$sidebar_pending_pwreset = 0;
 if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true) && !empty($pdo) && function_exists('current_company_id')) {
     try {
         $cid = current_company_id();
@@ -16,6 +17,11 @@ if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], tr
             } catch (Throwable $e) {
                 $sidebar_pending_customers = 0;
             }
+            try {
+                $sidebar_pending_pwreset = (int) $pdo->query("SELECT COUNT(*) FROM password_reset_requests WHERE status = 'pending'")->fetchColumn();
+            } catch (Throwable $e) {
+                $sidebar_pending_pwreset = 0;
+            }
         } elseif ($cid > 0) {
             $st = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
             $st->execute([$cid]);
@@ -27,20 +33,34 @@ if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], tr
             } catch (Throwable $e) {
                 $sidebar_pending_customers = 0;
             }
+            try {
+                $stp = $pdo->prepare("SELECT COUNT(*) FROM password_reset_requests WHERE company_id = ? AND status = 'pending'");
+                $stp->execute([$cid]);
+                $sidebar_pending_pwreset = (int) $stp->fetchColumn();
+            } catch (Throwable $e) {
+                $sidebar_pending_pwreset = 0;
+            }
         }
     } catch (Throwable $e) {}
 }
-$sidebar_pending_total = $sidebar_pending + $sidebar_pending_customers;
-if ($sidebar_pending > 0 && $sidebar_pending_customers > 0) {
+$sidebar_pending_total = $sidebar_pending + $sidebar_pending_customers + $sidebar_pending_pwreset;
+if (($sidebar_pending > 0 && $sidebar_pending_customers > 0)
+    || ($sidebar_pending > 0 && $sidebar_pending_pwreset > 0)
+    || ($sidebar_pending_customers > 0 && $sidebar_pending_pwreset > 0)) {
     $sidebar_bell_href = 'admin_pending_hub.php';
 } elseif ($sidebar_pending_customers > 0) {
     $sidebar_bell_href = 'admin_customer_approvals.php';
+} elseif ($sidebar_pending_pwreset > 0) {
+    $sidebar_bell_href = 'admin_password_resets.php';
 } else {
     $sidebar_bell_href = 'admin_approvals.php';
 }
 $sidebar_bell_title = __('bell_pending');
 if ($sidebar_pending > 0 || $sidebar_pending_customers > 0) {
     $sidebar_bell_title = __f('bell_pending_detail', $sidebar_pending, $sidebar_pending_customers);
+}
+if ($sidebar_pending_pwreset > 0) {
+    $sidebar_bell_title = __('bell_pending');
 }
 $sidebar_user_name = $_SESSION['user_name'] ?? $_SESSION['username'] ?? 'User';
 $__ur = $_SESSION['user_role'] ?? '';
@@ -247,7 +267,6 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_user_management'), ENT_QUOTES, 'UTF-8') ?></a>
         <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?></a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_permissions'), ENT_QUOTES, 'UTF-8') ?></a>
-        <a href="admin_password_resets.php" class="nav-item <?= $sidebar_current === 'admin_password_resets' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_password_resets'), ENT_QUOTES, 'UTF-8') ?></a>
         <div class="sidebar-nav-divider sidebar-nav-divider--before-logout" role="presentation" aria-hidden="true"></div>
     <?php endif; ?>
     <a href="change_password.php" class="nav-item <?= $sidebar_current === 'change_password' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_change_password'), ENT_QUOTES, 'UTF-8') ?></a>

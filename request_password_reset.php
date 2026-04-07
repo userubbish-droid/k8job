@@ -1,8 +1,15 @@
 <?php
 require __DIR__ . '/config.php';
+require_once __DIR__ . '/inc/i18n.php';
 require_once __DIR__ . '/inc/notify.php';
 
+if (session_status() !== PHP_SESSION_ACTIVE) {
+    session_start();
+}
+i18n_bootstrap();
+
 header('Content-Type: application/json; charset=utf-8');
+header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
 
 if ($_SERVER['REQUEST_METHOD'] !== 'POST') {
     http_response_code(405);
@@ -48,7 +55,7 @@ try {
     $stDup->execute([$uid]);
     $pendingId = (int)$stDup->fetchColumn();
     if ($pendingId > 0) {
-        echo json_encode(['ok' => true, 'message' => 'already_pending'], JSON_UNESCAPED_UNICODE);
+        echo json_encode(['ok' => true, 'message' => 'already_pending', 'notice' => __('login_reset_pending')], JSON_UNESCAPED_UNICODE);
         exit;
     }
 
@@ -70,7 +77,7 @@ try {
         exit;
     }
 
-    echo json_encode(['ok' => true, 'message' => 'sent'], JSON_UNESCAPED_UNICODE);
+    echo json_encode(['ok' => true, 'message' => 'sent', 'notice' => __('login_reset_sent')], JSON_UNESCAPED_UNICODE);
 } catch (Throwable $e) {
     echo json_encode(['ok' => false, 'error' => 'server_error', 'detail' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
 }

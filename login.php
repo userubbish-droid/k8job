@@ -132,6 +132,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     }
 }
 $login_as = $_POST['login_as'] ?? 'admin';
+if (!headers_sent()) {
+    header('Cache-Control: no-store, no-cache, must-revalidate, max-age=0');
+    header('Pragma: no-cache');
+}
 ?>
 <!DOCTYPE html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -413,7 +417,7 @@ $login_as = $_POST['login_as'] ?? 'admin';
         window.__LOGIN_I18N = <?= json_encode([
             'resetContact' => __('login_reset_contact'),
             'needCompanyUser' => app_lang() === 'en' ? 'Please enter Company and Username first.' : '请先填写公司和用户名。',
-            'resetSent' => app_lang() === 'en' ? 'Password has been changed to 12345. Please try to sign in after 3 minutes.' : '密碼已更換為12345，請在3分鐘后嘗試登入。',
+            'resetSent' => __('login_reset_sent'),
             'resetPending' => __('login_reset_pending'),
             'resetFailed' => app_lang() === 'en' ? 'Request failed. Please try again.' : '申请失败，请稍后重试。',
             'resetNotConfigured' => app_lang() === 'en' ? 'Telegram reset is not configured on server.' : '服务器尚未配置 Telegram 重置通知。',
@@ -497,7 +501,10 @@ $login_as = $_POST['login_as'] ?? 'admin';
                         body: 'company_code=' + encodeURIComponent(companyVal) + '&user=' + encodeURIComponent(userVal)
                     }).then(function(r){ return r.json(); }).then(function(data){
                         if (data && data.ok) {
-                            if (data.message === 'already_pending') {
+                            var noticeOk = data.notice && String(data.notice).trim() !== '' ? String(data.notice) : '';
+                            if (noticeOk !== '') {
+                                showLoginModal(noticeOk);
+                            } else if (data.message === 'already_pending') {
                                 showLoginModal(i18n.resetPending || '');
                             } else {
                                 showLoginModal(i18n.resetSent || '');

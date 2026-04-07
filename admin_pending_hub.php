@@ -12,6 +12,7 @@ $role_sa = ($_SESSION['user_role'] ?? '') === 'superadmin';
 
 $cnt_tx = 0;
 $cnt_cust = 0;
+$cnt_pwreset = 0;
 try {
     $has_deleted_at = true;
     try {
@@ -27,6 +28,11 @@ try {
         } catch (Throwable $e) {
             $cnt_cust = 0;
         }
+        try {
+            $cnt_pwreset = (int) $pdo->query("SELECT COUNT(*) FROM password_reset_requests WHERE status = 'pending'")->fetchColumn();
+        } catch (Throwable $e) {
+            $cnt_pwreset = 0;
+        }
     } elseif ($company_id > 0) {
         $st = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
         $st->execute([$company_id]);
@@ -38,11 +44,18 @@ try {
         } catch (Throwable $e) {
             $cnt_cust = 0;
         }
+        try {
+            $stp = $pdo->prepare("SELECT COUNT(*) FROM password_reset_requests WHERE company_id = ? AND status = 'pending'");
+            $stp->execute([$company_id]);
+            $cnt_pwreset = (int) $stp->fetchColumn();
+        } catch (Throwable $e) {
+            $cnt_pwreset = 0;
+        }
     }
 } catch (Throwable $e) {
 }
 
-if ($cnt_tx <= 0 && $cnt_cust <= 0) {
+if ($cnt_tx <= 0 && $cnt_cust <= 0 && $cnt_pwreset <= 0) {
     header('Location: dashboard.php');
     exit;
 }
@@ -54,6 +67,10 @@ if ($cnt_tx > 0 && $cnt_cust <= 0) {
 }
 if ($cnt_cust > 0 && $cnt_tx <= 0) {
     header('Location: admin_customer_approvals.php');
+    exit;
+}
+if ($cnt_pwreset > 0 && $cnt_tx <= 0 && $cnt_cust <= 0) {
+    header('Location: admin_password_resets.php');
     exit;
 }
 ?>
@@ -84,6 +101,11 @@ if ($cnt_cust > 0 && $cnt_tx <= 0) {
                 <h3 style="margin-top:0;">客户资料待审核</h3>
                 <p style="margin: 8px 0 12px; color: var(--muted);">当前待审：<strong><?= (int)$cnt_cust ?></strong> 位</p>
                 <a class="btn btn-primary" href="admin_customer_approvals.php">前往审核客户</a>
+            </div>
+            <div class="card" style="margin-top: 16px;">
+                <h3 style="margin-top:0;">密码重置待处理</h3>
+                <p style="margin: 8px 0 12px; color: var(--muted);">当前待处理：<strong><?= (int)$cnt_pwreset ?></strong> 条</p>
+                <a class="btn btn-primary" href="admin_password_resets.php">前往处理重置请求</a>
             </div>
         </div>
     </main>
