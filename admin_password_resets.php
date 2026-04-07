@@ -30,12 +30,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uid = (int)$req['user_id'];
                 $rid = (int)$req['id'];
                 if ($action === 'approve') {
-                    $temp = substr(str_replace(['+', '/', '='], '', base64_encode(random_bytes(9))), 0, 10);
+                    $temp = '12345';
                     $hash = password_hash($temp, PASSWORD_DEFAULT);
                     $pdo->prepare('UPDATE users SET password_hash = ? WHERE id = ?')->execute([$hash, $uid]);
                     $pdo->prepare("UPDATE password_reset_requests SET status='approved', resolved_at=?, resolved_by_tg=?, resolved_note=?, temp_password=? WHERE id=? AND status='pending'")
                         ->execute([$now, $resolver, 'approved_via_web', $temp, $rid]);
-                    $msg = __f('pwreset_ok_approve', $temp);
+                    $msg = '密碼已更換為12345';
                 } else {
                     $pdo->prepare("UPDATE password_reset_requests SET status='rejected', resolved_at=?, resolved_by_tg=?, resolved_note=? WHERE id=? AND status='pending'")
                         ->execute([$now, $resolver, 'rejected_via_web', $rid]);
