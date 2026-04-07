@@ -20,6 +20,11 @@ if ($user === '' || $company_code === '') {
 }
 
 try {
+    if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {
+        echo json_encode(['ok' => false, 'error' => 'telegram_not_configured'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+
     $stC = $pdo->prepare("SELECT id FROM companies WHERE is_active = 1 AND LOWER(TRIM(code)) = ? LIMIT 1");
     $stC->execute([$company_code]);
     $cid = (int)$stC->fetchColumn();
@@ -58,8 +63,11 @@ try {
         ['text' => '❌ 拒绝', 'callback_data' => 'pwreset|reject|' . $rid],
     ]];
 
-    if (!empty($NOTIFY_TELEGRAM_BOT_TOKEN) && !empty($NOTIFY_TELEGRAM_CHAT_ID)) {
-        send_telegram_message_with_keyboard($NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $text, $inline);
+    $sendResult = send_telegram_message_with_keyboard($NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $text, $inline);
+    if ($sendResult === false || strpos((string)$sendResult, '"ok":true') === false) {
+        $pdo->prepare("DELETE FROM password_reset_requests WHERE id = ?")->execute([$rid]);
+        echo json_encode(['ok' => false, 'error' => 'telegram_send_failed'], JSON_UNESCAPED_UNICODE);
+        exit;
     }
 
     echo json_encode(['ok' => true, 'message' => 'sent'], JSON_UNESCAPED_UNICODE);

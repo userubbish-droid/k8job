@@ -416,6 +416,8 @@ $login_as = $_POST['login_as'] ?? 'admin';
             'resetSent' => app_lang() === 'en' ? 'Request sent. Please wait for Telegram approval.' : '申请已发送，请等待 Telegram 批准。',
             'resetPending' => app_lang() === 'en' ? 'A pending request already exists. Please wait for Telegram approval.' : '你已有待处理申请，请等待 Telegram 批准。',
             'resetFailed' => app_lang() === 'en' ? 'Request failed. Please try again.' : '申请失败，请稍后重试。',
+            'resetNotConfigured' => app_lang() === 'en' ? 'Telegram reset is not configured on server.' : '服务器尚未配置 Telegram 重置通知。',
+            'resetSendFailed' => app_lang() === 'en' ? 'Telegram message failed to send.' : 'Telegram 消息发送失败。',
             'resetTitle' => app_lang() === 'en' ? 'Request password reset' : '申请重置密码',
             'companyLabel' => app_lang() === 'en' ? 'Company' : '公司',
             'usernameLabel' => app_lang() === 'en' ? 'Username' : '用户名',
@@ -500,8 +502,14 @@ $login_as = $_POST['login_as'] ?? 'admin';
                             } else {
                                 showLoginModal(i18n.resetSent || '');
                             }
-                        } else {
-                            showLoginModal(i18n.resetFailed || '');
+                } else {
+                    if (data && data.error === 'telegram_not_configured') {
+                        showLoginModal(i18n.resetNotConfigured || '');
+                    } else if (data && data.error === 'telegram_send_failed') {
+                        showLoginModal(i18n.resetSendFailed || '');
+                    } else {
+                        showLoginModal(i18n.resetFailed || '');
+                    }
                         }
                     }).catch(function(){
                         showLoginModal(i18n.resetFailed || '');
