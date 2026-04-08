@@ -203,7 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vals2 = "?, ?, ?, 'DEPOSIT', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
                 $stmt2 = $pdo->prepare("INSERT INTO transactions ($cols2) VALUES ($vals2)");
                 $stmt2->execute([$company_id, $day, $time, $to_bank, $amount, $amount, $staff, $remark_in, $uid, $uid]);
-                $msg = $from_bank . ' 转 ' . number_format($amount, 2) . ' 至 ' . $to_bank . ' 已记录，可在流水记录中查看（member 不可见）。';
+                $msg = $from_bank . ' 转 ' . number_format($amount, 2) . ' 至 ' . $to_bank . ' 已记录。';
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
                     throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_hide_from_member.sql 后再使用转账功能。');
