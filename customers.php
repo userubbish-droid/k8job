@@ -18,6 +18,7 @@ $sidebar_current = 'customers';
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $can_view_contact_full = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_MEMBER_CONTACT));
 $can_view_total_dp_wd = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_CUSTOMER_TOTAL_DP_WD));
+$can_export_customers_csv = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 $customers_list_colspan = 14 + ($can_view_total_dp_wd ? 2 : 0) + ($is_admin ? 2 : 0);
 $company_id = current_company_id();
 $has_customer_status = false;
@@ -224,6 +225,121 @@ try {
     $agent_range_wd = [];
     $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? __('cust_err_migrate_recommend') : __('cust_err_migrate_detail')) . ' (' . $e->getMessage() . ')';
 }
+
+if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
+    if (!$can_export_customers_csv) {
+        http_response_code(403);
+        header('Content-Type: text/plain; charset=utf-8');
+        echo __('cust_export_err_boss_only');
+        exit;
+    }
+    $filename = 'customers_' . date('Ymd_His') . '.csv';
+    if ($agent_view) {
+        $safe_rec = preg_replace('/[^\w\-.@]+/', '_', $filter_recommend);
+        $filename = 'customers_agent_' . ($safe_rec !== '' ? $safe_rec . '_' : '') . date('Ymd_His') . '.csv';
+    }
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+    if ($agent_view) {
+        fputcsv($out, [__('cust_csv_code'), __('cust_csv_winlose')]);
+        foreach ($rows as $r) {
+            $code = trim((string)($r['code'] ?? ''));
+            if ($agent_pnl_by_range) {
+                $all_dp = $agent_range_dp[$code] ?? 0;
+                $all_wd = $agent_range_wd[$code] ?? 0;
+            } else {
+                $all_dp = $all_deposit_by_code[$code] ?? 0;
+                $all_wd = $all_withdraw_by_code[$code] ?? 0;
+            }
+            $win_loss = $all_dp - $all_wd;
+            fputcsv($out, [$code, number_format($win_loss, 2, '.', '')]);
+        }
+        fclose($out);
+        exit;
+    }
+    $hdr = [
+        __('cust_csv_code'),
+        __('cust_csv_register_date'),
+        __('cust_csv_full_name'),
+        __('cust_csv_contact'),
+        __('cust_csv_bank_details'),
+    ];
+    if ($can_view_total_dp_wd) {
+        $hdr[] = __('cust_csv_total_dp');
+        $hdr[] = __('cust_csv_total_wd');
+    }
+    $hdr[] = __('cust_csv_rebate');
+    $hdr[] = __('cust_csv_free');
+    $hdr[] = __('cust_csv_free_withdraw');
+    $hdr[] = __('cust_csv_bonus');
+    $hdr[] = __('cust_csv_deposit_month');
+    $hdr[] = __('cust_csv_withdraw_month');
+    $hdr[] = __('cust_csv_regular');
+    $hdr[] = __('cust_csv_remark');
+    $hdr[] = __('cust_csv_recommend');
+    if ($is_admin) {
+        $hdr[] = __('cust_csv_created_by');
+        $hdr[] = __('cust_csv_is_active');
+    }
+    fputcsv($out, $hdr);
+    foreach ($rows as $r) {
+        $code = (string)($r['code'] ?? '');
+        $phone_raw = (string)($r['phone'] ?? '');
+        $phone_export = $can_view_contact_full ? $phone_raw : customer_mask_contact_for_member($phone_raw);
+        $row = [
+            $code,
+            (string)($r['register_date'] ?? ''),
+            (string)($r['name'] ?? ''),
+            $phone_export,
+            (string)($r['bank_details'] ?? ''),
+        ];
+        if ($can_view_total_dp_wd) {
+            $all_dp = $all_deposit_by_code[$code] ?? 0;
+            $all_wd = $all_withdraw_by_code[$code] ?? 0;
+            $row[] = number_format($all_dp, 2, '.', '');
+            $row[] = number_format($all_wd, 2, '.', '');
+        }
+        $all_rebate = $all_rebate_by_code[$code] ?? 0;
+        $all_free = $all_free_by_code[$code] ?? 0;
+        $all_fw = $all_free_withdraw_by_code[$code] ?? 0;
+        $all_bonus = $all_bonus_by_code[$code] ?? 0;
+        $mon_dp = $month_deposit_by_code[$code] ?? 0;
+        $mon_wd = $month_withdraw_by_code[$code] ?? 0;
+        $row[] = number_format($all_rebate, 2, '.', '');
+        $row[] = number_format($all_free, 2, '.', '');
+        $row[] = number_format($all_fw, 2, '.', '');
+        $row[] = number_format($all_bonus, 2, '.', '');
+        $row[] = number_format($mon_dp, 2, '.', '');
+        $row[] = number_format($mon_wd, 2, '.', '');
+        $row[] = customer_regular_tier($balance_by_code[$code] ?? 0);
+        $row[] = (string)($r['remark'] ?? '');
+        $row[] = (string)($r['recommend'] ?? '');
+        if ($is_admin) {
+            $row[] = (string)($r['created_by_name'] ?? '');
+            $row[] = ((int)($r['is_active'] ?? 0) === 1) ? __('status_enabled') : __('status_disabled');
+        }
+        fputcsv($out, $row);
+    }
+    fclose($out);
+    exit;
+}
+
+$export_csv_href = '';
+if ($can_export_customers_csv) {
+    $export_csv_q = ['export' => 'csv'];
+    if ($agent_view) {
+        $export_csv_q['recommend'] = $filter_recommend;
+        if ($pnl_day_from !== '') {
+            $export_csv_q['day_from'] = $pnl_day_from;
+        }
+        if ($pnl_day_to !== '') {
+            $export_csv_q['day_to'] = $pnl_day_to;
+        }
+    }
+    $export_csv_href = 'customers.php?' . http_build_query($export_csv_q);
+}
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -257,6 +373,15 @@ try {
         .cust-pnl-cust-wins { color: var(--danger); font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-company-wins { color: #2563eb; font-weight: 700; font-variant-numeric: tabular-nums; }
         .cust-pnl-even { color: #64748b; font-weight: 600; font-variant-numeric: tabular-nums; }
+        .cust-list-title-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 10px;
+        }
+        .cust-list-title-row h3 { margin: 0; }
     </style>
 </head>
 <body>
@@ -286,7 +411,12 @@ try {
 
         <div class="card" style="overflow-x: auto;">
             <?php if ($agent_view): ?>
-            <h3><?= htmlspecialchars(__('cust_agent_list_title'), ENT_QUOTES, 'UTF-8') ?></h3>
+            <div class="cust-list-title-row">
+                <h3><?= htmlspecialchars(__('cust_agent_list_title'), ENT_QUOTES, 'UTF-8') ?></h3>
+                <?php if ($can_export_customers_csv): ?>
+                <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
+                <?php endif; ?>
+            </div>
             <?php if ($agent_pnl_by_range): ?>
             <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(__f('cust_agent_pnl_range', $pnl_day_from, $pnl_day_to), ENT_QUOTES, 'UTF-8') ?></p>
             <?php else: ?>
@@ -335,7 +465,12 @@ try {
                 </tbody>
             </table>
             <?php else: ?>
-            <h3><?= htmlspecialchars(__('ui_label_list'), ENT_QUOTES, 'UTF-8') ?></h3>
+            <div class="cust-list-title-row">
+                <h3><?= htmlspecialchars(__('ui_label_list'), ENT_QUOTES, 'UTF-8') ?></h3>
+                <?php if ($can_export_customers_csv): ?>
+                <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
+                <?php endif; ?>
+            </div>
             <?php if ($is_admin): ?>
             <div class="column-toggle-bar">
                 <button type="button" class="btn btn-sm column-toggle-btn is-off" id="toggle-created-by" aria-pressed="false"><?= htmlspecialchars(__('ui_col_created_by'), ENT_QUOTES, 'UTF-8') ?></button>
