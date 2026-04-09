@@ -654,7 +654,6 @@ function i18n_dictionary(): array
         'ui_col_created_by' => ['zh' => '填写人', 'en' => 'Created by'],
         'ui_total' => ['zh' => '合计', 'en' => 'Total'],
         'ui_btn_cancel' => ['zh' => '取消', 'en' => 'Cancel'],
-        'nav_option_sets' => ['zh' => '选项设置', 'en' => 'Option settings'],
         'nav_go_add_transaction' => ['zh' => '去记一笔', 'en' => 'Add transaction'],
 
         /* product_library.php */

@@ -106,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send_test'])) {
         <div class="page-wrap" style="max-width: 900px;">
             <div class="page-header">
                 <h2>Telegram Diagnostics</h2>
-                <p class="breadcrumb"><a href="dashboard.php">Home</a></p>
+                <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
             </div>
             <div class="card">
                 <p><strong>notify_config loaded:</strong> <?= $configLoaded ? 'YES' : 'NO' ?></p>

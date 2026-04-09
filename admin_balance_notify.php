@@ -70,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             <div class="page-wrap" style="max-width: 560px;">
                 <div class="page-header">
                     <h2>余额通知（Telegram）</h2>
-                    <p class="breadcrumb"><a href="admin_banks_products.php">银行与产品</a><span>·</span>隐藏设置</p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>

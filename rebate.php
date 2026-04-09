@@ -173,7 +173,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
     <div class="page-wrap">
         <div class="page-header">
             <h2><?= htmlspecialchars(__('rebate_page_title'), ENT_QUOTES, 'UTF-8') ?></h2>
-            <p class="breadcrumb"><a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span><a href="transaction_create.php"><?= htmlspecialchars(__('nav_add_transaction'), ENT_QUOTES, 'UTF-8') ?></a></p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
@@ -335,10 +335,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
             </form>
         </div>
 
-        <p class="breadcrumb" style="margin-top:20px;">
-            <a href="transaction_create.php"><?= htmlspecialchars(__('rebate_footer_add_txn'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
-            <a href="dashboard.php"><?= htmlspecialchars(__('rebate_footer_home'), ENT_QUOTES, 'UTF-8') ?></a>
-        </p>
+        <?php $breadcrumb_back_style = 'margin-top:20px;'; include __DIR__ . '/inc/breadcrumb_back.php'; ?>
     </div>
         </main>
     </div>

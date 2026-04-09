@@ -50,6 +50,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $err = '请输入客户代码。';
     } else {
         $conflicts = [];
+        $has_bank_duplicate = false;
+        $existing_code_same_bank = '';
+        $bank_dup_codes = [];
+        $bank_dup_prefixes = [];
+
+        $extract_bank_prefixes7 = function (string $s): array {
+            $s = trim($s);
+            if ($s === '') return [];
+            preg_match_all('/\d+/', $s, $m);
+            $out = [];
+            foreach (($m[0] ?? []) as $digits) {
+                $digits = (string)$digits;
+                if (strlen($digits) >= 7) {
+                    $out[] = substr($digits, 0, 7);
+                }
+            }
+            $out = array_values(array_unique($out));
+            return $out;
+        };
+
+        $input_prefixes7 = $extract_bank_prefixes7($bank_details);
         if ($phone !== '') {
             $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND phone = ? LIMIT 1");
             $stmt->execute([$company_id, $phone]);
@@ -59,11 +80,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
         }
         if ($bank_details !== '') {
-            $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND bank_details = ? LIMIT 1");
-            $stmt->execute([$company_id, $bank_details]);
-            $row = $stmt->fetch();
-            if ($row) {
-                $conflicts[] = $row['code'] . ' 银行号码同样';
+            // 规则：只要任意数字串的前 7 位相同，即视为“银行号重复”（不区分银行名）
+            if (!empty($input_prefixes7)) {
+                try {
+                    $stb = $pdo->prepare("SELECT code, bank_details FROM customers WHERE company_id = ? AND bank_details IS NOT NULL AND bank_details <> ''");
+                    $stb->execute([$company_id]);
+                    while ($rr = $stb->fetch(PDO::FETCH_ASSOC)) {
+                        $ecode = trim((string)($rr['code'] ?? ''));
+                        $ebank = trim((string)($rr['bank_details'] ?? ''));
+                        if ($ecode === '' || $ebank === '') continue;
+                        $eprefixes7 = $extract_bank_prefixes7($ebank);
+                        if (empty($eprefixes7)) continue;
+                        $hits = array_values(array_intersect($input_prefixes7, $eprefixes7));
+                        if (!empty($hits)) {
+                            $has_bank_duplicate = true;
+                            $existing_code_same_bank = $existing_code_same_bank !== '' ? $existing_code_same_bank : $ecode;
+                            $bank_dup_codes[] = $ecode;
+                            foreach ($hits as $h) $bank_dup_prefixes[] = $h;
+                        }
+                    }
+                } catch (Throwable $e) {
+                }
+            }
+            if ($has_bank_duplicate) {
+                $bank_dup_codes = array_values(array_unique($bank_dup_codes));
+                $bank_dup_prefixes = array_values(array_unique($bank_dup_prefixes));
+                $conflicts[] = (implode(',', $bank_dup_codes) ?: '客户') . ' 银行号码前7位相同（' . (implode(',', $bank_dup_prefixes) ?: '—') . '）';
             }
         }
         if ($is_member_actor && !empty($conflicts) && !$confirm_override) {
@@ -92,6 +134,22 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $approved_at
                 ]);
                 $new_id = (int) $pdo->lastInsertId();
+                if ($is_member_actor && $has_bank_duplicate && file_exists(__DIR__ . '/inc/notify.php')) {
+                    require_once __DIR__ . '/inc/notify.php';
+                    if (function_exists('send_member_duplicate_bank_customer_notify')) {
+                        $member_uname = trim((string)($_SESSION['username'] ?? $_SESSION['user_name'] ?? ''));
+                        send_member_duplicate_bank_customer_notify(
+                            $pdo,
+                            $company_id,
+                            $member_uname,
+                            $code,
+                            $existing_code_same_bank,
+                            $bank_details,
+                            $bank_dup_codes,
+                            $bank_dup_prefixes
+                        );
+                    }
+                }
                 if ($status === 'pending') {
                     if (file_exists(__DIR__ . '/inc/notify.php')) {
                         require_once __DIR__ . '/inc/notify.php';
@@ -184,7 +242,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <div class="page-wrap" style="max-width: 860px;">
         <div class="page-header">
             <h2><?= app_lang() === 'en' ? 'New Customer' : '新增客户' ?></h2>
-            <p class="breadcrumb"><a href="customers.php"><?= app_lang() === 'en' ? '← Back to customer list' : '← 返回顾客列表' ?></a></p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 

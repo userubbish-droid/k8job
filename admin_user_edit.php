@@ -138,10 +138,7 @@ $can_set_second = user_actor_can_set_second_password($pdo, $id);
             <div class="page-wrap" style="max-width: 720px;">
                 <div class="page-header">
                     <h2>编辑用户</h2>
-                    <p class="breadcrumb">
-                        <a href="admin_users.php">User Management</a><span>·</span>
-                        #<?= (int)$u['id'] ?> <?= htmlspecialchars((string)$u['username']) ?>
-                    </p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>

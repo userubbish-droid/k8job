@@ -149,7 +149,7 @@ function teq_v($k, $fallback = '') {
         <div class="page-wrap" style="max-width: 720px;">
             <div class="page-header">
                 <h2>Request Edit #<?= (int)$row['id'] ?></h2>
-                <p class="breadcrumb"><a href="<?= htmlspecialchars($return_to, ENT_QUOTES, 'UTF-8') ?>">← Back</a></p>
+                <p class="breadcrumb"><a href="<?= htmlspecialchars($return_to, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('btn_back'), ENT_QUOTES, 'UTF-8') ?></a></p>
             </div>
             <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
             <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>

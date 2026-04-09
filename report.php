@@ -226,7 +226,7 @@ try {
             <div class="page-wrap report-wrap">
                 <div class="page-header">
                     <h2>Report</h2>
-                    <p class="breadcrumb"><a href="dashboard.php"><?= app_lang() === 'en' ? 'Home' : '首页' ?></a><span>·</span><?= app_lang() === 'en' ? 'Report' : '数据报表' ?></p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
 
                 <form class="filters-bar filters-bar-flow report-filter-card" method="get" style="margin-bottom:16px;">

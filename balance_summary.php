@@ -94,9 +94,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
             <div class="page-wrap" style="max-width: 100%;">
                 <div class="page-header">
                     <h2>statement</h2>
-                    <p class="breadcrumb">
-                        <a href="dashboard.php">首页</a><span>·</span>statement
-                    </p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= $err ?></div><?php endif; ?>

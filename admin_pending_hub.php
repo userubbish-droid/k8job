@@ -107,7 +107,7 @@ if ($cnt_txedit > 0 && $cnt_tx <= 0 && $cnt_cust <= 0 && $cnt_pwreset <= 0) {
         <div class="page-wrap" style="max-width: 640px;">
             <div class="page-header">
                 <h2>待处理</h2>
-                <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span>请选择要处理的类型</p>
+                <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
             </div>
             <div class="card" style="margin-bottom: 16px;">
                 <h3 style="margin-top:0;">流水待审核</h3>

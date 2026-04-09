@@ -264,7 +264,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     <div class="page-wrap">
         <div class="page-header">
             <h2><?= app_lang() === 'en' ? 'Transactions' : '流水记录' ?></h2>
-            <p class="breadcrumb"><a href="dashboard.php"><?= app_lang() === 'en' ? 'Home' : '首页' ?></a><span>·</span><a href="transaction_create.php"><?= app_lang() === 'en' ? 'Add Transaction' : '记一笔' ?></a></p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
 
     <?php if ($is_admin):
@@ -474,11 +474,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     </div>
     <?php endif; ?>
 
-    <p class="breadcrumb" style="margin-top:20px;">
-        <a href="transaction_create.php">记一笔</a><span>·</span>
-        <a href="dashboard.php">返回首页</a><span>·</span>
-        <a href="logout.php">退出</a>
-    </p>
+    <?php $breadcrumb_back_style = 'margin-top:20px;'; include __DIR__ . '/inc/breadcrumb_back.php'; ?>
     </div>
         </main>
     </div>

@@ -1135,7 +1135,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
     <div class="page-wrap txn-wrap<?= ($quick === 'expense' && $expense_kind_ui === 'kiosk') ? ' kiosk-expense-page' : '' ?>">
         <div class="page-header">
             <h2><?= htmlspecialchars($expense_page_title) ?></h2>
-            <p class="breadcrumb"><a href="dashboard.php"><?= htmlspecialchars(__('txn_bc_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span><a href="transaction_list.php"><?= htmlspecialchars(__('txn_bc_transactions'), ENT_QUOTES, 'UTF-8') ?></a></p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
 
     <?php if ($saved): ?>
@@ -1661,11 +1661,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
     </div>
     <?php endif; ?>
 
-    <p class="breadcrumb" style="margin-top:16px;">
-        <a href="dashboard.php"><?= htmlspecialchars(__('txn_footer_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
-        <a href="transaction_list.php"><?= htmlspecialchars(__('txn_footer_txns'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
-        <a href="logout.php"><?= htmlspecialchars(__('txn_footer_logout'), ENT_QUOTES, 'UTF-8') ?></a>
-    </p>
+    <?php $breadcrumb_back_style = 'margin-top:16px;'; include __DIR__ . '/inc/breadcrumb_back.php'; ?>
     </div>
         </main>
     </div>

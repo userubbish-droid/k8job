@@ -85,10 +85,7 @@ function kiosk_stmt_fmt_in(float $v): string {
             <div class="page-wrap" style="max-width: 100%;">
                 <div class="page-header">
                     <h2>Kiosk Statement</h2>
-                    <p class="breadcrumb">
-                        <a href="dashboard.php">首页</a><span>·</span>
-                        <span>Kiosk Statement</span>
-                    </p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
 
                 <div class="card">

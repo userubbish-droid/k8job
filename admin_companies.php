@@ -165,11 +165,7 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
             <div class="page-wrap">
                 <div class="page-header">
                     <h2>分公司管理</h2>
-                    <p class="breadcrumb">
-                        <a href="dashboard.php">首页</a><span>·</span>
-                        <a href="admin_users.php">用户管理</a><span>·</span>
-                        <span>分公司（仅平台 big boss）</span>
-                    </p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
 
                 <div class="companies-toolbar">

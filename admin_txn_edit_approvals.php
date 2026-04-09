@@ -118,7 +118,7 @@ try {
         <div class="page-wrap" style="max-width: 1200px;">
             <div class="page-header">
                 <h2>流水修改待批准</h2>
-                <p class="breadcrumb"><a href="dashboard.php">首页</a></p>
+                <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
             </div>
             <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
             <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>

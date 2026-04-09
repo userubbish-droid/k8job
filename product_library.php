@@ -191,12 +191,7 @@ try {
     <div class="page-wrap" style="max-width: 100%;">
         <div class="page-header">
             <h2><?= htmlspecialchars(__('nav_product_accounts'), ENT_QUOTES, 'UTF-8') ?></h2>
-            <p class="breadcrumb">
-                <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
-                <a href="customers.php"><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?></a>
-                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php"><?= htmlspecialchars(__('nav_new_customer'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-                <?php if ($is_admin): ?><span>·</span><a href="admin_products.php"><?= htmlspecialchars(__('pl_admin_products'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-            </p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
 
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>

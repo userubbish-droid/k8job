@@ -53,7 +53,7 @@ try {
     <div class="page-wrap" style="max-width: 860px;">
         <div class="page-header">
             <h2>产品/平台管理</h2>
-            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="admin_banks.php">银行管理</a><span>·</span><a href="admin_users.php">用户管理</a></p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>

@@ -125,11 +125,7 @@ if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
         <div class="page-wrap" style="max-width: 1160px;">
             <div class="page-header">
                 <h2><?= htmlspecialchars(__('nav_customer_report'), ENT_QUOTES, 'UTF-8') ?></h2>
-                <p class="breadcrumb">
-                    <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a>
-                    <span>·</span>
-                    <span><?= htmlspecialchars(__('nav_customer_report'), ENT_QUOTES, 'UTF-8') ?></span>
-                </p>
+                <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
             </div>
 
             <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>

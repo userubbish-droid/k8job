@@ -56,9 +56,7 @@ try {
             <div class="page-wrap">
                 <div class="page-header">
                     <h2><?= htmlspecialchars(__('cust_export_log_title'), ENT_QUOTES, 'UTF-8') ?></h2>
-                    <p class="breadcrumb">
-                        <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a>
-                    </p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                 </div>
                 <?php if ($log_err): ?>
                     <div class="alert alert-error"><?= htmlspecialchars($log_err, ENT_QUOTES, 'UTF-8') ?></div>

@@ -143,6 +143,77 @@ function send_pending_customer_notify(PDO $pdo, int $company_id = 0) {
     }
 }
 
+/**
+ * Member 新建客户时，银行资料（bank_details）与本公司已有客户完全相同：额外发 Telegram 提醒管理员。
+ */
+function send_member_duplicate_bank_customer_notify(
+    PDO $pdo,
+    int $company_id,
+    string $member_username,
+    string $new_customer_code,
+    string $existing_customer_code,
+    string $bank_details,
+    array $existing_customer_codes = [],
+    array $matched_prefixes7 = []
+): void {
+    global $NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $NOTIFY_BASE_URL;
+    if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {
+        return;
+    }
+    if ($company_id <= 0 || $bank_details === '') {
+        return;
+    }
+
+    $bank_show = $bank_details;
+    if (function_exists('mb_strlen') && mb_strlen($bank_show, 'UTF-8') > 500) {
+        $bank_show = mb_substr($bank_show, 0, 500, 'UTF-8') . '…';
+    } elseif (strlen($bank_show) > 500) {
+        $bank_show = substr($bank_show, 0, 500) . '…';
+    }
+
+    $co = '';
+    try {
+        $st = $pdo->prepare("SELECT code FROM companies WHERE id = ? LIMIT 1");
+        $st->execute([$company_id]);
+        $r = $st->fetch(PDO::FETCH_ASSOC);
+        if ($r) {
+            $co = trim((string)($r['code'] ?? ''));
+        }
+    } catch (Throwable $e) {
+    }
+
+    $who = $member_username !== '' ? $member_username : '(member)';
+    $text = "⚠️ 会员新建客户：银行号码前 7 位重复\n";
+    if ($co !== '') {
+        $text .= "公司：{$co}\n";
+    }
+    $text .= "提交会员：{$who}\n";
+    $text .= "新客户代码：" . trim($new_customer_code) . "\n";
+    $codes_line = trim($existing_customer_code);
+    if (!empty($existing_customer_codes)) {
+        $existing_customer_codes = array_values(array_unique(array_map('strval', $existing_customer_codes)));
+        $codes_line = implode(',', array_filter($existing_customer_codes, function($x){ return trim((string)$x) !== ''; }));
+    }
+    if ($codes_line !== '') {
+        $text .= "匹配客户代码：{$codes_line}\n";
+    }
+    if (!empty($matched_prefixes7)) {
+        $matched_prefixes7 = array_values(array_unique(array_map('strval', $matched_prefixes7)));
+        $pref_line = implode(',', array_filter($matched_prefixes7, function($x){ return trim((string)$x) !== ''; }));
+        if ($pref_line !== '') {
+            $text .= "匹配前7位：{$pref_line}\n";
+        }
+    }
+    $text .= "银行资料：{$bank_show}";
+    if (!empty($NOTIFY_BASE_URL)) {
+        $text .= "\n" . rtrim($NOTIFY_BASE_URL, '/') . '/admin_customer_approvals.php';
+    } else {
+        $text .= "\n请登录后台处理客户审核。";
+    }
+
+    send_telegram_message($NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $text);
+}
+
 function send_pending_txn_edit_request_notify(PDO $pdo, int $company_id = 0, int $request_id = 0) {
     global $NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $NOTIFY_BASE_URL;
     if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {

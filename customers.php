@@ -483,13 +483,7 @@ if ($can_export_customers_csv) {
     <div class="page-wrap">
         <div class="page-header">
             <h2><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?></h2>
-            <p class="breadcrumb">
-                <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a>
-                <?php if (has_permission('transaction_create')): ?><span>·</span><a href="transaction_create.php"><?= htmlspecialchars(__('nav_go_add_transaction'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php"><?= htmlspecialchars(__('nav_new_customer'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-                <?php if (has_permission('product_library')): ?><span>·</span><a href="product_library.php"><?= htmlspecialchars(__('nav_product_accounts'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-                <?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php"><?= htmlspecialchars(__('nav_option_sets'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-            </p>
+            <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
         </div>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>

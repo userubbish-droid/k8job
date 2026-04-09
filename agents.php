@@ -415,9 +415,7 @@ try {
                     </div>
                     <?php else: ?>
                     <h2><?= htmlspecialchars(__('perm_agent'), ENT_QUOTES, 'UTF-8') ?></h2>
-                    <p class="breadcrumb">
-                        <a href="dashboard.php"><?= htmlspecialchars(__('agent_breadcrumb_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span><?= htmlspecialchars(__('agent_breadcrumb_sub'), ENT_QUOTES, 'UTF-8') ?>
-                    </p>
+                    <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
                     <?php endif; ?>
                 </div>
                 <?php
