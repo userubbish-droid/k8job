@@ -6,6 +6,12 @@ $sidebar_current = 'customers';
 
 $company_id = current_company_id();
 
+// bonus_flag 列（no bonus / scam receipt）
+try {
+    $pdo->exec("ALTER TABLE customers ADD COLUMN bonus_flag VARCHAR(32) NULL DEFAULT NULL AFTER bank_details");
+} catch (Throwable $e) {
+}
+
 $id = (int)($_GET['id'] ?? 0);
 if ($id <= 0) {
     header('Location: customers.php');
@@ -13,11 +19,11 @@ if ($id <= 0) {
 }
 
 try {
-    $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
+    $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
     $row->execute([$id, $company_id]);
     $row = $row->fetch();
 } catch (Throwable $e) {
-    $stmt = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at FROM customers WHERE id = ? AND company_id = ?");
+    $stmt = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at FROM customers WHERE id = ? AND company_id = ?");
     $stmt->execute([$id, $company_id]);
     $row = $stmt->fetch();
     if ($row) $row['recommend'] = '';
@@ -110,16 +116,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
     $remark = trim($_POST['remark'] ?? '');
     $register_date = trim($_POST['register_date'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
+    $bonus_flag_raw = trim((string)($_POST['bonus_flag'] ?? ''));
+    $bonus_flag = in_array($bonus_flag_raw, ['no_bonus', 'scam_receipt'], true) ? $bonus_flag_raw : null;
     $recommend = trim($_POST['recommend'] ?? '');
 
     if ($code === '') {
         $err = '客户代码不能为空。';
     } else {
         try {
-            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, recommend=? WHERE id=? AND company_id=?");
-            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $recommend !== '' ? $recommend : null, $id, $company_id]);
+            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, bonus_flag=?, recommend=? WHERE id=? AND company_id=?");
+            $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $bonus_flag, $recommend !== '' ? $recommend : null, $id, $company_id]);
             $msg = '已保存。';
-            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
+            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
             $row->execute([$id, $company_id]);
             $row = $row->fetch();
         } catch (Throwable $e) {
@@ -178,6 +186,15 @@ if ($display_register_date === '' && !empty($row['created_at'])) {
                         <label>CONTACT</label>
                         <input name="phone" class="form-control" value="<?= htmlspecialchars($row['phone'] ?? '') ?>">
                     </div>
+                </div>
+                <div class="form-group">
+                    <label><?= app_lang() === 'en' ? 'Flag' : '标记' ?></label>
+                    <?php $bf = trim((string)($row['bonus_flag'] ?? '')); ?>
+                    <select name="bonus_flag" class="form-control">
+                        <option value=""><?= app_lang() === 'en' ? '-- None --' : '— 无 —' ?></option>
+                        <option value="no_bonus" <?= $bf === 'no_bonus' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'No bonus' : 'No bonus' ?></option>
+                        <option value="scam_receipt" <?= $bf === 'scam_receipt' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'Scam receipt' : 'Scam receipt' ?></option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label>BANK DETAILS</label>

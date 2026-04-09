@@ -10,6 +10,12 @@ $need_confirm = false;
 $confirm_message = '';
 $company_id = current_company_id();
 
+// bonus_flag 列（no bonus / scam receipt）
+try {
+    $pdo->exec("ALTER TABLE customers ADD COLUMN bonus_flag VARCHAR(32) NULL DEFAULT NULL AFTER bank_details");
+} catch (Throwable $e) {
+}
+
 // 建议下一个客户代码：按现有 C001、C009 等递增，下一个为 C010
 $suggested_code = 'C001';
 try {
@@ -32,6 +38,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $phone = trim($_POST['phone'] ?? '');
     $remark = trim($_POST['remark'] ?? '');
     $bank_details = trim($_POST['bank_details'] ?? '');
+    $bonus_flag_raw = trim((string)($_POST['bonus_flag'] ?? ''));
+    $bonus_flag = in_array($bonus_flag_raw, ['no_bonus', 'scam_receipt'], true) ? $bonus_flag_raw : null;
     $recommend = trim($_POST['recommend'] ?? '');
     $confirm_override = isset($_POST['confirm_override']) && (string)$_POST['confirm_override'] === '1';
 
@@ -67,7 +75,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $status = ($is_member_actor && !empty($conflicts)) ? 'pending' : 'approved';
                 $approved_by = $status === 'approved' ? (int)($_SESSION['user_id'] ?? 0) : null;
                 $approved_at = $status === 'approved' ? date('Y-m-d H:i:s') : null;
-                $stmt = $pdo->prepare("INSERT INTO customers (company_id, code, name, phone, remark, created_by, register_date, bank_details, recommend, status, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $pdo->prepare("INSERT INTO customers (company_id, code, name, phone, remark, created_by, register_date, bank_details, bonus_flag, recommend, status, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([
                     $company_id,
                     $code,
@@ -77,6 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     (int)($_SESSION['user_id'] ?? 0),
                     $register_date,
                     $bank_details !== '' ? $bank_details : null,
+                    $bonus_flag,
                     $recommend !== '' ? $recommend : null,
                     $status,
                     $approved_by,
@@ -200,6 +209,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         <div class="form-group">
                             <label><?= app_lang() === 'en' ? 'Contact' : '联系电话' ?></label>
                             <input name="phone" class="form-control" placeholder="CONTACT" value="<?= htmlspecialchars($_POST['phone'] ?? '') ?>">
+                        </div>
+                        <div class="form-group">
+                            <label><?= app_lang() === 'en' ? 'Flag' : '标记' ?></label>
+                            <?php $bf_post = trim((string)($_POST['bonus_flag'] ?? '')); ?>
+                            <select name="bonus_flag" class="form-control">
+                                <option value=""><?= app_lang() === 'en' ? '-- None --' : '— 无 —' ?></option>
+                                <option value="no_bonus" <?= $bf_post === 'no_bonus' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'No bonus' : 'No bonus' ?></option>
+                                <option value="scam_receipt" <?= $bf_post === 'scam_receipt' ? 'selected' : '' ?>><?= app_lang() === 'en' ? 'Scam receipt' : 'Scam receipt' ?></option>
+                            </select>
                         </div>
                         <div class="form-group">
                             <label><?= app_lang() === 'en' ? 'Bank Details' : '银行资料' ?></label>

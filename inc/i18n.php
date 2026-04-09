@@ -699,6 +699,7 @@ function i18n_dictionary(): array
         'cust_csv_free' => ['zh' => '赠送', 'en' => 'FREE'],
         'cust_csv_free_withdraw' => ['zh' => '免费出款', 'en' => 'FREE WITHDRAW'],
         'cust_csv_bonus' => ['zh' => '红利', 'en' => 'BONUS'],
+        'cust_csv_burn' => ['zh' => 'Burn', 'en' => 'BURN'],
         'cust_csv_deposit_month' => ['zh' => '本月入款', 'en' => 'DEPOSIT (MONTH)'],
         'cust_csv_withdraw_month' => ['zh' => '本月出款', 'en' => 'WITHDRAW (MONTH)'],
         'cust_csv_regular' => ['zh' => '等级', 'en' => 'REGULAR'],

@@ -19,7 +19,7 @@ $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'bo
 $can_view_contact_full = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_MEMBER_CONTACT));
 $can_view_total_dp_wd = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_CUSTOMER_TOTAL_DP_WD));
 $can_export_customers_csv = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
-$customers_list_colspan = 14 + ($can_view_total_dp_wd ? 2 : 0) + ($is_admin ? 2 : 0);
+$customers_list_colspan = 15 + ($can_view_total_dp_wd ? 2 : 0) + ($is_admin ? 2 : 0);
 $company_id = current_company_id();
 $has_customer_status = false;
 try {
@@ -122,14 +122,17 @@ $rows = [];
 $balance_by_code = [];
 $all_deposit_by_code = [];
 $all_withdraw_by_code = [];
+$all_burn_by_code = [];
 $all_rebate_by_code = [];
 $all_free_by_code = [];
 $all_free_withdraw_by_code = [];
 $all_bonus_by_code = [];
 $month_deposit_by_code = [];
 $month_withdraw_by_code = [];
+$month_burn_by_code = [];
 $agent_range_dp = [];
 $agent_range_wd = [];
+$agent_range_burn = [];
 try {
     $where = [];
     $params = [];
@@ -156,7 +159,7 @@ try {
         $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . " AND is_active = 1" . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
     }
     $sql = "SELECT c.id, c.code, c.name, c.phone, c.remark, c.is_active, c.created_at,
-                   c.register_date, c.bank_details, c.regular_customer, c.recommend, c.created_by,
+                   c.register_date, c.bank_details, c.bonus_flag, c.regular_customer, c.recommend, c.created_by,
                    u.username AS created_by_name
             FROM customers c
             LEFT JOIN users u ON c.created_by = u.id
@@ -165,9 +168,12 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
+    // Balance：DEPOSIT − WITHDRAW − BURN（Burn 不计入 Withdraw 列，独立扣减）
     try {
         $stmt = $pdo->prepare("SELECT code,
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS balance
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
+            - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)
+            - COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS balance
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
             GROUP BY code");
         $stmt->execute([$company_id]);
@@ -188,26 +194,27 @@ try {
     $all_withdraw_by_code = [];
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
+    // All-time DP/WD（Withdraw 不含 burn）
+    $stmt = $pdo->prepare("SELECT code,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
+        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+    $stmt->execute([$company_id]);
+    foreach ($stmt->fetchAll() as $r) {
+        $all_deposit_by_code[$r['code']] = (float)$r['ad'];
+        $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
+    }
+    // All-time Burn：WITHDRAW + FREE WITHDRAW 的 burn（独立列）
     try {
         $stmt = $pdo->prepare("SELECT code,
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS aw
+            COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS bb
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
         $stmt->execute([$company_id]);
         foreach ($stmt->fetchAll() as $r) {
-            $all_deposit_by_code[$r['code']] = (float)$r['ad'];
-            $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
+            $all_burn_by_code[$r['code']] = (float)$r['bb'];
         }
-    } catch (Throwable $eAw) {
-        $stmt = $pdo->prepare("SELECT code,
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
-            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
-        $stmt->execute([$company_id]);
-        foreach ($stmt->fetchAll() as $r) {
-            $all_deposit_by_code[$r['code']] = (float)$r['ad'];
-            $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
-        }
+    } catch (Throwable $eBurnAll) {
+        $all_burn_by_code = [];
     }
     $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
     $stmt->execute([$company_id]);
@@ -219,18 +226,11 @@ try {
     foreach ($stmt->fetchAll() as $r) {
         $all_free_by_code[$r['code']] = (float)$r['total'];
     }
-    try {
-        $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount + COALESCE(burn, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
-        $stmt->execute([$company_id]);
-        foreach ($stmt->fetchAll() as $r) {
-            $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
-        }
-    } catch (Throwable $eFwd) {
-        $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
-        $stmt->execute([$company_id]);
-        foreach ($stmt->fetchAll() as $r) {
-            $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
-        }
+    // FREE WITHDRAW：不含 burn（burn 另算到 Burn 列）
+    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+    $stmt->execute([$company_id]);
+    foreach ($stmt->fetchAll() as $r) {
+        $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
     }
     $stmt = $pdo->prepare("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
     $stmt->execute([$company_id]);
@@ -239,74 +239,75 @@ try {
     }
     $month_start = date('Y-m-01');
     $month_end = date('Y-m-t');
+    // Month DP/WD（Withdraw 不含 burn）
+    $stmt = $pdo->prepare("SELECT code,
+        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
+        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
+        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
+    $stmt->execute([$company_id, $month_start, $month_end]);
+    foreach ($stmt->fetchAll() as $r) {
+        $month_deposit_by_code[$r['code']] = (float)$r['md'];
+        $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
+    }
+    // Month Burn（独立列）
     try {
         $stmt = $pdo->prepare("SELECT code,
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS mw
+            COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS mb
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
         $stmt->execute([$company_id, $month_start, $month_end]);
         foreach ($stmt->fetchAll() as $r) {
-            $month_deposit_by_code[$r['code']] = (float)$r['md'];
-            $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
+            $month_burn_by_code[$r['code']] = (float)$r['mb'];
         }
-    } catch (Throwable $eMw) {
-        $stmt = $pdo->prepare("SELECT code,
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
-            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
-        $stmt->execute([$company_id, $month_start, $month_end]);
-        foreach ($stmt->fetchAll() as $r) {
-            $month_deposit_by_code[$r['code']] = (float)$r['md'];
-            $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
-        }
+    } catch (Throwable $eBurnMon) {
+        $month_burn_by_code = [];
     }
     if ($agent_pnl_by_range) {
         // 与 agents.php Win/Loss 同源：按 TRIM(code) 汇总区间内 DEPOSIT−WITHDRAW
+        $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+            AND day >= ? AND day <= ?
+            GROUP BY TRIM(code)");
+        $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
+        foreach ($stmt->fetchAll() as $r) {
+            $ck = trim((string)($r['code'] ?? ''));
+            if ($ck === '') {
+                continue;
+            }
+            $agent_range_dp[$ck] = (float)$r['ad'];
+            $agent_range_wd[$ck] = (float)$r['aw'];
+        }
         try {
             $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
-                COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
-                COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS aw
+                COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS bb
                 FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
                 AND day >= ? AND day <= ?
                 GROUP BY TRIM(code)");
             $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
             foreach ($stmt->fetchAll() as $r) {
                 $ck = trim((string)($r['code'] ?? ''));
-                if ($ck === '') {
-                    continue;
-                }
-                $agent_range_dp[$ck] = (float)$r['ad'];
-                $agent_range_wd[$ck] = (float)$r['aw'];
+                if ($ck === '') continue;
+                $agent_range_burn[$ck] = (float)$r['bb'];
             }
-        } catch (Throwable $ePnl) {
-            $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
-                COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
-                COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
-                FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
-                AND day >= ? AND day <= ?
-                GROUP BY TRIM(code)");
-            $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
-            foreach ($stmt->fetchAll() as $r) {
-                $ck = trim((string)($r['code'] ?? ''));
-                if ($ck === '') {
-                    continue;
-                }
-                $agent_range_dp[$ck] = (float)$r['ad'];
-                $agent_range_wd[$ck] = (float)$r['aw'];
-            }
+        } catch (Throwable $ePnlBurn) {
+            $agent_range_burn = [];
         }
     }
     } catch (Throwable $e) {
     $rows = [];
     $all_deposit_by_code = [];
     $all_withdraw_by_code = [];
+    $all_burn_by_code = [];
     $all_rebate_by_code = [];
     $all_free_by_code = [];
     $all_free_withdraw_by_code = [];
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
+    $month_burn_by_code = [];
     $agent_range_dp = [];
     $agent_range_wd = [];
+    $agent_range_burn = [];
     $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? __('cust_err_migrate_recommend') : __('cust_err_migrate_detail')) . ' (' . $e->getMessage() . ')';
 }
 
@@ -358,6 +359,7 @@ if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
     $hdr[] = __('cust_csv_rebate');
     $hdr[] = __('cust_csv_free');
     $hdr[] = __('cust_csv_free_withdraw');
+    $hdr[] = __('cust_csv_burn');
     $hdr[] = __('cust_csv_bonus');
     $hdr[] = __('cust_csv_deposit_month');
     $hdr[] = __('cust_csv_withdraw_month');
@@ -389,12 +391,14 @@ if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
         $all_rebate = $all_rebate_by_code[$code] ?? 0;
         $all_free = $all_free_by_code[$code] ?? 0;
         $all_fw = $all_free_withdraw_by_code[$code] ?? 0;
+        $all_burn = $all_burn_by_code[$code] ?? 0;
         $all_bonus = $all_bonus_by_code[$code] ?? 0;
         $mon_dp = $month_deposit_by_code[$code] ?? 0;
         $mon_wd = $month_withdraw_by_code[$code] ?? 0;
         $row[] = number_format($all_rebate, 2, '.', '');
         $row[] = number_format($all_free, 2, '.', '');
         $row[] = number_format($all_fw, 2, '.', '');
+        $row[] = number_format($all_burn, 2, '.', '');
         $row[] = number_format($all_bonus, 2, '.', '');
         $row[] = number_format($mon_dp, 2, '.', '');
         $row[] = number_format($mon_wd, 2, '.', '');
@@ -467,6 +471,9 @@ if ($can_export_customers_csv) {
             margin-bottom: 10px;
         }
         .cust-list-title-row h3 { margin: 0; }
+        /* customer flags */
+        .cust-flag-no-bonus td { background: #fef9c3 !important; } /* light yellow */
+        .cust-flag-scam td { background: #fee2e2 !important; } /* soft red */
     </style>
 </head>
 <body>
@@ -579,6 +586,7 @@ if ($can_export_customers_csv) {
                         <th>Rebate</th>
                         <th>Free</th>
                         <th>Free Withdraw</th>
+                        <th>Burn</th>
                         <th>Bonus</th>
                         <th>deposit</th>
                         <th>withdraw</th>
@@ -592,16 +600,19 @@ if ($can_export_customers_csv) {
                 <tbody>
                 <?php foreach ($rows as $r):
                     $code = $r['code'];
+                    $flag = trim((string)($r['bonus_flag'] ?? ''));
+                    $flag_cls = $flag === 'no_bonus' ? 'cust-flag-no-bonus' : ($flag === 'scam_receipt' ? 'cust-flag-scam' : '');
                     $all_dp = $all_deposit_by_code[$code] ?? 0;
                     $all_wd = $all_withdraw_by_code[$code] ?? 0;
                     $all_rebate = $all_rebate_by_code[$code] ?? 0;
                     $all_free = $all_free_by_code[$code] ?? 0;
                     $all_fw = $all_free_withdraw_by_code[$code] ?? 0;
+                    $all_burn = $all_burn_by_code[$code] ?? 0;
                     $all_bonus = $all_bonus_by_code[$code] ?? 0;
                     $mon_dp = $month_deposit_by_code[$code] ?? 0;
                     $mon_wd = $month_withdraw_by_code[$code] ?? 0;
                 ?>
-                    <tr>
+                    <tr class="<?= $flag_cls ?>">
                         <td><a href="customer_edit.php?id=<?= (int)$r['id'] ?>"><?= htmlspecialchars($code) ?></a></td>
                         <td><?= htmlspecialchars($r['register_date'] ?? '') ?></td>
                         <td><?= htmlspecialchars($r['name'] ?? '') ?></td>
@@ -616,6 +627,7 @@ if ($can_export_customers_csv) {
                         <td class="num"><?= number_format($all_rebate, 2) ?></td>
                         <td class="num"><?= number_format($all_free, 2) ?></td>
                         <td class="num"><?= number_format($all_fw, 2) ?></td>
+                        <td class="num"><?= number_format($all_burn, 2) ?></td>
                         <td class="num"><?= number_format($all_bonus, 2) ?></td>
                         <td class="num"><?= number_format($mon_dp, 2) ?></td>
                         <td class="num"><?= number_format($mon_wd, 2) ?></td>

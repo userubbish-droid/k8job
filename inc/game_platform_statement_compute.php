@@ -71,10 +71,10 @@ try {
 }
 
 try {
-    $line_with_burn = "(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) + COALESCE(t.burn,0)";
+    $line = "(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END)";
     $stmt = $pdo->prepare("SELECT {$gpc_gp_key_sql} AS gp,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN $line_with_burn ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN $line_with_burn ELSE 0 END), 0) AS topup,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN $line + (CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN COALESCE(t.burn,0) ELSE 0 END) ELSE 0 END), 0) AS ti,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN $line ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'WITHDRAW' THEN t.amount + COALESCE(t.burn,0) WHEN TRIM(COALESCE(t.mode,'')) = 'EXPENSE' THEN t.amount ELSE 0 END), 0) AS tout
         FROM transactions t WHERE t.company_id = ? AND t.day < ? AND t.status = 'approved' AND t.deleted_at IS NULL GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from]);
@@ -128,10 +128,10 @@ try {
 }
 
 try {
-    $line_with_burn = "(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) + COALESCE(t.burn,0)";
+    $line = "(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END)";
     $stmt = $pdo->prepare("SELECT {$gpc_gp_key_sql} AS gp,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN $line_with_burn ELSE 0 END), 0) AS total_in,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN $line_with_burn ELSE 0 END), 0) AS topup,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN $line + (CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN COALESCE(t.burn,0) ELSE 0 END) ELSE 0 END), 0) AS total_in,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN $line ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'WITHDRAW' THEN t.amount + COALESCE(t.burn,0) WHEN TRIM(COALESCE(t.mode,'')) = 'EXPENSE' THEN t.amount ELSE 0 END), 0) AS total_out
         FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
         GROUP BY gp");
@@ -156,12 +156,12 @@ try {
 /** 区间内按模式拆分（与 statement In 使用同一套 total/amount+bonus 规则） */
 $range_breakdown_product = [];
 try {
-    $line = '(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) + COALESCE(t.burn,0)';
+    $line = '(CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END)';
     $stmt = $pdo->prepare("SELECT {$gpc_gp_key_sql} AS gp,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'DEPOSIT' THEN $line ELSE 0 END), 0) AS dep,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'REBATE' THEN $line ELSE 0 END), 0) AS reb,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE' THEN $line ELSE 0 END), 0) AS fr,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN $line ELSE 0 END), 0) AS fwd,
+        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN $line + COALESCE(t.burn,0) ELSE 0 END), 0) AS fwd,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW')
             THEN COALESCE(t.bonus,0) + GREATEST(0, $line - t.amount - COALESCE(t.bonus,0)) ELSE 0 END), 0) AS bns
         FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
