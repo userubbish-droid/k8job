@@ -473,7 +473,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                 $perm_groups = [
                                     __('nav_home') => ['home_dashboard', 'statement_report'],
                                     __('nav_statement') => ['statement_balance'],
-                                    __('nav_transactions') => ['transaction_list', 'transaction_edit_request'],
+                                    __('nav_transactions') => ['transaction_list'],
                                     __('nav_add') => ['transaction_create', 'customer_create'],
                                     __('nav_expense') => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
                                     __('nav_rebate') => ['rebate', 'agent'],
@@ -517,7 +517,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                 </div>
                                 <?php endforeach; ?>
                             </div>
-                            <?php if ($actor_can_set_contact_view): ?>
                             <div class="nav-group perm-other-group" data-group="other">
                                 <button type="button" class="nav-group-toggle nav-item" id="perm-toggle-other-m" aria-expanded="false" aria-controls="perm-group-sub-other-m">
                                     <span class="nav-icon" aria-hidden="true"></span>
@@ -525,6 +524,13 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                     <span class="nav-group-chevron" aria-hidden="true">▸</span>
                                 </button>
                                 <div class="nav-group-sub" id="perm-group-sub-other-m" role="region" aria-labelledby="perm-toggle-other-m" style="display:none">
+                                    <?php if (array_key_exists('transaction_edit_request', $options)): ?>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="perms[]" value="transaction_edit_request" id="perm_other_tx_edit_req_m" <?= in_array('transaction_edit_request', $current, true) ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="perm_other_tx_edit_req_m"><?= htmlspecialchars((string)($options['transaction_edit_request'] ?? 'transaction_edit_request'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($actor_can_set_contact_view): ?>
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
                                         <label class="perm-label" for="view_member_contact_m"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -533,9 +539,9 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                         <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_m" <?= $member_dp_wd_has_view ? 'checked' : '' ?>>
                                         <label class="perm-label" for="view_customer_total_dp_wd_m"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
-                            <?php endif; ?>
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                         </div>
@@ -555,7 +561,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                 <label class="perm-label" for="admin_dash_month"><?= htmlspecialchars(__('perm_allow_dashboard_month'), ENT_QUOTES, 'UTF-8') ?></label>
                             </div>
                             <?php endif; ?>
-                            <?php if ($actor_can_set_contact_view): ?>
                             <div class="nav-group perm-other-group" data-group="other-admin">
                                 <button type="button" class="nav-group-toggle nav-item" id="perm-toggle-other-a" aria-expanded="false" aria-controls="perm-group-sub-other-a">
                                     <span class="nav-icon" aria-hidden="true"></span>
@@ -563,6 +568,13 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                     <span class="nav-group-chevron" aria-hidden="true">▸</span>
                                 </button>
                                 <div class="nav-group-sub" id="perm-group-sub-other-a" role="region" aria-labelledby="perm-toggle-other-a" style="display:none">
+                                    <?php if (array_key_exists('transaction_edit_request', $options)): ?>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="perms[]" value="transaction_edit_request" id="perm_other_tx_edit_req_a" <?= in_array('transaction_edit_request', $current, true) ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="perm_other_tx_edit_req_a"><?= htmlspecialchars((string)($options['transaction_edit_request'] ?? 'transaction_edit_request'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($actor_can_set_contact_view): ?>
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_a" <?= $contact_user_has_view ? 'checked' : '' ?>>
                                         <label class="perm-label" for="view_member_contact_a"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -571,9 +583,9 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                         <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_a" <?= $admin_dp_wd_has_view ? 'checked' : '' ?>>
                                         <label class="perm-label" for="view_customer_total_dp_wd_a"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
+                                    <?php endif; ?>
                                 </div>
                             </div>
-                            <?php endif; ?>
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                         <?php endif; ?>
