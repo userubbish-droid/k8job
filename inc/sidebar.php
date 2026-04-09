@@ -311,7 +311,7 @@ window.__APP_I18N = <?= json_encode([
 (function(){
     var btn = document.getElementById('sidebar-toggle');
     var overlay = document.getElementById('sidebar-overlay');
-    if (!btn || !overlay) return;
+    if (btn && overlay) {
     // 网页版（桌面）默认展开侧栏；手机版默认收起
     if (window.innerWidth > 768) document.body.classList.add('sidebar-open');
     function syncAria() { overlay.setAttribute('aria-hidden', document.body.classList.contains('sidebar-open') ? 'false' : 'true'); }
@@ -322,18 +322,26 @@ window.__APP_I18N = <?= json_encode([
     var closeBtn = document.getElementById('sidebar-close');
     if (closeBtn) closeBtn.addEventListener('click', closeSidebar);
     document.querySelectorAll('.dashboard-sidebar a').forEach(function(a){ a.addEventListener('click', function(){ if (window.innerWidth <= 768) closeSidebar(); }); });
-    document.querySelectorAll('.nav-group-toggle').forEach(function(btn){
-        var sub = btn.getAttribute('aria-controls') && document.getElementById(btn.getAttribute('aria-controls'));
-        var chevron = btn.querySelector('.nav-group-chevron');
-        if (!sub) return;
-        btn.addEventListener('click', function(){
-            var expanded = btn.getAttribute('aria-expanded') === 'true';
-            btn.setAttribute('aria-expanded', !expanded);
-            sub.style.display = !expanded ? 'block' : 'none';
-            if (chevron) chevron.textContent = !expanded ? '▾' : '▸';
+    }
+    function bindNavGroupToggles() {
+        document.querySelectorAll('.nav-group-toggle').forEach(function(btn){
+            var sub = btn.getAttribute('aria-controls') && document.getElementById(btn.getAttribute('aria-controls'));
+            var chevron = btn.querySelector('.nav-group-chevron');
+            if (!sub) return;
+            btn.addEventListener('click', function(){
+                var expanded = btn.getAttribute('aria-expanded') === 'true';
+                btn.setAttribute('aria-expanded', !expanded);
+                sub.style.display = !expanded ? 'block' : 'none';
+                if (chevron) chevron.textContent = !expanded ? '▾' : '▸';
+            });
+            if (chevron && btn.getAttribute('aria-expanded') === 'false') chevron.textContent = '▸';
         });
-        if (chevron && btn.getAttribute('aria-expanded') === 'false') chevron.textContent = '▸';
-    });
+    }
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', bindNavGroupToggles);
+    } else {
+        bindNavGroupToggles();
+    }
 
     // 全站统一弹窗：alert / confirm
     var modalMask = document.getElementById('app-modal-mask');

@@ -256,173 +256,96 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
     <title><?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
-        /* 右侧权限区：视觉对齐 .dashboard-sidebar（深蓝渐变 + 白字 + 分组缩进） */
-        .perm-detail-sidebar {
-            border-radius: 14px;
-            overflow: hidden;
-            box-shadow: 12px 0 40px rgba(8, 12, 28, 0.45);
-            background:
-                radial-gradient(200px 200px at 10% 8%, rgba(139, 92, 246, 0.32) 0%, transparent 72%),
-                radial-gradient(260px 240px at 100% 100%, rgba(167, 139, 250, 0.14) 0%, transparent 70%),
-                linear-gradient(195deg, #121a2e 0%, #151d32 45%, #0c1222 100%);
-            border: 1px solid rgba(0, 0, 0, 0.28);
-        }
-        .perm-detail-sidebar__title {
-            margin: 0;
-            padding: 16px 20px 14px;
-            font-size: 16px;
-            font-weight: 600;
-            color: #fff;
-            letter-spacing: 0.02em;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.12);
-        }
-        .perm-detail-sidebar__title span {
+        /* 右侧权限：与侧栏相同的分组 DOM / 折叠逻辑（nav-group-toggle + display），浅色主内容区样式 */
+        .perm-ui-detail-title { font-size: 15px; font-weight: 800; color: #0f172a; margin: 0 0 12px; }
+        .perm-ui-detail-title span {
             display: block;
             margin-top: 4px;
             font-size: 11px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 0.06em;
-            color: rgba(255, 255, 255, 0.55);
+            color: var(--muted);
         }
-        .perm-detail-sidebar--empty {
-            min-height: 120px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .perm-detail-sidebar__empty-text {
-            margin: 0;
-            padding: 28px 22px;
-            font-size: 14px;
-            line-height: 1.55;
-            color: rgba(255, 255, 255, 0.68);
-            text-align: center;
-        }
-        .perm-detail-sidebar .form-hint {
-            margin: 0 20px 16px;
-            color: rgba(255, 255, 255, 0.65) !important;
-            font-size: 13px;
-            line-height: 1.5;
-        }
-        .perm-detail-sidebar form { padding-bottom: 6px; }
-        .perm-detail-sidebar .perm-groups {
-            margin: 0;
-            padding: 6px 0 10px;
-            list-style: none;
+        .perm-nav-panel { margin: 0; }
+        .perm-nav-panel .perm-nav-groups { margin: 0; padding: 0; }
+        .perm-nav-panel .nav-group { border-bottom: 1px solid var(--border); }
+        .perm-nav-panel .nav-group:last-child { border-bottom: none; }
+        .perm-nav-panel .nav-group-toggle.nav-item {
             width: 100%;
-        }
-        .perm-detail-sidebar .perm-group {
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-        .perm-detail-sidebar .perm-group:last-child { border-bottom: none; }
-        .perm-detail-sidebar .perm-group-toggle {
-            width: calc(100% - 22px);
             box-sizing: border-box;
-            margin: 0 11px 5px 11px;
-            padding: 11px 18px;
+            margin: 0;
+            padding: 12px 4px 12px 0;
             display: flex;
             flex-direction: row;
             align-items: center;
-            border: none;
-            border-radius: var(--radius-md, 12px);
-            border-left: 3px solid transparent;
-            background: transparent;
-            color: rgba(255, 255, 255, 0.92);
-            font-size: 14px;
-            font-weight: 600;
             cursor: pointer;
             text-align: left;
-            transition: background 0.2s ease, color 0.2s ease;
+            background: none;
+            border: none;
+            font: inherit;
+            color: #0f172a;
+            font-size: 15px;
+            font-weight: 700;
+            justify-content: flex-start;
+            border-radius: var(--radius-sm, 8px);
         }
-        .perm-detail-sidebar .perm-group-toggle::before {
-            content: '';
+        .perm-nav-panel .nav-group-toggle.nav-item:hover { background: rgba(59, 130, 246, 0.06); }
+        .perm-nav-panel .nav-group-toggle .nav-group-label { flex: 1; }
+        .perm-nav-panel .nav-group-toggle .nav-icon {
             width: 18px;
             height: 18px;
             margin-right: 12px;
             border-radius: 6px;
-            background: rgba(255, 255, 255, 0.25);
+            background: rgba(15, 23, 42, 0.12);
             flex-shrink: 0;
         }
-        .perm-detail-sidebar .perm-group-toggle:hover {
-            background: rgba(255, 255, 255, 0.09);
-            color: #fff;
-        }
-        .perm-detail-sidebar .perm-group-chevron {
-            margin-left: auto;
-            color: rgba(255, 255, 255, 0.75);
-            font-weight: 900;
+        .perm-nav-panel .nav-group-chevron {
+            margin-left: 8px;
             font-size: 12px;
+            font-weight: 900;
+            color: var(--muted);
+            opacity: 0.95;
         }
-        .perm-detail-sidebar .perm-group-sub {
-            display: none;
-            padding: 0 0 6px 0;
-            margin: 2px 11px 8px 33px;
-            border-left: 2px solid rgba(129, 140, 248, 0.35);
+        .perm-nav-panel .nav-group-sub {
+            padding-left: 12px;
+            margin: 2px 0 10px 22px;
+            border-left: 2px solid rgba(99, 102, 241, 0.35);
         }
-        .perm-detail-sidebar .perm-group-sub.show { display: block; }
-        .perm-detail-sidebar .perm-item {
+        .perm-nav-panel .perm-perm-row {
             display: flex;
             align-items: center;
             gap: 12px;
             padding: 9px 14px;
             margin: 0 0 3px 0;
             border-radius: var(--radius-sm, 8px);
-            border-bottom: none;
-            transition: background 0.15s ease;
         }
-        .perm-detail-sidebar .perm-item:hover {
-            background: rgba(255, 255, 255, 0.06);
-        }
-        .perm-detail-sidebar .perm-item input[type="checkbox"] {
+        .perm-nav-panel .perm-perm-row:hover { background: rgba(99, 102, 241, 0.06); }
+        .perm-nav-panel .perm-perm-row input[type="checkbox"] {
             width: 18px;
             height: 18px;
             flex-shrink: 0;
-            accent-color: #a5b4fc;
             cursor: pointer;
         }
-        .perm-detail-sidebar .perm-label {
-            font-weight: 600;
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.9);
-            cursor: pointer;
-        }
-        .perm-detail-sidebar .perm-legacy {
-            color: rgba(255, 255, 255, 0.55);
-        }
-        .perm-detail-sidebar .perm-item-plain {
-            border: none;
-            margin: 10px 11px 0;
-            padding: 12px 18px;
-            border-top: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 0;
-        }
-        .perm-detail-sidebar .perm-item-plain:hover {
-            background: rgba(255, 255, 255, 0.05);
-        }
-        .perm-detail-sidebar .btn-primary {
-            display: block;
-            width: calc(100% - 22px);
-            margin: 14px 11px 12px;
-            padding: 12px 16px;
-            border-radius: var(--radius-md, 12px);
-            border: 1px solid rgba(165, 180, 252, 0.45);
-            background: linear-gradient(90deg, rgba(129, 140, 248, 0.42) 0%, rgba(77, 100, 248, 0.28) 100%);
-            color: #fff !important;
+        .perm-nav-panel .perm-label {
             font-weight: 600;
             font-size: 14px;
-            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            color: #1f2937;
             cursor: pointer;
-            transition: filter 0.15s ease, box-shadow 0.15s ease;
         }
-        .perm-detail-sidebar .btn-primary:hover {
-            filter: brightness(1.06);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        .perm-nav-panel .perm-legacy { color: var(--muted); }
+        .perm-nav-panel .perm-item-plain {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 0;
+            margin-top: 8px;
+            border-top: 1px solid var(--border);
         }
+        .perm-nav-panel .perm-item-plain input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; }
+        .perm-nav-panel .btn-primary { margin-top: 16px; }
         @media (max-width: 768px) {
-            .perm-detail-sidebar .perm-group-toggle { width: calc(100% - 16px); margin-left: 8px; margin-right: 8px; }
-            .perm-detail-sidebar .perm-group-sub { margin-left: 26px; margin-right: 8px; }
-            .perm-detail-sidebar .btn-primary { width: calc(100% - 16px); margin-left: 8px; margin-right: 8px; }
+            .perm-nav-panel .nav-group-sub { margin-left: 16px; }
         }
         .perm-ui-seg {
             display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;
@@ -519,12 +442,10 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                 </div>
                 <div>
                     <?php if ($pick_id <= 0 || !$pick_user_row): ?>
-                        <div class="perm-detail-sidebar perm-detail-sidebar--empty" role="region" aria-label="<?= htmlspecialchars(__('perm_select_user_hint'), ENT_QUOTES, 'UTF-8') ?>">
-                            <p class="perm-detail-sidebar__empty-text"><?= htmlspecialchars(__('perm_select_user_hint'), ENT_QUOTES, 'UTF-8') ?></p>
-                        </div>
+                        <p class="perm-ui-empty"><?= htmlspecialchars(__('perm_select_user_hint'), ENT_QUOTES, 'UTF-8') ?></p>
                     <?php elseif ($pick_role === 'member'): ?>
-                        <div class="perm-detail-sidebar" role="region" aria-label="<?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?>">
-                        <h3 class="perm-detail-sidebar__title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?><span><?= htmlspecialchars(__('perm_tab_member'), ENT_QUOTES, 'UTF-8') ?></span></h3>
+                        <div class="perm-nav-panel" role="region" aria-label="<?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?>">
+                        <h3 class="perm-ui-detail-title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?><span><?= htmlspecialchars(__('perm_tab_member'), ENT_QUOTES, 'UTF-8') ?></span></h3>
                         <form method="post">
                             <input type="hidden" name="action" value="save_perm_panel">
                             <input type="hidden" name="tab" value="<?= htmlspecialchars($perm_tab, ENT_QUOTES, 'UTF-8') ?>">
@@ -542,7 +463,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                 ];
                                 $group_id = 0;
                             ?>
-                            <ul class="perm-groups" id="perm-groups">
+                            <div class="perm-nav-groups" id="perm-groups">
                                 <?php foreach ($perm_groups as $glabel => $keys):
                                     $group_id++;
                                     $keys = array_values(array_filter($keys, static function ($k) use ($options) { return array_key_exists($k, $options); }));
@@ -556,26 +477,29 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                             break;
                                         }
                                     }
+                                    $toggle_id = 'perm-toggle-' . $group_id;
+                                    $sub_id = 'perm-group-sub-' . $group_id;
                                 ?>
-                                <li class="perm-group" data-group="<?= $group_id ?>">
-                                    <button type="button" class="perm-group-toggle" aria-expanded="<?= $expanded ? 'true' : 'false' ?>" aria-controls="perm-group-sub-<?= $group_id ?>">
-                                        <span><?= htmlspecialchars($glabel) ?></span>
-                                        <span class="perm-group-chevron" aria-hidden="true"><?= $expanded ? '▾' : '▸' ?></span>
+                                <div class="nav-group" data-group="<?= (int)$group_id ?>">
+                                    <button type="button" class="nav-group-toggle nav-item" id="<?= htmlspecialchars($toggle_id, ENT_QUOTES, 'UTF-8') ?>" aria-expanded="<?= $expanded ? 'true' : 'false' ?>" aria-controls="<?= htmlspecialchars($sub_id, ENT_QUOTES, 'UTF-8') ?>">
+                                        <span class="nav-icon" aria-hidden="true"></span>
+                                        <span class="nav-group-label"><?= htmlspecialchars($glabel) ?></span>
+                                        <span class="nav-group-chevron" aria-hidden="true"><?= $expanded ? '▾' : '▸' ?></span>
                                     </button>
-                                    <div class="perm-group-sub<?= $expanded ? ' show' : '' ?>" id="perm-group-sub-<?= $group_id ?>">
+                                    <div class="nav-group-sub" id="<?= htmlspecialchars($sub_id, ENT_QUOTES, 'UTF-8') ?>" role="region" aria-labelledby="<?= htmlspecialchars($toggle_id, ENT_QUOTES, 'UTF-8') ?>" style="display:<?= $expanded ? 'block' : 'none' ?>">
                                         <?php foreach ($keys as $key):
                                             $label = (string)($options[$key] ?? $key);
                                             $isLegacy = ($key === 'statement');
                                         ?>
-                                        <div class="perm-item">
+                                        <div class="perm-perm-row">
                                             <input type="checkbox" name="perms[]" value="<?= htmlspecialchars($key) ?>" id="perm_<?= htmlspecialchars($key) ?>" <?= in_array($key, $current, true) ? 'checked' : '' ?>>
                                             <label class="perm-label<?= $isLegacy ? ' perm-legacy' : '' ?>" for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
                                         </div>
                                         <?php endforeach; ?>
                                     </div>
-                                </li>
+                                </div>
                                 <?php endforeach; ?>
-                            </ul>
+                            </div>
                             <?php if ($actor_can_set_contact_view): ?>
                             <div class="perm-item perm-item-plain">
                                 <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
@@ -586,8 +510,8 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                         </form>
                         </div>
                     <?php elseif ($pick_role === 'admin'): ?>
-                        <div class="perm-detail-sidebar" role="region" aria-label="<?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?>">
-                        <h3 class="perm-detail-sidebar__title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?><span><?= htmlspecialchars(__('perm_tab_admin'), ENT_QUOTES, 'UTF-8') ?></span></h3>
+                        <div class="perm-nav-panel" role="region" aria-label="<?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?>">
+                        <h3 class="perm-ui-detail-title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?><span><?= htmlspecialchars(__('perm_tab_admin'), ENT_QUOTES, 'UTF-8') ?></span></h3>
                         <?php if (!$actor_can_set_admin_month && !$actor_can_set_contact_view): ?>
                             <p class="form-hint"><?= htmlspecialchars(__('perm_err_boss_only_admin_opts'), ENT_QUOTES, 'UTF-8') ?></p>
                         <?php else: ?>
@@ -618,21 +542,5 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
     </div>
         </main>
     </div>
-    <script>
-    (function(){
-        document.querySelectorAll('.perm-detail-sidebar .perm-group-toggle').forEach(function(btn){
-            var subId = btn.getAttribute('aria-controls');
-            var sub = subId ? document.getElementById(subId) : null;
-            var chev = btn.querySelector('.perm-group-chevron');
-            if (!sub) return;
-            btn.addEventListener('click', function(){
-                var expanded = btn.getAttribute('aria-expanded') === 'true';
-                btn.setAttribute('aria-expanded', expanded ? 'false' : 'true');
-                sub.classList.toggle('show', !expanded);
-                if (chev) chev.textContent = expanded ? '▸' : '▾';
-            });
-        });
-    })();
-    </script>
 </body>
 </html>
