@@ -473,7 +473,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                 $perm_groups = [
                                     __('nav_home') => ['home_dashboard', 'statement_report'],
                                     __('nav_statement') => ['statement_balance'],
-                                    __('nav_transactions') => ['transaction_list'],
+                                    __('nav_transactions') => ['transaction_list', 'transaction_edit_request'],
                                     __('nav_add') => ['transaction_create', 'customer_create'],
                                     __('nav_expense') => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
                                     __('nav_rebate') => ['rebate', 'agent'],
