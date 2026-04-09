@@ -55,24 +55,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt->execute([$company_id, $post_day_to, $code, $uid, $pct_val ?: null, $rebate_amount]);
                     }
                 }
-                $msg = count($given) ? '已标记所选客户为「已给」，返点金额已保存。' : '请勾选「已给了」再提交。';
+                $msg = count($given) ? __('rebate_msg_marked_given') : __('rebate_msg_check_given');
             } elseif ($action === 'cancel' && $is_admin) {
                 $code = trim($_POST['code'] ?? '');
                 if ($code !== '') {
                     $stmt = $pdo->prepare("DELETE FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? AND code = ?");
                     $stmt->execute([$company_id, $post_day_from, $post_day_to, $code]);
-                    $msg = '已取消该客户「已给」状态。';
+                    $msg = __('rebate_msg_cancel_given');
                 }
             } elseif ($action === 'cancel' && !$is_admin) {
-                $err = '仅管理员可取消。';
+                $err = __('rebate_err_admin_only_cancel');
             }
         } catch (Throwable $e) {
             if (strpos($e->getMessage(), 'rebate_given') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
-                $err = '请先在 phpMyAdmin 执行 migrate_rebate_given.sql 创建 rebate_given 表。';
+                $err = __('rebate_err_migrate_table');
             } elseif (strpos($e->getMessage(), 'Unknown column') !== false && strpos($e->getMessage(), 'rebate_pct') !== false) {
-                $err = '请执行 migrate_rebate_given_columns.sql 为 rebate_given 表添加 rebate_pct、rebate_amount 列。';
+                $err = __('rebate_err_migrate_columns');
             } else {
-                $err = '操作失败：' . $e->getMessage();
+                $err = __('rebate_err_op_failed') . $e->getMessage();
             }
         }
     }
@@ -132,11 +132,11 @@ $rows_display = $is_admin ? array_merge($rows_not_given, $rows_given) : $rows_no
 $rows_for_sum = $all_rows; // 合计用全部客户
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>返点 Rebate - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__('rebate_page_title'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
     .rebate-table th.num, .rebate-table td.num { text-align: right; }
@@ -172,8 +172,8 @@ $rows_for_sum = $all_rows; // 合计用全部客户
         <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
-            <h2>返点 Rebate</h2>
-            <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span><a href="transaction_create.php">记一笔</a></p>
+            <h2><?= htmlspecialchars(__('rebate_page_title'), ENT_QUOTES, 'UTF-8') ?></h2>
+            <p class="breadcrumb"><a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span><a href="transaction_create.php"><?= htmlspecialchars(__('nav_add_transaction'), ENT_QUOTES, 'UTF-8') ?></a></p>
         </div>
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
@@ -224,7 +224,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             <th class="num">winlose</th>
                             <th class="num">%</th>
                             <th class="num">rebate</th>
-                            <?php if ($is_admin): ?><th class="num">操作</th><?php endif; ?>
+                            <?php if ($is_admin): ?><th class="num"><?= htmlspecialchars(__('ui_col_actions'), ENT_QUOTES, 'UTF-8') ?></th><?php endif; ?>
                         </tr>
                     </thead>
                     <tbody>
@@ -242,10 +242,10 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                                     <?= htmlspecialchars($code) ?>
                                 <?php elseif ($no_rebate): ?>
                                     <label style="display:inline-flex;align-items:center;gap:6px;cursor:not-allowed;opacity:.9;">
-                                        <input type="checkbox" name="given[]" value="<?= htmlspecialchars($code) ?>" disabled title="Win/Lose 为负，不必给返点">
+                                        <input type="checkbox" name="given[]" value="<?= htmlspecialchars($code) ?>" disabled title="<?= htmlspecialchars(__('rebate_title_winlose_negative'), ENT_QUOTES, 'UTF-8') ?>">
                                         <?= htmlspecialchars($code) ?>
                                     </label>
-                                    <span class="rebate-na-muted">不必给</span>
+                                    <span class="rebate-na-muted"><?= htmlspecialchars(__('rebate_not_applicable'), ENT_QUOTES, 'UTF-8') ?></span>
                                 <?php else: ?>
                                     <label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;">
                                         <input type="checkbox" name="given[]" value="<?= htmlspecialchars($code) ?>">
@@ -273,7 +273,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                                 <?php
                                 if ($is_given) {
                                     if ($no_rebate) {
-                                        echo '<span class="rebate-na-muted">不必给</span>';
+                                        echo '<span class="rebate-na-muted">' . htmlspecialchars(__('rebate_not_applicable'), ENT_QUOTES, 'UTF-8') . '</span>';
                                     } else {
                                         $info = $given_info[$code] ?? [];
                                         $amt_val = null;
@@ -286,7 +286,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                                         echo $amt_val !== null ? number_format($amt_val, 2) : '—';
                                     }
                                 } elseif ($no_rebate) {
-                                    echo '<span class="rebate-na-muted">不必给</span>';
+                                    echo '<span class="rebate-na-muted">' . htmlspecialchars(__('rebate_not_applicable'), ENT_QUOTES, 'UTF-8') . '</span>';
                                 } else {
                                     echo '—';
                                 }
@@ -294,13 +294,13 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                             </td>
                             <?php if ($is_admin && $is_given): ?>
                             <td class="num">
-                                <form method="post" style="display:inline;" data-confirm="确定取消该客户「已给」？">
+                                <form method="post" style="display:inline;" data-confirm="<?= htmlspecialchars(__('rebate_confirm_cancel_given'), ENT_QUOTES, 'UTF-8') ?>">
                                     <input type="hidden" name="day" value="<?= htmlspecialchars($day_to) ?>">
                                     <input type="hidden" name="day_from" value="<?= htmlspecialchars($day_from) ?>">
                                     <input type="hidden" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                                     <input type="hidden" name="action" value="cancel">
                                     <input type="hidden" name="code" value="<?= htmlspecialchars($code) ?>">
-                                    <button type="submit" class="btn btn-sm btn-outline">取消</button>
+                                    <button type="submit" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('ui_btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                 </form>
                             </td>
                             <?php elseif ($is_admin): ?>
@@ -309,13 +309,13 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                         </tr>
                         <?php endforeach; ?>
                         <?php if (empty($rows_display)): ?>
-                        <tr><td colspan="<?= $is_admin ? 7 : 6 ?>"><?= $day_from === $day_to ? $day_from : $day_from . ' ~ ' . $day_to ?> <?= $is_admin ? '暂无流水或全部已给' : '暂无未给的客户（或区间内无流水）' ?></td></tr>
+                        <tr><td colspan="<?= $is_admin ? 7 : 6 ?>"><?= $day_from === $day_to ? $day_from : $day_from . ' ~ ' . $day_to ?> <?= htmlspecialchars($is_admin ? __('rebate_empty_admin') : __('rebate_empty_member'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                         <?php endif; ?>
                     </tbody>
                     <?php if (!empty($rows_for_sum) && $is_admin): ?>
                     <tfoot>
                         <tr class="rebate-total-row">
-                            <td>合计</td>
+                            <td><?= htmlspecialchars(__('ui_total'), ENT_QUOTES, 'UTF-8') ?></td>
                             <td class="num js-sum-in">0.00</td>
                             <td class="num js-sum-out">0.00</td>
                             <td class="num js-sum-balance">0.00</td>
@@ -329,29 +329,37 @@ $rows_for_sum = $all_rows; // 合计用全部客户
 
                 <?php if (!empty($rows_not_given)): ?>
                 <div class="rebate-actions" style="margin-top:16px; padding-top:16px; border-top:1px solid var(--border);">
-                    <button type="submit" class="btn btn-primary">提交</button>
+                    <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('rebate_btn_submit'), ENT_QUOTES, 'UTF-8') ?></button>
                 </div>
                 <?php endif; ?>
             </form>
         </div>
 
         <p class="breadcrumb" style="margin-top:20px;">
-            <a href="transaction_create.php">记一笔</a><span>·</span>
-            <a href="dashboard.php">返回首页</a>
+            <a href="transaction_create.php"><?= htmlspecialchars(__('rebate_footer_add_txn'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
+            <a href="dashboard.php"><?= htmlspecialchars(__('rebate_footer_home'), ENT_QUOTES, 'UTF-8') ?></a>
         </p>
     </div>
         </main>
     </div>
     <script>
     (function(){
+        var REBATE_NA = <?= json_encode(__('rebate_not_applicable'), JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_APOS | JSON_HEX_QUOT) ?>;
         var table = document.querySelector('.rebate-table');
         if (!table) return;
         function parseNum(v) { var n = parseFloat(String(v).replace(/[,%\s]/g, '')); return isNaN(n) ? 0 : n; }
+        function setNaCell(cell) {
+            cell.textContent = '';
+            var span = document.createElement('span');
+            span.className = 'rebate-na-muted';
+            span.textContent = REBATE_NA;
+            cell.appendChild(span);
+        }
         function updateRow(tr) {
             var totalCell = tr.querySelector('.js-total');
             if (!totalCell) return;
             if (tr.getAttribute('data-no-rebate') === '1') {
-                totalCell.innerHTML = '<span class="rebate-na-muted">不必给</span>';
+                setNaCell(totalCell);
                 return;
             }
             var balance = parseNum(tr.getAttribute('data-balance'));
@@ -372,7 +380,7 @@ $rows_for_sum = $all_rows; // 合计用全部客户
                 var totalCell = tr.querySelector('.js-total');
                 if (totalCell) {
                     var t = (totalCell.textContent || '').trim();
-                    if (t !== '—' && t.indexOf('不必给') === -1) sumRebate += parseNum(totalCell.textContent);
+                    if (t !== '—' && t.indexOf(REBATE_NA) === -1) sumRebate += parseNum(totalCell.textContent);
                 }
             });
             var foot = table.querySelector('tfoot');

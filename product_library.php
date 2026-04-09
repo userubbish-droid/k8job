@@ -37,26 +37,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
     $password = trim($_POST['password'] ?? '');
     if ($password === '') $password = 'Aaaa8888';
     if ($customer_id <= 0 || $product_name === '') {
-        $err = '请选择顾客和产品。';
+        $err = __('pl_err_pick_customer_product');
     } else {
         try {
             $chk = $pdo->prepare("SELECT id FROM customers WHERE id = ? AND company_id = ? LIMIT 1");
             $chk->execute([$customer_id, $company_id]);
             if (!$chk->fetch()) {
-                throw new RuntimeException('顾客不属于当前分公司。');
+                throw new RuntimeException(__('pl_err_customer_wrong_company'));
             }
             $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (company_id, customer_id, product_name, account, password) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$company_id, $customer_id, $product_name, $account ?: null, $password]);
-            $msg = '已添加。';
+            $msg = __('pl_msg_added');
             header("Location: product_library.php?msg=1");
             exit;
         } catch (Throwable $e) {
-            $err = '添加失败：' . $e->getMessage();
+            $err = __('pl_err_add_prefix') . $e->getMessage();
         }
     }
 }
 if (isset($_GET['msg'])) {
-    $msg = '已添加。';
+    $msg = __('pl_msg_added');
 }
 $show_add_box = !empty($err) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product';
 
@@ -92,15 +92,15 @@ try {
     }
 } catch (Throwable $e) {
     $codes = [];
-    $err = '无法加载数据，请确认已执行 migrate_customer_products.sql。';
+    $err = __('pl_err_load');
 }
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>产品账号 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__('nav_product_accounts'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -190,12 +190,12 @@ try {
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 100%;">
         <div class="page-header">
-            <h2>产品账号</h2>
+            <h2><?= htmlspecialchars(__('nav_product_accounts'), ENT_QUOTES, 'UTF-8') ?></h2>
             <p class="breadcrumb">
-                <a href="dashboard.php">首页</a><span>·</span>
-                <a href="customers.php">顾客列表</a>
-                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">新增顾客</a><?php endif; ?>
-                <?php if ($is_admin): ?><span>·</span><a href="admin_products.php">产品管理</a><?php endif; ?>
+                <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
+                <a href="customers.php"><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?></a>
+                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php"><?= htmlspecialchars(__('nav_new_customer'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+                <?php if ($is_admin): ?><span>·</span><a href="admin_products.php"><?= htmlspecialchars(__('pl_admin_products'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
             </p>
         </div>
 
@@ -204,14 +204,14 @@ try {
 
         <div class="card">
             <h3 style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                顾客产品资料
+                <?= htmlspecialchars(__('pl_section_title'), ENT_QUOTES, 'UTF-8') ?>
                 <button type="button" id="product_lib_add_btn" class="btn btn-outline btn-sm" style="padding:2px 10px; font-size:13px;">Add Account</button>
             </h3>
             <div class="addacct-mask<?= $show_add_box ? ' show' : '' ?>" id="addacct-mask" aria-hidden="<?= $show_add_box ? 'false' : 'true' ?>">
                 <div class="addacct-modal" role="dialog" aria-modal="true" aria-label="Add Account">
                     <div class="addacct-head">
                         <span>Add Account</span>
-                        <button type="button" class="addacct-close" id="addacct-close" aria-label="关闭">×</button>
+                        <button type="button" class="addacct-close" id="addacct-close" aria-label="<?= htmlspecialchars(__('pl_aria_close'), ENT_QUOTES, 'UTF-8') ?>">×</button>
                     </div>
                     <form method="post" id="addacct-form" autocomplete="off">
                         <input type="hidden" name="action" value="add_product">
@@ -246,7 +246,7 @@ try {
                                     <h4>Payment</h4>
                                     <div class="form-group">
                                         <label>Password *</label>
-                                        <input name="password" type="text" class="form-control" placeholder="不填则 Aaaa8888">
+                                        <input name="password" type="text" class="form-control" placeholder="<?= htmlspecialchars(__('pl_placeholder_pwd'), ENT_QUOTES, 'UTF-8') ?>">
                                     </div>
                                     <div class="form-group">
                                         <label>Payment Alert</label>
@@ -258,7 +258,7 @@ try {
                                     </div>
                                     <div class="form-group">
                                         <label>Remark</label>
-                                        <input name="remark" class="form-control" placeholder="Remark（仅显示，不入库）">
+                                        <input name="remark" class="form-control" placeholder="<?= htmlspecialchars(__('pl_placeholder_remark'), ENT_QUOTES, 'UTF-8') ?>">
                                     </div>
                                 </div>
                             </div>
@@ -267,14 +267,14 @@ try {
                                 <div class="form-row-2" style="display:grid; grid-template-columns: 1fr 1fr; gap:12px;">
                                     <div class="form-group" style="margin-bottom:0;">
                                         <label>Other Currency</label>
-                                        <input class="form-control" placeholder="MYR（展示用）" disabled>
+                                        <input class="form-control" placeholder="<?= htmlspecialchars(__('pl_placeholder_myr'), ENT_QUOTES, 'UTF-8') ?>" disabled>
                                     </div>
                                     <div class="form-group" style="margin-bottom:0;">
                                         <label>Company</label>
                                         <input class="form-control" placeholder="—" disabled>
                                     </div>
                                 </div>
-                                <p class="form-hint" style="margin:8px 0 0;">此区块仅用于对齐你提供的模板视觉（当前系统未落库）。</p>
+                                <p class="form-hint" style="margin:8px 0 0;"><?= htmlspecialchars(__('pl_hint_advanced_template'), ENT_QUOTES, 'UTF-8') ?></p>
                             </div>
                         </div>
                         <div class="addacct-foot">
@@ -297,7 +297,7 @@ try {
                 </thead>
                 <tbody>
                 <?php if (empty($codes)): ?>
-                    <tr><td colspan="<?= count($products) + 1 ?>">暂无记录。请到「编辑顾客」为顾客添加产品及账号、密码。</td></tr>
+                    <tr><td colspan="<?= count($products) + 1 ?>"><?= htmlspecialchars(__('pl_empty_table'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                 <?php else: ?>
                 <?php foreach ($codes as $code):
                     $cid = 0;
@@ -318,8 +318,8 @@ try {
                                     $accDisplay = $acc !== '' ? htmlspecialchars($acc) . $suffix : '—';
                                     $pwdDisplay = $pwd !== '' ? htmlspecialchars($pwd) : '—';
                             ?>
-                            <div class="id">id：<?= $accDisplay ?></div>
-                            <div class="ps">ps：<?= $pwdDisplay ?></div>
+                            <div class="id"><?= htmlspecialchars(__('pl_label_id_prefix'), ENT_QUOTES, 'UTF-8') ?><?= $accDisplay ?></div>
+                            <div class="ps"><?= htmlspecialchars(__('pl_label_ps_prefix'), ENT_QUOTES, 'UTF-8') ?><?= $pwdDisplay ?></div>
                             <?php endforeach; ?>
                             <?php else: ?>
                             —
@@ -333,7 +333,7 @@ try {
             </table>
             </div>
             <?php else: ?>
-            <p class="form-hint">暂无数据。请先在「产品管理」添加产品，再在「编辑顾客」里为顾客添加各产品的账号与密码。</p>
+            <p class="form-hint"><?= htmlspecialchars(__('pl_empty_no_products'), ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
     </div>

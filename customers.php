@@ -29,7 +29,7 @@ try {
 $msg = '';
 $err = '';
 if (!empty($_GET['pending_customer'])) {
-    $msg = '已提交客户资料，等待管理员审核通过后才会显示。';
+    $msg = __('cust_msg_pending_review');
 }
 
 // 从 Agent 页进入（带 recommend 筛选）时不允许 POST 操作，且只显示代号+输赢，不显示客户资料
@@ -59,10 +59,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$agent_view) {
     try {
         if ($action === 'toggle' && $is_admin) {
             $id = (int)($_POST['id'] ?? 0);
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('cust_err_param'));
             $stmt = $pdo->prepare("UPDATE customers SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
-            $msg = '已更新状态。';
+            $msg = __('cust_msg_status_ok');
         }
     } catch (Throwable $e) {
         $err = $e->getMessage();
@@ -222,15 +222,15 @@ try {
     $month_withdraw_by_code = [];
     $agent_range_dp = [];
     $agent_range_wd = [];
-    $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? '请先在 phpMyAdmin 执行 migrate_customers_recommend.sql。' : '请先在 phpMyAdmin 执行 migrate_customers_detail.sql。') . ' (' . $e->getMessage() . ')';
+    $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? __('cust_err_migrate_recommend') : __('cust_err_migrate_detail')) . ' (' . $e->getMessage() . ')';
 }
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>顾客列表 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
     <style>
@@ -265,13 +265,13 @@ try {
         <main class="dashboard-main">
     <div class="page-wrap">
         <div class="page-header">
-            <h2>顾客列表</h2>
+            <h2><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?></h2>
             <p class="breadcrumb">
-                <a href="dashboard.php">首页</a>
-                <?php if (has_permission('transaction_create')): ?><span>·</span><a href="transaction_create.php">去记一笔</a><?php endif; ?>
-                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php">新增顾客</a><?php endif; ?>
-                <?php if (has_permission('product_library')): ?><span>·</span><a href="product_library.php">产品账号</a><?php endif; ?>
-                <?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php">选项设置</a><?php endif; ?>
+                <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a>
+                <?php if (has_permission('transaction_create')): ?><span>·</span><a href="transaction_create.php"><?= htmlspecialchars(__('nav_go_add_transaction'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+                <?php if (has_permission('customer_create')): ?><span>·</span><a href="customer_create.php"><?= htmlspecialchars(__('nav_new_customer'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+                <?php if (has_permission('product_library')): ?><span>·</span><a href="product_library.php"><?= htmlspecialchars(__('nav_product_accounts'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+                <?php if ($is_admin): ?><span>·</span><a href="admin_option_sets.php"><?= htmlspecialchars(__('nav_option_sets'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
             </p>
         </div>
 
@@ -286,19 +286,11 @@ try {
 
         <div class="card" style="overflow-x: auto;">
             <?php if ($agent_view): ?>
-            <h3>list player</h3>
+            <h3><?= htmlspecialchars(__('cust_agent_list_title'), ENT_QUOTES, 'UTF-8') ?></h3>
             <?php if ($agent_pnl_by_range): ?>
-            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(sprintf(
-                app_lang() === 'en'
-                    ? 'Win/Loss below is for %s – %s (same range as Agent Rebate).'
-                    : '以下输赢为 %s 至 %s 区间（与 Agent Rebate 所选日期一致）。',
-                $pnl_day_from,
-                $pnl_day_to
-            ), ENT_QUOTES, 'UTF-8') ?></p>
+            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(__f('cust_agent_pnl_range', $pnl_day_from, $pnl_day_to), ENT_QUOTES, 'UTF-8') ?></p>
             <?php else: ?>
-            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(app_lang() === 'en'
-                ? 'No date range in URL — totals are all-time (deposit − withdraw). Open from Agent Rebate or add ?day_from=&day_to= to match a period.'
-                : '未带日期参数时为全期累计（入款−出款）。从 Agent Rebate 点入或自行加上 ?day_from= 与 ?day_to= 可与该页区间一致。', ENT_QUOTES, 'UTF-8') ?></p>
+            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(__('cust_agent_pnl_alltime'), ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
             <table class="data-table">
                 <thead>
@@ -333,7 +325,7 @@ try {
                     $tot_cls = $agent_total_win_loss < 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                     ?>
                     <tr style="font-weight:bold;">
-                        <td>Total</td>
+                        <td><?= htmlspecialchars(__('ui_total'), ENT_QUOTES, 'UTF-8') ?></td>
                         <td class="num <?= $tot_cls ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
                     </tr>
                 <?php endif; ?>
@@ -343,10 +335,10 @@ try {
                 </tbody>
             </table>
             <?php else: ?>
-            <h3>列表</h3>
+            <h3><?= htmlspecialchars(__('ui_label_list'), ENT_QUOTES, 'UTF-8') ?></h3>
             <?php if ($is_admin): ?>
             <div class="column-toggle-bar">
-                <button type="button" class="btn btn-sm column-toggle-btn is-off" id="toggle-created-by" aria-pressed="false">填写人</button>
+                <button type="button" class="btn btn-sm column-toggle-btn is-off" id="toggle-created-by" aria-pressed="false"><?= htmlspecialchars(__('ui_col_created_by'), ENT_QUOTES, 'UTF-8') ?></button>
                 <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-contact" aria-pressed="false">CONTACT</button>
                 <?php if ($can_view_total_dp_wd): ?>
                 <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-total-dp" aria-pressed="false">Total DP</button>
@@ -373,8 +365,8 @@ try {
                         <th>REGULAR</th>
                         <th>REMARK</th>
                         <th>RECOMMEND</th>
-                        <?php if ($is_admin): ?><th class="col-created-by" style="display:none;">填写人</th><?php endif; ?>
-                        <?php if ($is_admin): ?><th>操作</th><?php endif; ?>
+                        <?php if ($is_admin): ?><th class="col-created-by" style="display:none;"><?= htmlspecialchars(__('ui_col_created_by'), ENT_QUOTES, 'UTF-8') ?></th><?php endif; ?>
+                        <?php if ($is_admin): ?><th><?= htmlspecialchars(__('ui_col_actions'), ENT_QUOTES, 'UTF-8') ?></th><?php endif; ?>
                     </tr>
                 </thead>
                 <tbody>
@@ -413,18 +405,18 @@ try {
                         <?php if ($is_admin): ?><td class="col-created-by" style="display:none;"><?= htmlspecialchars($r['created_by_name'] ?? '—') ?></td><?php endif; ?>
                         <?php if ($is_admin): ?>
                         <td>
-                            <a href="customer_edit.php?id=<?= (int)$r['id'] ?>">编辑</a>
+                            <a href="customer_edit.php?id=<?= (int)$r['id'] ?>"><?= htmlspecialchars(__('cust_edit'), ENT_QUOTES, 'UTF-8') ?></a>
                             <form method="post" class="inline">
                                 <input type="hidden" name="action" value="toggle">
                                 <input type="hidden" name="id" value="<?= (int)$r['id'] ?>">
-                                <button type="submit" class="btn btn-sm btn-gray"><?= ((int)$r['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                <button type="submit" class="btn btn-sm btn-gray"><?= ((int)$r['is_active'] === 1) ? htmlspecialchars(__('cust_btn_disable'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('cust_btn_enable'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                         </td>
                         <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= (int)$customers_list_colspan ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= (int)$customers_list_colspan ?>" style="color:var(--muted); padding:24px;"><?= htmlspecialchars(__('cust_err_migrate'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
