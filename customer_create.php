@@ -54,6 +54,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $existing_code_same_bank = '';
         $bank_dup_codes = [];
         $bank_dup_prefixes = [];
+        $has_phone_duplicate = false;
+        $existing_code_same_phone = '';
+        $phone_dup_codes = [];
 
         $extract_bank_prefixes7 = function (string $s): array {
             $s = trim($s);
@@ -72,11 +75,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $input_prefixes7 = $extract_bank_prefixes7($bank_details);
         if ($phone !== '') {
-            $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND phone = ? LIMIT 1");
-            $stmt->execute([$company_id, $phone]);
-            $row = $stmt->fetch();
-            if ($row) {
-                $conflicts[] = $row['code'] . ' 电话号码同样';
+            try {
+                $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND phone = ?");
+                $stmt->execute([$company_id, $phone]);
+                while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
+                    $c = trim((string)($row['code'] ?? ''));
+                    if ($c === '') continue;
+                    $has_phone_duplicate = true;
+                    $existing_code_same_phone = $existing_code_same_phone !== '' ? $existing_code_same_phone : $c;
+                    $phone_dup_codes[] = $c;
+                }
+            } catch (Throwable $e) {
+            }
+            if ($has_phone_duplicate) {
+                $phone_dup_codes = array_values(array_unique($phone_dup_codes));
+                $conflicts[] = (implode(',', $phone_dup_codes) ?: '客户') . ' 电话号码相同';
             }
         }
         if ($bank_details !== '') {
@@ -134,6 +147,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $approved_at
                 ]);
                 $new_id = (int) $pdo->lastInsertId();
+                if ($is_member_actor && $has_phone_duplicate && file_exists(__DIR__ . '/inc/notify.php')) {
+                    require_once __DIR__ . '/inc/notify.php';
+                    if (function_exists('send_member_duplicate_phone_customer_notify')) {
+                        $member_uname = trim((string)($_SESSION['username'] ?? $_SESSION['user_name'] ?? ''));
+                        send_member_duplicate_phone_customer_notify(
+                            $pdo,
+                            $company_id,
+                            $member_uname,
+                            $code,
+                            $existing_code_same_phone,
+                            $phone,
+                            $phone_dup_codes
+                        );
+                    }
+                }
                 if ($is_member_actor && $has_bank_duplicate && file_exists(__DIR__ . '/inc/notify.php')) {
                     require_once __DIR__ . '/inc/notify.php';
                     if (function_exists('send_member_duplicate_bank_customer_notify')) {
