@@ -17,6 +17,8 @@ $sidebar_current = 'customers';
 
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $can_view_contact_full = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_MEMBER_CONTACT));
+$can_view_total_dp_wd = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_CUSTOMER_TOTAL_DP_WD));
+$customers_list_colspan = 14 + ($can_view_total_dp_wd ? 2 : 0) + ($is_admin ? 2 : 0);
 $company_id = current_company_id();
 $has_customer_status = false;
 try {
@@ -346,8 +348,10 @@ try {
             <div class="column-toggle-bar">
                 <button type="button" class="btn btn-sm column-toggle-btn is-off" id="toggle-created-by" aria-pressed="false">填写人</button>
                 <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-contact" aria-pressed="false">CONTACT</button>
+                <?php if ($can_view_total_dp_wd): ?>
                 <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-total-dp" aria-pressed="false">Total DP</button>
                 <button type="button" class="btn btn-sm column-toggle-btn" id="toggle-total-wd" aria-pressed="false">Total WD</button>
+                <?php endif; ?>
             </div>
             <?php endif; ?>
             <table class="data-table">
@@ -358,8 +362,8 @@ try {
                         <th>FULL NAME</th>
                         <th class="col-contact">CONTACT</th>
                         <th>BANK DETAILS</th>
-                        <th class="col-total-dp">Total DP</th>
-                        <th class="col-total-wd">Total WD</th>
+                        <?php if ($can_view_total_dp_wd): ?><th class="col-total-dp">Total DP</th><?php endif; ?>
+                        <?php if ($can_view_total_dp_wd): ?><th class="col-total-wd">Total WD</th><?php endif; ?>
                         <th>Rebate</th>
                         <th>Free</th>
                         <th>Free Withdraw</th>

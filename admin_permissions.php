@@ -133,6 +133,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                 if ($actor_can_set_contact_view && !empty($_POST['view_member_contact'])) {
                     $stmt->execute([$tid, PERM_VIEW_MEMBER_CONTACT]);
                 }
+                if ($actor_can_set_contact_view && !empty($_POST['view_customer_total_dp_wd'])) {
+                    $stmt->execute([$tid, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
+                }
                 header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
                 exit;
             } elseif ($trole === 'admin') {
@@ -149,6 +152,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                         $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$tid, PERM_VIEW_MEMBER_CONTACT]);
                         if (!empty($_POST['view_member_contact'])) {
                             $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$tid, PERM_VIEW_MEMBER_CONTACT]);
+                        }
+                        $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$tid, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
+                        if (!empty($_POST['view_customer_total_dp_wd'])) {
+                            $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$tid, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
                         }
                     }
                     header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
@@ -191,6 +198,7 @@ if ($pick_id > 0) {
 
 $admin_has_month = false;
 $contact_user_has_view = false;
+$admin_dp_wd_has_view = false;
 if ($pick_id > 0 && $pick_role === 'admin') {
     if ($actor_can_set_admin_month) {
         try {
@@ -209,12 +217,20 @@ if ($pick_id > 0 && $pick_role === 'admin') {
         } catch (Throwable $e) {
             $contact_user_has_view = false;
         }
+        try {
+            $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stmt->execute([$pick_id, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
+            $admin_dp_wd_has_view = (bool) $stmt->fetch();
+        } catch (Throwable $e) {
+            $admin_dp_wd_has_view = false;
+        }
     }
 }
 
 $options = get_permission_options();
 $current = [];
 $member_contact_has_view = false;
+$member_dp_wd_has_view = false;
 if ($pick_id > 0 && $pick_role === 'member') {
     try {
         $stmt = $pdo->prepare('SELECT permission_key FROM user_permissions WHERE user_id = ?');
@@ -233,6 +249,13 @@ if ($pick_id > 0 && $pick_role === 'member') {
             $member_contact_has_view = (bool) $stc->fetch();
         } catch (Throwable $e) {
             $member_contact_has_view = false;
+        }
+        try {
+            $stc = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stc->execute([$pick_id, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
+            $member_dp_wd_has_view = (bool) $stc->fetch();
+        } catch (Throwable $e) {
+            $member_dp_wd_has_view = false;
         }
     }
 }
@@ -333,7 +356,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
             color: #1f2937;
             cursor: pointer;
         }
-        .perm-nav-panel .perm-legacy { color: var(--muted); }
         .perm-nav-panel .perm-item-plain {
             display: flex;
             align-items: center;
@@ -459,7 +481,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                     __('nav_expense') => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
                                     __('nav_rebate') => ['rebate', 'agent'],
                                     __('nav_customer_detail') => ['customers', 'product_library', 'customer_edit'],
-                                    __('perm_group_legacy') => ['statement'],
                                 ];
                                 $group_id = 0;
                             ?>
@@ -489,11 +510,10 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                     <div class="nav-group-sub" id="<?= htmlspecialchars($sub_id, ENT_QUOTES, 'UTF-8') ?>" role="region" aria-labelledby="<?= htmlspecialchars($toggle_id, ENT_QUOTES, 'UTF-8') ?>" style="display:<?= $expanded ? 'block' : 'none' ?>">
                                         <?php foreach ($keys as $key):
                                             $label = (string)($options[$key] ?? $key);
-                                            $isLegacy = ($key === 'statement');
                                         ?>
                                         <div class="perm-perm-row">
                                             <input type="checkbox" name="perms[]" value="<?= htmlspecialchars($key) ?>" id="perm_<?= htmlspecialchars($key) ?>" <?= in_array($key, $current, true) ? 'checked' : '' ?>>
-                                            <label class="perm-label<?= $isLegacy ? ' perm-legacy' : '' ?>" for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
+                                            <label class="perm-label" for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
                                         </div>
                                         <?php endforeach; ?>
                                     </div>
@@ -504,6 +524,10 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                             <div class="perm-item perm-item-plain">
                                 <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
                                 <label class="perm-label" for="view_member_contact_m"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
+                            </div>
+                            <div class="perm-item perm-item-plain">
+                                <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_m" <?= $member_dp_wd_has_view ? 'checked' : '' ?>>
+                                <label class="perm-label" for="view_customer_total_dp_wd_m"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
                             </div>
                             <?php endif; ?>
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
@@ -529,6 +553,10 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                             <div class="perm-item perm-item-plain">
                                 <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_a" <?= $contact_user_has_view ? 'checked' : '' ?>>
                                 <label class="perm-label" for="view_member_contact_a"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
+                            </div>
+                            <div class="perm-item perm-item-plain">
+                                <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_a" <?= $admin_dp_wd_has_view ? 'checked' : '' ?>>
+                                <label class="perm-label" for="view_customer_total_dp_wd_a"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
                             </div>
                             <?php endif; ?>
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>

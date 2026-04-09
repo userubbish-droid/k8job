@@ -26,13 +26,14 @@ function get_permission_options(): array
         'customer_edit'      => __('perm_customer_edit'),
         'product_library'    => __('perm_product_library'),
         'agent'              => __('perm_agent'),
-        'statement'          => __('perm_statement_legacy'),
     ];
 }
 
 /** Admin 专属：首页「本月数据」须由 Boss / 平台 big boss 在权限页勾选后才有 */
 const PERM_DASHBOARD_MONTH_DATA = 'dashboard_month_data';
 const PERM_VIEW_MEMBER_CONTACT = 'view_member_contact';
+/** Customers 列表 Total DP / Total WD 列（Boss/Superadmin 在权限页为 Admin/Member 勾选） */
+const PERM_VIEW_CUSTOMER_TOTAL_DP_WD = 'view_customer_total_dp_wd';
 
 /**
  * 当前用户是否拥有某权限。boss / superadmin 全允许；admin 除「本月数据」外全允许；member 查 user_permissions。
@@ -47,7 +48,7 @@ function has_permission(string $key): bool
         return true;
     }
     if ($role === 'admin') {
-        if (in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT], true)) {
+        if (in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT, PERM_VIEW_CUSTOMER_TOTAL_DP_WD], true)) {
             $uid = (int)($_SESSION['user_id'] ?? 0);
             if ($uid <= 0) {
                 return false;
@@ -58,7 +59,7 @@ function has_permission(string $key): bool
             }
             try {
                 $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
-                $stmt->execute([$uid, PERM_DASHBOARD_MONTH_DATA]);
+                $stmt->execute([$uid, $key]);
                 return (bool) $stmt->fetch();
             } catch (Throwable $e) {
                 return false;
@@ -81,14 +82,6 @@ function has_permission(string $key): bool
         return false;
     }
     try {
-        // 向后兼容：如果 member 勾了旧的 statement，则默认拥有所有 statement_* 与 kiosk_* 查看权限
-        if (in_array($key, ['statement_report', 'statement_balance', 'kiosk_statement', 'kiosk_expense_view'], true)) {
-            $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = 'statement' LIMIT 1");
-            $stmt->execute([$uid]);
-            if ((bool)$stmt->fetch()) {
-                return true;
-            }
-        }
         $stmt = $pdo->prepare("SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1");
         $stmt->execute([$uid, $key]);
         return (bool) $stmt->fetch();
