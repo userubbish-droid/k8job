@@ -142,3 +142,29 @@ function send_pending_customer_notify(PDO $pdo, int $company_id = 0) {
         send_telegram_message($NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $text);
     }
 }
+
+function send_pending_txn_edit_request_notify(PDO $pdo, int $company_id = 0, int $request_id = 0) {
+    global $NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $NOTIFY_BASE_URL;
+    if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {
+        return;
+    }
+    if ($company_id <= 0 && function_exists('current_company_id')) {
+        $company_id = current_company_id();
+    }
+    if ($company_id <= 0 || $request_id <= 0) {
+        return;
+    }
+    $text = "🔔 有 1 笔「流水修改」待批准。\n请求 #{$request_id}";
+    if (!empty($NOTIFY_BASE_URL)) {
+        $text .= "\n" . rtrim($NOTIFY_BASE_URL, '/') . "/admin_txn_edit_approvals.php";
+    } else {
+        $text .= "\n请登录后台处理。";
+    }
+    $kb = [
+        [
+            ['text' => '✅ Approve', 'callback_data' => "txnedit|approve|{$request_id}"],
+            ['text' => '❌ Reject', 'callback_data' => "txnedit|reject|{$request_id}"],
+        ],
+    ];
+    send_telegram_message_with_keyboard($NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID, $text, $kb);
+}

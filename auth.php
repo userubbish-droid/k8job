@@ -20,6 +20,7 @@ function get_permission_options(): array
         'kiosk_statement'    => __('perm_kiosk_statement'),
         'transaction_create' => __('perm_transaction_create'),
         'transaction_list'   => __('perm_transaction_list'),
+        'transaction_edit_request' => __('perm_transaction_edit_request'),
         'rebate'             => __('perm_rebate'),
         'customers'          => __('perm_customers'),
         'customer_create'    => __('perm_customer_create'),

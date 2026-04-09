@@ -30,7 +30,7 @@ if ($approver === '') {
 }
 
 $expectedChat = trim((string)$NOTIFY_TELEGRAM_CHAT_ID);
-if ($chatId !== $expectedChat || strpos($data, 'pwreset|') !== 0) {
+if ($chatId !== $expectedChat || !(strpos($data, 'pwreset|') === 0 || strpos($data, 'txnedit|') === 0)) {
     if ($cbId !== '') {
         telegram_api_post($NOTIFY_TELEGRAM_BOT_TOKEN, 'answerCallbackQuery', [
             'callback_query_id' => $cbId,
@@ -43,9 +43,10 @@ if ($chatId !== $expectedChat || strpos($data, 'pwreset|') !== 0) {
 }
 
 $parts = explode('|', $data);
+$type = $parts[0] ?? '';
 $action = $parts[1] ?? '';
 $rid = (int)($parts[2] ?? 0);
-if (!in_array($action, ['approve', 'reject'], true) || $rid <= 0) {
+if (!in_array($type, ['pwreset', 'txnedit'], true) || !in_array($action, ['approve', 'reject'], true) || $rid <= 0) {
     if ($cbId !== '') {
         telegram_api_post($NOTIFY_TELEGRAM_BOT_TOKEN, 'answerCallbackQuery', [
             'callback_query_id' => $cbId,
@@ -58,6 +59,81 @@ if (!in_array($action, ['approve', 'reject'], true) || $rid <= 0) {
 }
 
 try {
+    if ($type === 'txnedit') {
+        $st = $pdo->prepare("SELECT * FROM transaction_edit_requests WHERE id = ? LIMIT 1");
+        $st->execute([$rid]);
+        $req = $st->fetch(PDO::FETCH_ASSOC);
+        if (!$req) {
+            throw new RuntimeException('Request not found');
+        }
+        if (($req['status'] ?? '') !== 'pending') {
+            $doneText = "请求 #{$rid} 已处理（状态：" . (string)$req['status'] . "）";
+            if ($cbId !== '') {
+                telegram_api_post($NOTIFY_TELEGRAM_BOT_TOKEN, 'answerCallbackQuery', [
+                    'callback_query_id' => $cbId,
+                    'text' => $doneText,
+                    'show_alert' => false,
+                ]);
+            }
+            echo json_encode(['ok' => true]);
+            exit;
+        }
+
+        $now = date('Y-m-d H:i:s');
+        $note = $action === 'approve' ? 'approved_via_telegram' : 'rejected_via_telegram';
+        $text = '';
+
+        if ($action === 'approve') {
+            $pdo->beginTransaction();
+            $pdo->prepare("UPDATE transactions
+                SET day = ?, time = ?, mode = ?, code = ?, bank = ?, product = ?, amount = ?, burn = ?, bonus = ?, total = ?, remark = ?
+                WHERE id = ? AND company_id = ?")
+                ->execute([
+                    (string)$req['day'],
+                    (string)$req['time'],
+                    (string)$req['mode'],
+                    $req['code'],
+                    $req['bank'],
+                    $req['product'],
+                    (float)$req['amount'],
+                    $req['burn'] !== null && $req['burn'] !== '' ? (float)$req['burn'] : null,
+                    (float)$req['bonus'],
+                    (float)$req['total'],
+                    $req['remark'],
+                    (int)$req['transaction_id'],
+                    (int)$req['company_id'],
+                ]);
+            $pdo->prepare("UPDATE transaction_edit_requests
+                SET status='approved', approved_at=?, approved_by_tg=?
+                WHERE id=?")->execute([$now, $approver, $rid]);
+            $pdo->commit();
+            $text = "✅ 已批准流水修改\n请求：#{$rid}\n处理人：{$approver}\n时间：{$now}";
+        } else {
+            $pdo->prepare("UPDATE transaction_edit_requests
+                SET status='rejected', approved_at=?, approved_by_tg=?
+                WHERE id=?")->execute([$now, $approver, $rid]);
+            $text = "❌ 已拒绝流水修改\n请求：#{$rid}\n处理人：{$approver}\n时间：{$now}";
+        }
+
+        if ($messageId > 0) {
+            telegram_api_post($NOTIFY_TELEGRAM_BOT_TOKEN, 'editMessageReplyMarkup', [
+                'chat_id' => $chatId,
+                'message_id' => $messageId,
+                'reply_markup' => json_encode(['inline_keyboard' => []], JSON_UNESCAPED_UNICODE),
+            ]);
+        }
+        send_telegram_message($NOTIFY_TELEGRAM_BOT_TOKEN, $chatId, $text);
+        if ($cbId !== '') {
+            telegram_api_post($NOTIFY_TELEGRAM_BOT_TOKEN, 'answerCallbackQuery', [
+                'callback_query_id' => $cbId,
+                'text' => ($action === 'approve' ? 'Approved' : 'Rejected'),
+                'show_alert' => false,
+            ]);
+        }
+        echo json_encode(['ok' => true]);
+        exit;
+    }
+
     $st = $pdo->prepare("SELECT id, user_id, username, status FROM password_reset_requests WHERE id = ? LIMIT 1");
     $st->execute([$rid]);
     $req = $st->fetch(PDO::FETCH_ASSOC);

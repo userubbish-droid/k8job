@@ -4,6 +4,7 @@ if (!isset($sidebar_current)) $sidebar_current = '';
 $sidebar_pending = 0;
 $sidebar_pending_customers = 0;
 $sidebar_pending_pwreset = 0;
+$sidebar_pending_txedit = 0;
 if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true) && !empty($pdo) && function_exists('current_company_id')) {
     try {
         $cid = current_company_id();
@@ -21,6 +22,11 @@ if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], tr
                 $sidebar_pending_pwreset = (int) $pdo->query("SELECT COUNT(*) FROM password_reset_requests WHERE status = 'pending'")->fetchColumn();
             } catch (Throwable $e) {
                 $sidebar_pending_pwreset = 0;
+            }
+            try {
+                $sidebar_pending_txedit = (int) $pdo->query("SELECT COUNT(*) FROM transaction_edit_requests WHERE status = 'pending'")->fetchColumn();
+            } catch (Throwable $e) {
+                $sidebar_pending_txedit = 0;
             }
         } elseif ($cid > 0) {
             $st = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
@@ -40,18 +46,28 @@ if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], tr
             } catch (Throwable $e) {
                 $sidebar_pending_pwreset = 0;
             }
+            try {
+                $stx = $pdo->prepare("SELECT COUNT(*) FROM transaction_edit_requests WHERE company_id = ? AND status = 'pending'");
+                $stx->execute([$cid]);
+                $sidebar_pending_txedit = (int) $stx->fetchColumn();
+            } catch (Throwable $e) {
+                $sidebar_pending_txedit = 0;
+            }
         }
     } catch (Throwable $e) {}
 }
-$sidebar_pending_total = $sidebar_pending + $sidebar_pending_customers + $sidebar_pending_pwreset;
+$sidebar_pending_total = $sidebar_pending + $sidebar_pending_customers + $sidebar_pending_pwreset + $sidebar_pending_txedit;
 if (($sidebar_pending > 0 && $sidebar_pending_customers > 0)
     || ($sidebar_pending > 0 && $sidebar_pending_pwreset > 0)
-    || ($sidebar_pending_customers > 0 && $sidebar_pending_pwreset > 0)) {
+    || ($sidebar_pending_customers > 0 && $sidebar_pending_pwreset > 0)
+    || ($sidebar_pending_txedit > 0 && ($sidebar_pending > 0 || $sidebar_pending_customers > 0 || $sidebar_pending_pwreset > 0))) {
     $sidebar_bell_href = 'admin_pending_hub.php';
 } elseif ($sidebar_pending_customers > 0) {
     $sidebar_bell_href = 'admin_customer_approvals.php';
 } elseif ($sidebar_pending_pwreset > 0) {
     $sidebar_bell_href = 'admin_password_resets.php';
+} elseif ($sidebar_pending_txedit > 0) {
+    $sidebar_bell_href = 'admin_txn_edit_approvals.php';
 } else {
     $sidebar_bell_href = 'admin_approvals.php';
 }

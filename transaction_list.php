@@ -34,6 +34,7 @@ $per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
+$can_request_edit = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_edit_request');
 
 $params = [];
 $where  = ['1=1', 'company_id = ?'];
@@ -150,9 +151,46 @@ $sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, s
         WHERE $sql_where_list
         ORDER BY day DESC, time DESC
         LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
-$stmt = $pdo->prepare($sql);
-$stmt->execute($params);
-$rows = $stmt->fetchAll();
+
+// member：若 12 小时内有 pending 修改申请，则“临时显示”为申请内容（不改变数据库原流水）
+if ($can_request_edit) {
+    try {
+        $sql = "SELECT
+            t.id, t.day, t.time, t.mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.staff, t.remark{$sel_extra},
+            r.id AS txr_id,
+            r.created_at AS txr_created_at,
+            r.day AS txr_day, r.time AS txr_time, r.mode AS txr_mode,
+            r.code AS txr_code, r.bank AS txr_bank, r.product AS txr_product,
+            r.amount AS txr_amount, r.burn AS txr_burn, r.bonus AS txr_bonus, r.total AS txr_total, r.remark AS txr_remark
+        FROM transactions t
+        LEFT JOIN (
+            SELECT x.*
+            FROM transaction_edit_requests x
+            INNER JOIN (
+                SELECT transaction_id, MAX(id) AS max_id
+                FROM transaction_edit_requests
+                WHERE company_id = ? AND created_by = ? AND status = 'pending'
+                  AND created_at >= (NOW() - INTERVAL 12 HOUR)
+                GROUP BY transaction_id
+            ) m ON m.max_id = x.id
+        ) r ON r.transaction_id = t.id
+        WHERE $sql_where_list
+        ORDER BY t.day DESC, t.time DESC
+        LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
+        $stmt = $pdo->prepare($sql);
+        $params2 = array_merge([(int)$company_id, (int)($_SESSION['user_id'] ?? 0)], $params);
+        $stmt->execute($params2);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute($params);
+        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    }
+} else {
+    $stmt = $pdo->prepare($sql);
+    $stmt->execute($params);
+    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+}
 
 // 用于下拉筛选（从已有流水中取 distinct，简单可靠）
 $distinct_base = "FROM transactions WHERE ";
@@ -351,8 +389,20 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         </thead>
         <tbody>
             <?php foreach ($rows as $r):
-                $rmk = trim($r['remark'] ?? '');
-                $display_mode = $r['mode'];
+                // 临时覆盖：12 小时内 pending 修改申请
+                $has_temp = !$is_admin && $can_request_edit && !empty($r['txr_id']);
+                $rDay = $has_temp ? ($r['txr_day'] ?? $r['day']) : $r['day'];
+                $rTime = $has_temp ? ($r['txr_time'] ?? $r['time']) : $r['time'];
+                $rMode = $has_temp ? ($r['txr_mode'] ?? $r['mode']) : $r['mode'];
+                $rCode = $has_temp ? ($r['txr_code'] ?? $r['code']) : ($r['code'] ?? '');
+                $rBank = $has_temp ? ($r['txr_bank'] ?? $r['bank']) : ($r['bank'] ?? '');
+                $rProd = $has_temp ? ($r['txr_product'] ?? $r['product']) : ($r['product'] ?? '');
+                $rAmt = $has_temp ? ($r['txr_amount'] ?? $r['amount']) : $r['amount'];
+                $rBonus = $has_temp ? ($r['txr_bonus'] ?? ($r['bonus'] ?? 0)) : ($r['bonus'] ?? 0);
+                $rTotal = $has_temp ? ($r['txr_total'] ?? ($r['total'] ?? 0)) : ($r['total'] ?? 0);
+                $rRemark = $has_temp ? ($r['txr_remark'] ?? ($r['remark'] ?? '')) : ($r['remark'] ?? '');
+                $rmk = trim((string)$rRemark);
+                $display_mode = $rMode;
                 if ($rmk === '产品加额') $display_mode = 'topup';
                 elseif ($rmk !== '' && (strpos($rmk, '转至 ') === 0 || strpos($rmk, '来自 ') === 0)) $display_mode = 'contra';
                 $is_del = $has_deleted_at && !empty($r['deleted_at']);
@@ -364,26 +414,35 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 }
             ?>
             <tr class="<?= $is_del ? 'txn-row-deleted' : '' ?>">
-                <td><?= htmlspecialchars($r['day']) ?></td>
-                <td><?= htmlspecialchars($r['time']) ?></td>
+                <td><?= htmlspecialchars((string)$rDay) ?></td>
+                <td><?= htmlspecialchars((string)$rTime) ?></td>
                 <td><?= htmlspecialchars($display_mode) ?></td>
-                <td><?= htmlspecialchars($r['code'] ?? '') ?></td>
-                <td><?= htmlspecialchars($r['bank'] ?? '') ?></td>
-                <td><?= htmlspecialchars($r['product'] ?? '') ?></td>
-                <td class="num <?= ($r['mode'] === 'DEPOSIT' || $r['mode'] === 'TOPUP') ? 'value-in' : 'value-out' ?>"><?= number_format((float)$r['amount'], 2) ?></td>
-                <td><?= number_format((float)($r['bonus'] ?? 0), 2) ?></td>
-                <td><?= number_format((float)($r['total'] ?? 0), 2) ?></td>
+                <td><?= htmlspecialchars((string)$rCode) ?></td>
+                <td><?= htmlspecialchars((string)$rBank) ?></td>
+                <td><?= htmlspecialchars((string)$rProd) ?></td>
+                <td class="num <?= ($rMode === 'DEPOSIT' || $rMode === 'TOPUP') ? 'value-in' : 'value-out' ?>"><?= number_format((float)$rAmt, 2) ?></td>
+                <td><?= number_format((float)$rBonus, 2) ?></td>
+                <td><?= number_format((float)$rTotal, 2) ?></td>
                 <td><?= htmlspecialchars($r['staff'] ?? '') ?></td>
-                <td><?= htmlspecialchars($r['remark'] ?? '') ?></td>
+                <td>
+                    <?= htmlspecialchars((string)$rRemark) ?>
+                    <?php if ($has_temp): ?>
+                        <span class="form-hint" style="margin-left:6px;">(pending edit)</span>
+                    <?php endif; ?>
+                </td>
                 <?php if ($is_admin && $has_deleted_at): ?>
                 <td><?= $is_del ? htmlspecialchars($del_txt) : '—' ?></td>
                 <?php endif; ?>
-                <?php if ($is_admin): ?>
+                <?php if ($is_admin || $can_request_edit): ?>
                 <td>
                     <?php $edit_return = 'transaction_list.php?' . ($query_string ? $query_string . '&' : '') . 'page=' . $page; ?>
                     <?php if (!$is_del): ?>
+                    <?php if ($is_admin): ?>
                     <a href="transaction_edit.php?id=<?= (int)$r['id'] ?>&return_to=<?= urlencode($edit_return) ?>">编辑</a>
                     <a href="transaction_delete.php?id=<?= (int)$r['id'] ?>&<?= $query_string ?>&page=<?= $page ?>" data-confirm="确定删除这条流水？">删除</a>
+                    <?php elseif ($can_request_edit): ?>
+                    <a href="transaction_edit_request.php?id=<?= (int)$r['id'] ?>&return_to=<?= urlencode($edit_return) ?>">申请修改</a>
+                    <?php endif; ?>
                     <?php else: ?>
                     <span class="form-hint">已删除</span>
                     <?php endif; ?>

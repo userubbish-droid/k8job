@@ -22,6 +22,17 @@ if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 
 $rows = [];
 $err = '';
+// 快捷日期
+$yesterday = date('Y-m-d', strtotime('-1 day'));
+$this_week_start = date('Y-m-d', strtotime('monday this week'));
+$this_week_end = date('Y-m-d', strtotime('sunday this week'));
+$last_week_start = date('Y-m-d', strtotime('monday last week'));
+$last_week_end = date('Y-m-d', strtotime('sunday last week'));
+$this_month_start = date('Y-m-01');
+$this_month_end = date('Y-m-t');
+$last_month_start = date('Y-m-01', strtotime('first day of last month'));
+$last_month_end = date('Y-m-t', strtotime('last day of last month'));
+
 try {
     // 显示所有在区间内有流水（上线）的客户：按 code 汇总
     // Burn 不计入 Withdraw 列，独立扣减到 Net
@@ -78,6 +89,25 @@ try {
         $rows = [];
     }
 }
+
+// 导出 CSV（当前筛选区间 + 全部上线客户）
+if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
+    $filename = 'customer_report_' . $day_from . '_to_' . $day_to . '_' . date('Ymd_His') . '.csv';
+    header('Content-Type: text/csv; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $filename . '"');
+    $out = fopen('php://output', 'w');
+    fwrite($out, "\xEF\xBB\xBF");
+    fputcsv($out, [__('cust_col_customer'), __('cust_col_deposit'), __('cust_col_withdraw'), __('cust_csv_burn'), __('cust_col_net')]);
+    foreach ($rows as $r) {
+        $in = (float)($r['dep'] ?? 0);
+        $wd = (float)($r['wd'] ?? 0);
+        $burn = (float)($r['burn'] ?? 0);
+        $net = $in - $wd - $burn;
+        fputcsv($out, [(string)($r['code'] ?? ''), number_format($in, 2, '.', ''), number_format($wd, 2, '.', ''), number_format($burn, 2, '.', ''), number_format($net, 2, '.', '')]);
+    }
+    fclose($out);
+    exit;
+}
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -105,7 +135,7 @@ try {
             <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
 
             <div class="card">
-                <form class="filters-bar filters-bar-flow" method="get" style="margin-bottom:16px;">
+                <form class="filters-bar filters-bar-flow" method="get" id="cust-report-filter" style="margin-bottom:16px;">
                     <div class="filters-row filters-row-main">
                         <div class="filter-group">
                             <label>From:</label>
@@ -116,6 +146,15 @@ try {
                             <input type="date" name="day_to" value="<?= htmlspecialchars($day_to) ?>">
                         </div>
                         <button type="submit" class="btn btn-search"><?= htmlspecialchars(__('btn_search'), ENT_QUOTES, 'UTF-8') ?></button>
+                    </div>
+                    <div class="filters-row filters-row-presets">
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $today, 'day_to' => $today]) ?>" class="btn btn-preset">Today</a>
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $yesterday, 'day_to' => $yesterday]) ?>" class="btn btn-preset">Yesterday</a>
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $this_week_start, 'day_to' => $this_week_end]) ?>" class="btn btn-preset">This Week</a>
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $last_week_start, 'day_to' => $last_week_end]) ?>" class="btn btn-preset">Last Week</a>
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $this_month_start, 'day_to' => $this_month_end]) ?>" class="btn btn-preset">This Month</a>
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset">Last Month</a>
+                        <a href="customer_report.php?<?= http_build_query(['day_from' => $day_from, 'day_to' => $day_to, 'export' => 'csv']) ?>" class="btn btn-preset cust-report-export" data-confirm="<?= htmlspecialchars(__('cust_report_confirm_export'), ENT_QUOTES, 'UTF-8') ?>">Export</a>
                     </div>
                 </form>
 
@@ -165,4 +204,21 @@ try {
 </div>
 </body>
 </html>
+
+<script>
+(function(){
+    document.querySelectorAll('a.cust-report-export[data-confirm]').forEach(function(a){
+        a.addEventListener('click', function(e){
+            e.preventDefault();
+            var href = a.getAttribute('href') || '';
+            var msg = a.getAttribute('data-confirm') || '';
+            if (window.appModalConfirm) {
+                window.appModalConfirm(msg, function(){ window.location.href = href; });
+            } else if (confirm(msg)) {
+                window.location.href = href;
+            }
+        });
+    });
+})();
+</script>
 

@@ -13,6 +13,7 @@ $role_sa = ($_SESSION['user_role'] ?? '') === 'superadmin';
 $cnt_tx = 0;
 $cnt_cust = 0;
 $cnt_pwreset = 0;
+$cnt_txedit = 0;
 try {
     $has_deleted_at = true;
     try {
@@ -33,6 +34,11 @@ try {
         } catch (Throwable $e) {
             $cnt_pwreset = 0;
         }
+        try {
+            $cnt_txedit = (int) $pdo->query("SELECT COUNT(*) FROM transaction_edit_requests WHERE status = 'pending'")->fetchColumn();
+        } catch (Throwable $e) {
+            $cnt_txedit = 0;
+        }
     } elseif ($company_id > 0) {
         $st = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
         $st->execute([$company_id]);
@@ -51,11 +57,18 @@ try {
         } catch (Throwable $e) {
             $cnt_pwreset = 0;
         }
+        try {
+            $stx = $pdo->prepare("SELECT COUNT(*) FROM transaction_edit_requests WHERE company_id = ? AND status = 'pending'");
+            $stx->execute([$company_id]);
+            $cnt_txedit = (int) $stx->fetchColumn();
+        } catch (Throwable $e) {
+            $cnt_txedit = 0;
+        }
     }
 } catch (Throwable $e) {
 }
 
-if ($cnt_tx <= 0 && $cnt_cust <= 0 && $cnt_pwreset <= 0) {
+if ($cnt_tx <= 0 && $cnt_cust <= 0 && $cnt_pwreset <= 0 && $cnt_txedit <= 0) {
     header('Location: dashboard.php');
     exit;
 }
@@ -71,6 +84,10 @@ if ($cnt_cust > 0 && $cnt_tx <= 0) {
 }
 if ($cnt_pwreset > 0 && $cnt_tx <= 0 && $cnt_cust <= 0) {
     header('Location: admin_password_resets.php');
+    exit;
+}
+if ($cnt_txedit > 0 && $cnt_tx <= 0 && $cnt_cust <= 0 && $cnt_pwreset <= 0) {
+    header('Location: admin_txn_edit_approvals.php');
     exit;
 }
 ?>
