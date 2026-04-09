@@ -80,6 +80,29 @@ function customer_regular_tier($balance) {
     return 'platinum';
 }
 
+/** 记录顾客 CSV 导出（失败不阻断下载；表未建时忽略） */
+function customer_export_log_try(PDO $pdo): void {
+    try {
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        $uname = trim((string)($_SESSION['user_name'] ?? $_SESSION['username'] ?? ''));
+        if (mb_strlen($uname, 'UTF-8') > 190) {
+            $uname = mb_substr($uname, 0, 190, 'UTF-8');
+        }
+        $role = trim((string)($_SESSION['user_role'] ?? ''));
+        if (strlen($role) > 32) {
+            $role = substr($role, 0, 32);
+        }
+        $cid = current_company_id();
+        $ip = trim((string)($_SERVER['REMOTE_ADDR'] ?? ''));
+        if (strlen($ip) > 45) {
+            $ip = substr($ip, 0, 45);
+        }
+        $stmt = $pdo->prepare('INSERT INTO customer_export_log (company_id, user_id, username, user_role, ip, created_at) VALUES (?, ?, ?, ?, ?, NOW())');
+        $stmt->execute([$cid, $uid, $uname, $role, $ip !== '' ? $ip : null]);
+    } catch (Throwable $e) {
+    }
+}
+
 function customer_mask_contact_for_member(string $phone): string {
     $p = trim($phone);
     if ($p === '') {
@@ -233,6 +256,7 @@ if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
         echo __('cust_export_err_boss_only');
         exit;
     }
+    customer_export_log_try($pdo);
     $filename = 'customers_' . date('Ymd_His') . '.csv';
     if ($agent_view) {
         $safe_rec = preg_replace('/[^\w\-.@]+/', '_', $filter_recommend);
@@ -414,7 +438,7 @@ if ($can_export_customers_csv) {
             <div class="cust-list-title-row">
                 <h3><?= htmlspecialchars(__('cust_agent_list_title'), ENT_QUOTES, 'UTF-8') ?></h3>
                 <?php if ($can_export_customers_csv): ?>
-                <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline cust-export-csv-link" data-confirm="<?= htmlspecialchars(__('cust_export_confirm_download'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
                 <?php endif; ?>
             </div>
             <?php if ($agent_pnl_by_range): ?>
@@ -468,7 +492,7 @@ if ($can_export_customers_csv) {
             <div class="cust-list-title-row">
                 <h3><?= htmlspecialchars(__('ui_label_list'), ENT_QUOTES, 'UTF-8') ?></h3>
                 <?php if ($can_export_customers_csv): ?>
-                <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline cust-export-csv-link" data-confirm="<?= htmlspecialchars(__('cust_export_confirm_download'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
                 <?php endif; ?>
             </div>
             <?php if ($is_admin): ?>
@@ -584,6 +608,18 @@ if ($can_export_customers_csv) {
         toggleCol('toggle-contact', 'col-contact', true);
         toggleCol('toggle-total-dp', 'col-total-dp', true);
         toggleCol('toggle-total-wd', 'col-total-wd', true);
+        document.querySelectorAll('a.cust-export-csv-link[data-confirm]').forEach(function(a){
+            a.addEventListener('click', function(e){
+                e.preventDefault();
+                var href = a.getAttribute('href') || '';
+                var msg = a.getAttribute('data-confirm') || '';
+                if (window.appModalConfirm) {
+                    window.appModalConfirm(msg, function(){ window.location.href = href; });
+                } else if (confirm(msg)) {
+                    window.location.href = href;
+                }
+            });
+        });
     })();
     </script>
 </body>

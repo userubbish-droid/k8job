@@ -90,9 +90,6 @@ function kiosk_stmt_fmt_in(float $v): string {
                         <span>Kiosk Statement</span>
                     </p>
                 </div>
-                <?php if (!$is_admin): ?>
-                    <p class="form-hint" style="margin-bottom:12px;">您仅有查看权限，不可修改任何数据。</p>
-                <?php endif; ?>
 
                 <div class="card">
                     <div class="statement-filter-wrap" style="margin-bottom:16px;">

@@ -242,16 +242,17 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         </div>
     </div>
     <?php endif; ?>
-    <?php if (has_permission('customers') || has_permission('product_library')): ?>
+    <?php if (has_permission('customers') || has_permission('product_library') || $sidebar_is_superadmin): ?>
     <div class="nav-group" data-group="account-customer">
-        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['customers', 'product_library'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-account-customer" id="nav-toggle-account-customer">
+        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['customers', 'product_library', 'admin_customer_export_log'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-account-customer" id="nav-toggle-account-customer">
             <span class="nav-icon"></span>
             <span class="nav-group-label"><?= htmlspecialchars(__('nav_customer_detail'), ENT_QUOTES, 'UTF-8') ?></span>
             <span class="nav-group-chevron" aria-hidden="true">▾</span>
         </button>
-        <div class="nav-group-sub" id="nav-sub-account-customer" role="region" aria-labelledby="nav-toggle-account-customer" style="display:<?= in_array($sidebar_current, ['customers', 'product_library'], true) ? 'block' : 'none' ?>">
+        <div class="nav-group-sub" id="nav-sub-account-customer" role="region" aria-labelledby="nav-toggle-account-customer" style="display:<?= in_array($sidebar_current, ['customers', 'product_library', 'admin_customer_export_log'], true) ? 'block' : 'none' ?>">
             <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item nav-sub-item <?= $sidebar_current === 'customers' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
             <?php if (has_permission('product_library')): ?><a href="product_library.php" class="nav-item nav-sub-item <?= $sidebar_current === 'product_library' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_product_accounts'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+            <?php if ($sidebar_is_superadmin): ?><a href="admin_customer_export_log.php" class="nav-item nav-sub-item <?= $sidebar_current === 'admin_customer_export_log' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_customer_export_log'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
         </div>
     </div>
     <?php endif; ?>

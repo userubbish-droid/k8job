@@ -100,7 +100,6 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= $err ?></div><?php endif; ?>
-                <?php if (!$is_admin): ?><p class="form-hint" style="margin-bottom:12px;">您仅有查看权限，不可修改任何数据。</p><?php endif; ?>
 
                 <div class="card">
                     <?php if ($head_office_stmt): ?>
