@@ -300,6 +300,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 } else {
                     $first = $saved_accounts[0];
                     $saved_account = trim((string)($first['account'] ?? '')) ?: '—';
+                    // DEPOSIT：成功提示条显示表单里选中的账号（须与库中该客户+产品记录一致）
+                    if ($mode === 'DEPOSIT') {
+                        $pick = trim((string)($_POST['deposit_selected_account'] ?? ''));
+                        if ($pick !== '') {
+                            foreach ($saved_accounts as $ar) {
+                                if (trim((string)($ar['account'] ?? '')) === $pick) {
+                                    $saved_account = $pick;
+                                    break;
+                                }
+                            }
+                        }
+                    }
                 }
             } catch (Throwable $e) {
                 $saved_account = '—';
@@ -1101,17 +1113,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <?php endif; ?>
                 <?php if (!empty($saved_product) && !empty($saved_code)): ?>
                 <?php
-                    $accCount = is_array($saved_accounts ?? null) ? count($saved_accounts) : 0;
-                    if ($accCount > 1) {
-                        $accBtnText = htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8');
-                        $accBtn = '<span class="txn-acc-picker" id="txn-acc-picker" role="button" tabindex="0" aria-label="Pick account" data-accounts="' . htmlspecialchars(json_encode($saved_accounts, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') . '">'
-                            . '<span class="mono" id="txn-acc-current">' . $accBtnText . '</span>'
-                            . '<span class="txn-acc-picker-caret">▾</span>'
-                            . '</span>';
-                        $accHtml = $accBtn;
-                    } else {
-                        $accHtml = '<span class="mono">' . htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8') . '</span>';
-                    }
+                    $accHtml = '<span class="mono">' . htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8') . '</span>';
                     echo __f(
                         'txn_hint_account_line',
                         htmlspecialchars($saved_code, ENT_QUOTES, 'UTF-8'),
@@ -1466,6 +1468,7 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <div class="form-hint" style="margin-bottom:6px;"><?= app_lang() === 'en' ? 'Account' : '账号' ?></div>
                 <div id="txn-live-acc-line"></div>
             </div>
+            <input type="hidden" name="deposit_selected_account" id="deposit_selected_account" value="">
         </div>
 
         <div class="form-section">
@@ -1638,20 +1641,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
     </div>
     <?php endif; ?>
-    <?php if ($saved && !empty($saved_accounts) && is_array($saved_accounts) && count($saved_accounts) > 1): ?>
-    <div class="pretty-modal-mask" id="txn-acc-modal" aria-hidden="true">
-        <div class="pretty-modal" role="dialog" aria-modal="true" aria-label="Pick account">
-            <div class="pretty-modal-head"><?= app_lang() === 'en' ? 'Pick account' : '选择账号' ?></div>
-            <div class="pretty-modal-body">
-                <div class="form-hint"><?= app_lang() === 'en' ? 'Choose one to use/copy.' : '选择一个账号（会自动复制到剪贴板）' ?></div>
-                <div class="txn-acc-list" id="txn-acc-list"></div>
-            </div>
-            <div class="pretty-modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
-                <button type="button" class="pretty-ok" id="txn-acc-close"><?= htmlspecialchars(__('btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
-            </div>
-        </div>
-    </div>
-    <?php endif; ?>
     <script>
         (function() {
             var customerData = <?= json_encode(array_column($customers, null, 'code')) ?>;
@@ -1809,14 +1798,21 @@ $ep = $expense_modal_should_open ? $_POST : [];
             var productEl = form.querySelector('select[name="product"]');
             var wrap = document.getElementById('txn-live-acc-wrap');
             var line = document.getElementById('txn-live-acc-line');
-            var modal = document.getElementById('txn-acc-modal');
+            var modal = null;
+            var depAccHidden = document.getElementById('deposit_selected_account');
             if (!modeEl || !codeEl || !productEl || !wrap || !line) return;
 
             var latestKey = '';
             var lastRows = [];
 
             function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
-            function setHidden(){ wrap.style.display = 'none'; line.innerHTML = ''; lastRows = []; latestKey = ''; }
+            function setHidden(){
+                wrap.style.display = 'none';
+                line.innerHTML = '';
+                lastRows = [];
+                latestKey = '';
+                if (depAccHidden) depAccHidden.value = '';
+            }
 
             function ensureModal() {
                 if (modal) return modal;
@@ -1880,9 +1876,16 @@ $ep = $expense_modal_should_open ? $_POST : [];
 
             function render(rows) {
                 lastRows = rows || [];
-                if (!Array.isArray(rows) || rows.length < 2) { setHidden(); return; }
+                if (!Array.isArray(rows) || rows.length === 0) { setHidden(); return; }
+                if (rows.length === 1) {
+                    wrap.style.display = 'none';
+                    line.innerHTML = '';
+                    if (depAccHidden) depAccHidden.value = String((rows[0] && rows[0].account) || '').trim();
+                    return;
+                }
                 var first = rows[0] || {};
                 var current = String(first.account || '—') || '—';
+                if (depAccHidden) depAccHidden.value = String(first.account || '').trim();
                 wrap.style.display = 'block';
                 line.innerHTML =
                     '<span class="txn-acc-picker" role="button" tabindex="0" id="txn-live-acc-picker">' +
@@ -1892,7 +1895,10 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 var picker = document.getElementById('txn-live-acc-picker');
                 var cur = document.getElementById('txn-live-acc-current');
                 if (!picker) return;
-                function setCur(v){ if (cur) cur.textContent = v || '—'; }
+                function setCur(v){
+                    if (cur) cur.textContent = v || '—';
+                    if (depAccHidden) depAccHidden.value = String(v || '').trim();
+                }
                 picker.addEventListener('click', function(){ openRowsModal(lastRows, setCur); });
                 picker.addEventListener('keydown', function(e){
                     if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRowsModal(lastRows, setCur); }
@@ -1921,6 +1927,12 @@ $ep = $expense_modal_should_open ? $_POST : [];
             modeEl.addEventListener('change', refresh);
             codeEl.addEventListener('change', refresh);
             productEl.addEventListener('change', refresh);
+            form.addEventListener('submit', function(){
+                if ((modeEl.value || '').trim() !== 'DEPOSIT') return;
+                if (depAccHidden && !depAccHidden.value.trim() && lastRows && lastRows.length) {
+                    depAccHidden.value = String((lastRows[0] && lastRows[0].account) || '').trim();
+                }
+            });
             refresh();
         })();
         <?php if ($is_admin && $quick !== 'expense'): ?>
@@ -1940,65 +1952,6 @@ $ep = $expense_modal_should_open ? $_POST : [];
             function closeModal(){ mask.classList.remove('show'); }
             ok.addEventListener('click', closeModal);
             mask.addEventListener('click', function(e){ if (e.target === mask) closeModal(); });
-        })();
-        (function(){
-            var picker = document.getElementById('txn-acc-picker');
-            var modal = document.getElementById('txn-acc-modal');
-            var list = document.getElementById('txn-acc-list');
-            var closeBtn = document.getElementById('txn-acc-close');
-            var cur = document.getElementById('txn-acc-current');
-            if (!picker || !modal || !list) return;
-
-            function openM() {
-                modal.classList.add('show');
-                modal.setAttribute('aria-hidden', 'false');
-                document.body.style.overflow = 'hidden';
-            }
-            function closeM() {
-                modal.classList.remove('show');
-                modal.setAttribute('aria-hidden', 'true');
-                document.body.style.overflow = '';
-            }
-            function safeText(x) { return (x == null) ? '' : String(x); }
-            function render() {
-                var raw = picker.getAttribute('data-accounts') || '[]';
-                var arr = [];
-                try { arr = JSON.parse(raw) || []; } catch(e) { arr = []; }
-                list.innerHTML = '';
-                arr.forEach(function(it, idx){
-                    var acc = safeText(it && it.account);
-                    var ps = safeText(it && it.password);
-                    var suf = (idx === 0) ? '' : ('-' + (idx + 1));
-                    var item = document.createElement('div');
-                    item.className = 'txn-acc-item';
-                    var left = document.createElement('div');
-                    left.innerHTML = '<div class="form-hint" style="margin:0;">id: <span class="mono">' + (acc + suf).replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>'
-                        + (ps ? '<div class="form-hint" style="margin:0;">ps: <span class="mono">' + ps.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>' : '');
-                    var btn = document.createElement('button');
-                    btn.type = 'button';
-                    btn.textContent = (document.documentElement.lang === 'en') ? 'Use' : '使用';
-                    btn.addEventListener('click', function(){
-                        if (cur) cur.textContent = acc || '—';
-                        try {
-                            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
-                                navigator.clipboard.writeText(acc || '');
-                            }
-                        } catch(e) {}
-                        closeM();
-                    });
-                    item.appendChild(left);
-                    item.appendChild(btn);
-                    list.appendChild(item);
-                });
-            }
-
-            picker.addEventListener('click', function(){ render(); openM(); });
-            picker.addEventListener('keydown', function(e){
-                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); render(); openM(); }
-            });
-            if (closeBtn) closeBtn.addEventListener('click', closeM);
-            modal.addEventListener('click', function(e){ if (e.target === modal) closeM(); });
-            document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && modal.classList.contains('show')) closeM(); });
         })();
         <?php if ($quick === 'expense' && $expense_kind_ui !== 'kiosk'): ?>
         (function(){
