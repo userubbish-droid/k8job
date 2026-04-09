@@ -47,6 +47,7 @@ function i18n_dictionary(): array
         'nav_home' => ['zh' => '首页', 'en' => 'Home'],
         'nav_dashboard' => ['zh' => '仪表盘', 'en' => 'Dashboard'],
         'nav_report' => ['zh' => '报表', 'en' => 'Report'],
+        'nav_customer_report' => ['zh' => '客户报表', 'en' => 'Customer report'],
         'nav_statement' => ['zh' => '对账单', 'en' => 'Statement'],
         'nav_add' => ['zh' => '新增', 'en' => 'Add'],
         'nav_add_transaction' => ['zh' => '记一笔', 'en' => 'Add Transaction'],

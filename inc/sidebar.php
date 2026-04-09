@@ -189,14 +189,15 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
     <?php else: ?>
     <?php if (has_permission('home_dashboard') || has_permission('statement_report')): ?>
     <div class="nav-group" data-group="home-menu">
-        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['dashboard', 'report'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-home-menu" id="nav-toggle-home-menu">
+        <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['dashboard', 'report', 'customer_report'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-home-menu" id="nav-toggle-home-menu">
             <span class="nav-icon"></span>
             <span class="nav-group-label"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></span>
             <span class="nav-group-chevron" aria-hidden="true">▾</span>
         </button>
-        <div class="nav-group-sub" id="nav-sub-home-menu" role="region" aria-labelledby="nav-toggle-home-menu" style="display:<?= in_array($sidebar_current, ['dashboard', 'report'], true) ? 'block' : 'none' ?>">
+        <div class="nav-group-sub" id="nav-sub-home-menu" role="region" aria-labelledby="nav-toggle-home-menu" style="display:<?= in_array($sidebar_current, ['dashboard', 'report', 'customer_report'], true) ? 'block' : 'none' ?>">
             <?php if (has_permission('home_dashboard')): ?><a href="dashboard.php" class="nav-item nav-sub-item <?= $sidebar_current === 'dashboard' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_dashboard'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
             <?php if (has_permission('statement_report')): ?><a href="report.php" class="nav-item nav-sub-item <?= $sidebar_current === 'report' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_report'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+            <?php if (has_permission('statement_report')): ?><a href="customer_report.php" class="nav-item nav-sub-item <?= $sidebar_current === 'customer_report' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_customer_report'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
