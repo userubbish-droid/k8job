@@ -399,8 +399,8 @@ try {
                         ?>
                         <td class="col-contact"><?= htmlspecialchars($phone_show) ?></td>
                         <td><?= htmlspecialchars($r['bank_details'] ?? '') ?></td>
-                        <td class="col-total-dp num"><?= number_format($all_dp, 2) ?></td>
-                        <td class="col-total-wd num"><?= number_format($all_wd, 2) ?></td>
+                        <?php if ($can_view_total_dp_wd): ?><td class="col-total-dp num"><?= number_format($all_dp, 2) ?></td><?php endif; ?>
+                        <?php if ($can_view_total_dp_wd): ?><td class="col-total-wd num"><?= number_format($all_wd, 2) ?></td><?php endif; ?>
                         <td class="num"><?= number_format($all_rebate, 2) ?></td>
                         <td class="num"><?= number_format($all_free, 2) ?></td>
                         <td class="num"><?= number_format($all_fw, 2) ?></td>
@@ -424,7 +424,7 @@ try {
                     </tr>
                 <?php endforeach; ?>
                 <?php if (!$rows): ?>
-                    <tr><td colspan="<?= $is_admin ? 18 : 16 ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
+                    <tr><td colspan="<?= (int)$customers_list_colspan ?>" style="color:var(--muted); padding:24px;">暂无数据，请先执行 migrate_customers_detail.sql 并添加顾客。</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
