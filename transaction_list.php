@@ -100,6 +100,11 @@ if ($product !== '') {
 }
 
 $sql_where_list = implode(' AND ', $where);
+$sql_where_list_t = preg_replace(
+    '/\b(company_id|day|time|mode|code|bank|product|status|deleted_at|created_by|hide_from_member)\b/',
+    't.$1',
+    $sql_where_list
+);
 $sql_where_active = $sql_where_list;
 if ($is_admin && $has_deleted_at) {
     $sql_where_active .= ' AND deleted_at IS NULL';
@@ -174,7 +179,7 @@ if ($can_request_edit) {
                 GROUP BY transaction_id
             ) m ON m.max_id = x.id
         ) r ON r.transaction_id = t.id
-        WHERE $sql_where_list
+        WHERE $sql_where_list_t
         ORDER BY t.day DESC, t.time DESC
         LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
         $stmt = $pdo->prepare($sql);
