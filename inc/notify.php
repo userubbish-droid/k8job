@@ -154,7 +154,35 @@ function send_pending_txn_edit_request_notify(PDO $pdo, int $company_id = 0, int
     if ($company_id <= 0 || $request_id <= 0) {
         return;
     }
-    $text = "🔔 有 1 笔「流水修改」待批准。\n请求 #{$request_id}";
+    $who = '';
+    $txId = 0;
+    $code = '';
+    try {
+        $st = $pdo->prepare("SELECT r.transaction_id, COALESCE(u.username, '') AS uname, COALESCE(r.code, '') AS code
+            FROM transaction_edit_requests r
+            LEFT JOIN users u ON u.id = r.created_by
+            WHERE r.id = ? LIMIT 1");
+        $st->execute([$request_id]);
+        $rw = $st->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($rw) {
+            $who = trim((string)($rw['uname'] ?? ''));
+            $txId = (int)($rw['transaction_id'] ?? 0);
+            $code = trim((string)($rw['code'] ?? ''));
+        }
+    } catch (Throwable $e) {
+    }
+
+    $text = "🔔 有 1 笔「流水修改」待批准。";
+    if ($who !== '') {
+        $text .= "\n提交人：{$who}";
+    }
+    $text .= "\n请求 #{$request_id}";
+    if ($txId > 0) {
+        $text .= "\n原流水：#{$txId}";
+    }
+    if ($code !== '') {
+        $text .= "\n客户：{$code}";
+    }
     if (!empty($NOTIFY_BASE_URL)) {
         $text .= "\n" . rtrim($NOTIFY_BASE_URL, '/') . "/admin_txn_edit_approvals.php";
     } else {
