@@ -26,6 +26,7 @@ $day_customers_count = 0;
 $day_orders_count = 0;
 $day_new_customers = 0;
 $day_new_customer_orders = 0;
+$top_customer_rows = [];
 
 try {
     $has_register_date = false;
@@ -80,6 +81,41 @@ try {
         $month_free_withdraw = (float)($month['free_withdraw'] ?? 0);
         $month_rebate = (float)($month['rebate'] ?? 0);
         $month_bonus = (float)($month['bonus'] ?? 0);
+    }
+
+    // Customer report：Top 10 Net Customers（本月区间）
+    try {
+        $stmt = $pdo->prepare("
+            SELECT code,
+                   COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
+                   COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out,
+                   COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS total_burn
+            FROM transactions
+            WHERE " . ($dashboard_all_companies ? "day >= ? AND day <= ?" : "company_id = ? AND day >= ? AND day <= ?") . "
+              AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) <> ''
+            GROUP BY code
+            ORDER BY (COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
+                      - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)
+                      - COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0)) DESC
+            LIMIT 10
+        ");
+        $stmt->execute($dashboard_all_companies ? [$month_start, $month_end] : [$company_id, $month_start, $month_end]);
+        $top_customer_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $eTop) {
+        // burn 列不存在时回退（不含 burn 扣减）
+        $stmt = $pdo->prepare("
+            SELECT code,
+                   COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
+                   COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
+            FROM transactions
+            WHERE " . ($dashboard_all_companies ? "day >= ? AND day <= ?" : "company_id = ? AND day >= ? AND day <= ?") . "
+              AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) <> ''
+            GROUP BY code
+            ORDER BY (COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)) DESC
+            LIMIT 10
+        ");
+        $stmt->execute($dashboard_all_companies ? [$month_start, $month_end] : [$company_id, $month_start, $month_end]);
+        $top_customer_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 
     // 今日上线客户数（分公司内不重复 code；总公司视图按 company_id+code 区分不同分公司同名客户）
@@ -162,6 +198,8 @@ if ($company_id > 0) {
         .dashboard-compact .stat-card .value { font-size: 1.05rem; }
         .dashboard-compact .card h3 { margin-bottom: 12px; }
         .dashboard-compact .total-table-wrap { margin-top: 12px; }
+        .dash-collapse-head { display:flex; align-items:center; justify-content:space-between; gap:12px; }
+        .dash-collapse-body.collapsed { display:none; }
     </style>
 </head>
 <body>
@@ -260,6 +298,46 @@ if ($company_id > 0) {
                 </div>
             </div>
 
+            <div class="card">
+                <h3><?= htmlspecialchars(__('dash_customer_report'), ENT_QUOTES, 'UTF-8') ?></h3>
+                <div class="dash-collapse-head" style="margin-top:6px;">
+                    <div style="font-weight:800; color:#1e3a8a;"><?= htmlspecialchars(__('dash_top10_net_customers'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <button type="button" class="btn btn-sm btn-outline js-dash-toggle" data-target="dash-top-customers" aria-expanded="false">
+                        <?= htmlspecialchars(__('ui_btn_expand'), ENT_QUOTES, 'UTF-8') ?>
+                    </button>
+                </div>
+                <div id="dash-top-customers" class="dash-collapse-body collapsed" style="overflow-x:auto; margin-top:10px;">
+                    <table class="data-table">
+                        <thead>
+                            <tr>
+                                <th><?= htmlspecialchars(__('cust_col_customer'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('cust_col_deposit'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('cust_col_withdraw'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('cust_col_net'), ENT_QUOTES, 'UTF-8') ?></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($top_customer_rows as $r):
+                                $in = (float)($r['total_in'] ?? 0);
+                                $out = (float)($r['total_out'] ?? 0);
+                                $burn = (float)($r['total_burn'] ?? 0);
+                                $net = $in - $out - $burn;
+                            ?>
+                            <tr>
+                                <td><?= htmlspecialchars((string)($r['code'] ?? '')) ?></td>
+                                <td class="num"><?= number_format($in, 2) ?></td>
+                                <td class="num"><?= number_format($out, 2) ?></td>
+                                <td class="num <?= $net >= 0 ? 'in' : 'out' ?>"><?= number_format($net, 2) ?></td>
+                            </tr>
+                            <?php endforeach; ?>
+                            <?php if (empty($top_customer_rows)): ?>
+                                <tr><td colspan="4" style="color:var(--muted); padding:18px;"><?= htmlspecialchars(__('cust_empty'), ENT_QUOTES, 'UTF-8') ?></td></tr>
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
             <?php if ($show_dashboard_month): ?>
             <label class="month-toggle">
                 <input type="checkbox" id="show_month" onchange="document.getElementById('month-card').classList.toggle('visible', this.checked)">
@@ -307,5 +385,21 @@ if ($company_id > 0) {
             <?php endif; ?>
         </main>
     </div>
+    <script>
+    (function(){
+        document.querySelectorAll('.js-dash-toggle').forEach(function(btn){
+            btn.addEventListener('click', function(){
+                var id = btn.getAttribute('data-target');
+                if (!id) return;
+                var body = document.getElementById(id);
+                if (!body) return;
+                var collapsed = body.classList.contains('collapsed');
+                body.classList.toggle('collapsed', !collapsed);
+                btn.setAttribute('aria-expanded', collapsed ? 'true' : 'false');
+                btn.textContent = collapsed ? (<?= json_encode(__('ui_btn_collapse')) ?>) : (<?= json_encode(__('ui_btn_expand')) ?>);
+            });
+        });
+    })();
+    </script>
 </body>
 </html>
