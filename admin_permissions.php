@@ -5,6 +5,7 @@ require_admin();
 $sidebar_current = 'admin_permissions';
 
 $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+$actor_role = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
 $actor_can_set_admin_month = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 $actor_can_set_contact_view = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 
@@ -21,7 +22,7 @@ try {
             ORDER BY u.company_id ASC, u.username ASC")->fetchAll();
     } else {
         $cid = current_company_id();
-        $stmt = $pdo->prepare("SELECT id, username, display_name, company_id FROM users WHERE role = 'member' AND company_id = ? ORDER BY username ASC");
+        $stmt = $pdo->prepare("SELECT id, username, display_name, company_id, '' AS company_code FROM users WHERE role = 'member' AND company_id = ? ORDER BY username ASC");
         $stmt->execute([$cid]);
         $members = $stmt->fetchAll();
     }
@@ -29,192 +30,219 @@ try {
     $members = [];
 }
 
-$admins_for_month = [];
-if ($actor_can_set_admin_month) {
+$admins_list_ui = [];
+if (in_array($actor_role, ['boss', 'superadmin'], true)) {
     try {
         if ($actor_is_superadmin) {
-            $admins_for_month = $pdo->query("SELECT u.id, u.username, u.display_name, u.company_id, COALESCE(c.code, '') AS company_code
+            $admins_list_ui = $pdo->query("SELECT u.id, u.username, u.display_name, u.company_id, COALESCE(c.code, '') AS company_code
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
                 WHERE u.role = 'admin'
                 ORDER BY u.company_id ASC, u.username ASC")->fetchAll();
         } else {
             $cid = current_company_id();
-            $stmt = $pdo->prepare("SELECT id, username, display_name, company_id FROM users WHERE role = 'admin' AND company_id = ? ORDER BY username ASC");
+            $stmt = $pdo->prepare("SELECT id, username, display_name, company_id, '' AS company_code FROM users WHERE role = 'admin' AND company_id = ? ORDER BY username ASC");
             $stmt->execute([$cid]);
-            $admins_for_month = $stmt->fetchAll();
+            $admins_list_ui = $stmt->fetchAll();
         }
     } catch (Throwable $e) {
-        $admins_for_month = [];
+        $admins_list_ui = [];
     }
 }
 
-$contact_permission_users = [];
-if ($actor_can_set_contact_view) {
+$perm_tab = trim((string)($_GET['tab'] ?? 'all'));
+if (!in_array($perm_tab, ['all', 'admin', 'member'], true)) {
+    $perm_tab = 'all';
+}
+
+$allowed_perm_user_ids = array_values(array_unique(array_merge(
+    array_map('intval', array_column($members, 'id')),
+    array_map('intval', array_column($admins_list_ui, 'id'))
+)));
+
+$pick_id = (int)($_GET['pick'] ?? 0);
+if ($pick_id > 0 && !in_array($pick_id, $allowed_perm_user_ids, true)) {
+    $pick_id = 0;
+}
+
+$perm_rows_all = [];
+foreach ($members as $m) {
+    $perm_rows_all[] = array_merge($m, ['perm_role' => 'member']);
+}
+foreach ($admins_list_ui as $a) {
+    $perm_rows_all[] = array_merge($a, ['perm_role' => 'admin']);
+}
+usort($perm_rows_all, static function (array $x, array $y): int {
+    $cmp = strcmp((string)($x['username'] ?? ''), (string)($y['username'] ?? ''));
+    if ($cmp !== 0) {
+        return $cmp;
+    }
+    return ((int)($x['id'] ?? 0)) <=> ((int)($y['id'] ?? 0));
+});
+
+$perm_rows_filtered = $perm_rows_all;
+if ($perm_tab === 'admin') {
+    $perm_rows_filtered = array_values(array_filter($perm_rows_all, static function (array $r): bool {
+        return ($r['perm_role'] ?? '') === 'admin';
+    }));
+} elseif ($perm_tab === 'member') {
+    $perm_rows_filtered = array_values(array_filter($perm_rows_all, static function (array $r): bool {
+        return ($r['perm_role'] ?? '') === 'member';
+    }));
+}
+
+if ($pick_id > 0) {
+    $vids = array_map('intval', array_column($perm_rows_filtered, 'id'));
+    if (!in_array($pick_id, $vids, true)) {
+        $pick_id = 0;
+    }
+}
+
+if (isset($_GET['ok']) && $_GET['ok'] === '1') {
+    $msg = __('perm_ok_panel_saved');
+}
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_perm_panel') {
+    $tab_post = trim((string)($_POST['tab'] ?? 'all'));
+    if (!in_array($tab_post, ['all', 'admin', 'member'], true)) {
+        $tab_post = 'all';
+    }
+    $tid = (int)($_POST['target_user_id'] ?? 0);
+    if ($tid <= 0 || !in_array($tid, $allowed_perm_user_ids, true)) {
+        $err = __('perm_err_pick_invalid');
+    } elseif (!user_is_manageable_by_current_actor($pdo, $tid)) {
+        $err = __('perm_err_save_user_forbidden');
+    } else {
+        try {
+            $chk = $pdo->prepare('SELECT role FROM users WHERE id = ? LIMIT 1');
+            $chk->execute([$tid]);
+            $trole = strtolower(trim((string)($chk->fetchColumn() ?: '')));
+            if ($trole === 'member') {
+                $checked = $_POST['perms'] ?? [];
+                if (!is_array($checked)) {
+                    $checked = [];
+                }
+                $options = get_permission_options();
+                $valid = array_keys($options);
+                $to_insert = array_intersect($checked, $valid);
+                $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ?')->execute([$tid]);
+                $stmt = $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)');
+                foreach ($to_insert as $key) {
+                    $stmt->execute([$tid, $key]);
+                }
+                if ($actor_can_set_contact_view && !empty($_POST['view_member_contact'])) {
+                    $stmt->execute([$tid, PERM_VIEW_MEMBER_CONTACT]);
+                }
+                header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
+                exit;
+            } elseif ($trole === 'admin') {
+                if (!$actor_can_set_admin_month && !$actor_can_set_contact_view) {
+                    $err = __('perm_err_boss_only_admin_opts');
+                } else {
+                    if ($actor_can_set_admin_month) {
+                        $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$tid, PERM_DASHBOARD_MONTH_DATA]);
+                        if (!empty($_POST['dashboard_month_data'])) {
+                            $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$tid, PERM_DASHBOARD_MONTH_DATA]);
+                        }
+                    }
+                    if ($actor_can_set_contact_view) {
+                        $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$tid, PERM_VIEW_MEMBER_CONTACT]);
+                        if (!empty($_POST['view_member_contact'])) {
+                            $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$tid, PERM_VIEW_MEMBER_CONTACT]);
+                        }
+                    }
+                    header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
+                    exit;
+                }
+            } else {
+                $err = __('perm_err_role_not_supported');
+            }
+        } catch (Throwable $e) {
+            $em = $e->getMessage();
+            if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
+                $err = __('perm_err_migration_short');
+            } else {
+                $err = __f('perm_err_save_failed_reason', htmlspecialchars($em, ENT_QUOTES, 'UTF-8'));
+            }
+        }
+    }
+}
+
+$pick_role = '';
+$pick_user_row = null;
+if ($pick_id > 0) {
     try {
-        if ($actor_is_superadmin) {
-            $contact_permission_users = $pdo->query("SELECT u.id, u.username, u.display_name, u.role, u.company_id, COALESCE(c.code, '') AS company_code
-                FROM users u
-                LEFT JOIN companies c ON c.id = u.company_id
-                WHERE u.role IN ('admin', 'member')
-                ORDER BY u.role ASC, u.company_id ASC, u.username ASC")->fetchAll();
-        } else {
-            $cid = current_company_id();
-            $stmt = $pdo->prepare("SELECT id, username, display_name, role, company_id FROM users WHERE role IN ('admin', 'member') AND company_id = ? ORDER BY role ASC, username ASC");
-            $stmt->execute([$cid]);
-            $contact_permission_users = $stmt->fetchAll();
+        $pr = $pdo->prepare('SELECT id, username, display_name, role FROM users WHERE id = ? LIMIT 1');
+        $pr->execute([$pick_id]);
+        $pick_user_row = $pr->fetch(PDO::FETCH_ASSOC);
+        if ($pick_user_row) {
+            $pick_role = strtolower(trim((string)($pick_user_row['role'] ?? '')));
         }
     } catch (Throwable $e) {
-        $contact_permission_users = [];
+        $pick_user_row = null;
+        $pick_role = '';
     }
-}
-
-$selected_id = (int)($_REQUEST['user_id'] ?? $_POST['user_id'] ?? 0);
-if ($selected_id > 0 && !in_array($selected_id, array_column($members, 'id'), true)) {
-    $selected_id = 0;
-}
-
-$selected_admin_id = (int)($_REQUEST['admin_user_id'] ?? $_POST['admin_user_id'] ?? 0);
-if ($selected_admin_id > 0 && !in_array($selected_admin_id, array_column($admins_for_month, 'id'), true)) {
-    $selected_admin_id = 0;
-}
-
-$selected_contact_user_id = (int)($_REQUEST['contact_user_id'] ?? $_POST['contact_user_id'] ?? 0);
-if ($selected_contact_user_id > 0 && !in_array($selected_contact_user_id, array_column($contact_permission_users, 'id'), true)) {
-    $selected_contact_user_id = 0;
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_admin_month') {
-    if (!$actor_can_set_admin_month) {
-        $err = __('perm_err_boss_admin_month');
-    } elseif ($selected_admin_id <= 0) {
-        $err = __('perm_err_pick_admin');
-    } elseif (!user_is_manageable_by_current_actor($pdo, $selected_admin_id)) {
-        $err = __('perm_err_save_user_forbidden');
-    } else {
-        try {
-            $chk = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
-            $chk->execute([$selected_admin_id]);
-            $rrow = $chk->fetch(PDO::FETCH_ASSOC);
-            if (($rrow['role'] ?? '') !== 'admin') {
-                $err = __('perm_err_admin_only_month');
-            } else {
-                $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
-                if (!empty($_POST['dashboard_month_data'])) {
-                    $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
-                }
-                $msg = __('perm_ok_admin_month_updated');
-            }
-        } catch (Throwable $e) {
-            $em = $e->getMessage();
-            if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
-                $err = __('perm_err_migration_short');
-            } else {
-                $err = __f('perm_err_save_failed_reason', htmlspecialchars($em, ENT_QUOTES, 'UTF-8'));
-            }
-        }
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && !in_array(($_POST['action'] ?? ''), ['save_admin_month', 'save_contact_view'], true)) {
-    if (!user_is_manageable_by_current_actor($pdo, $selected_id)) {
-        $err = __('perm_err_save_scope_member');
-    } else {
-        $checked = $_POST['perms'] ?? [];
-        if (!is_array($checked)) {
-            $checked = [];
-        }
-        $options = get_permission_options();
-        $valid = array_keys($options);
-        $to_insert = array_intersect($checked, $valid);
-
-        try {
-            $pdo->prepare("DELETE FROM user_permissions WHERE user_id = ?")->execute([$selected_id]);
-            $stmt = $pdo->prepare("INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)");
-            foreach ($to_insert as $key) {
-                $stmt->execute([$selected_id, $key]);
-            }
-            $msg = __('perm_ok_member_perms_saved');
-        } catch (Throwable $e) {
-            $msg = $e->getMessage();
-            if (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false)) {
-                $err = __('perm_err_migration_long');
-            } else {
-                $err = __f('perm_err_save_failed_reason', htmlspecialchars($msg, ENT_QUOTES, 'UTF-8'));
-            }
-        }
-    }
-}
-
-if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_contact_view') {
-    if (!$actor_can_set_contact_view) {
-        $err = __('perm_err_boss_contact');
-    } elseif ($selected_contact_user_id <= 0) {
-        $err = __('perm_err_pick_user');
-    } elseif (!user_is_manageable_by_current_actor($pdo, $selected_contact_user_id)) {
-        $err = __('perm_err_save_user_forbidden');
-    } else {
-        try {
-            $chk = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
-            $chk->execute([$selected_contact_user_id]);
-            $rrow = $chk->fetch(PDO::FETCH_ASSOC);
-            $r = strtolower(trim((string)($rrow['role'] ?? '')));
-            if (!in_array($r, ['admin', 'member'], true)) {
-                $err = __('perm_err_am_only_contact');
-            } else {
-                $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
-                if (!empty($_POST['view_member_contact'])) {
-                    $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
-                }
-                $msg = __('perm_ok_contact_updated');
-            }
-        } catch (Throwable $e) {
-            $em = $e->getMessage();
-            if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
-                $err = __('perm_err_migration_short');
-            } else {
-                $err = __f('perm_err_save_failed_reason', htmlspecialchars($em, ENT_QUOTES, 'UTF-8'));
-            }
-        }
+    if (!$pick_user_row || !in_array($pick_role, ['member', 'admin'], true)) {
+        $pick_id = 0;
+        $pick_user_row = null;
+        $pick_role = '';
     }
 }
 
 $admin_has_month = false;
-if ($actor_can_set_admin_month && $selected_admin_id > 0) {
-    try {
-        $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
-        $stmt->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
-        $admin_has_month = (bool) $stmt->fetch();
-    } catch (Throwable $e) {
-        $admin_has_month = false;
-    }
-}
-
 $contact_user_has_view = false;
-if ($actor_can_set_contact_view && $selected_contact_user_id > 0) {
-    try {
-        $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
-        $stmt->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
-        $contact_user_has_view = (bool) $stmt->fetch();
-    } catch (Throwable $e) {
-        $contact_user_has_view = false;
+if ($pick_id > 0 && $pick_role === 'admin') {
+    if ($actor_can_set_admin_month) {
+        try {
+            $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stmt->execute([$pick_id, PERM_DASHBOARD_MONTH_DATA]);
+            $admin_has_month = (bool) $stmt->fetch();
+        } catch (Throwable $e) {
+            $admin_has_month = false;
+        }
+    }
+    if ($actor_can_set_contact_view) {
+        try {
+            $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stmt->execute([$pick_id, PERM_VIEW_MEMBER_CONTACT]);
+            $contact_user_has_view = (bool) $stmt->fetch();
+        } catch (Throwable $e) {
+            $contact_user_has_view = false;
+        }
     }
 }
 
 $options = get_permission_options();
 $current = [];
-if ($selected_id > 0) {
+$member_contact_has_view = false;
+if ($pick_id > 0 && $pick_role === 'member') {
     try {
-        $stmt = $pdo->prepare("SELECT permission_key FROM user_permissions WHERE user_id = ?");
-        $stmt->execute([$selected_id]);
+        $stmt = $pdo->prepare('SELECT permission_key FROM user_permissions WHERE user_id = ?');
+        $stmt->execute([$pick_id]);
         $current = $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e) {
         $current = [];
-        $msg = $e->getMessage();
-        if (empty($err) && (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false))) {
+        if (empty($err) && (strpos($e->getMessage(), 'user_permissions') !== false && (strpos($e->getMessage(), "doesn't exist") !== false || strpos($e->getMessage(), '1146') !== false))) {
             $err = __('perm_err_missing_table_page');
         }
     }
+    if ($actor_can_set_contact_view) {
+        try {
+            $stc = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stc->execute([$pick_id, PERM_VIEW_MEMBER_CONTACT]);
+            $member_contact_has_view = (bool) $stc->fetch();
+        } catch (Throwable $e) {
+            $member_contact_has_view = false;
+        }
+    }
+}
+
+function perm_ui_build_pick_url(string $tab, int $userId): string {
+    $q = ['tab' => $tab];
+    if ($userId > 0) {
+        $q['pick'] = $userId;
+    }
+    return 'admin_permissions.php?' . http_build_query($q);
 }
 
 $disp_o = app_lang() === 'en' ? ' (' : '（';
@@ -270,6 +298,46 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
         .perm-label { font-weight: 600; color: #1f2937; font-size: 15px; }
         .perm-legacy { color: var(--muted); font-weight: 600; }
         .perm-item-plain { border: none; padding: 12px 0; }
+        .perm-ui-seg {
+            display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 18px;
+        }
+        .perm-ui-seg a {
+            padding: 8px 16px; border-radius: 999px; font-weight: 700; font-size: 13px;
+            text-decoration: none; border: 1px solid rgba(99, 102, 241, 0.35);
+            background: rgba(255,255,255,0.9); color: #4338ca;
+        }
+        .perm-ui-seg a:hover { background: rgba(238, 242, 255, 0.95); }
+        .perm-ui-seg a.is-active {
+            background: linear-gradient(180deg, #6366f1 0%, #4f46e5 100%);
+            color: #fff; border-color: transparent;
+        }
+        .perm-ui-layout {
+            display: grid; grid-template-columns: minmax(200px, 260px) 1fr; gap: 20px; align-items: start;
+        }
+        @media (max-width: 768px) {
+            .perm-ui-layout { grid-template-columns: 1fr; }
+        }
+        .perm-ui-list {
+            list-style: none; margin: 0; padding: 0; max-height: min(52vh, 420px); overflow: auto;
+            border: 1px solid var(--border); border-radius: 12px; background: rgba(255,255,255,0.92);
+        }
+        .perm-ui-list li { border-bottom: 1px solid var(--border); }
+        .perm-ui-list li:last-child { border-bottom: none; }
+        .perm-ui-list a {
+            display: block; padding: 10px 12px; text-decoration: none; color: #0f172a; font-size: 14px;
+        }
+        .perm-ui-list a:hover { background: rgba(99, 102, 241, 0.06); }
+        .perm-ui-list a.is-active {
+            background: rgba(99, 102, 241, 0.12); font-weight: 700;
+        }
+        .perm-ui-role {
+            display: inline-block; font-size: 10px; font-weight: 800; letter-spacing: 0.04em;
+            padding: 2px 6px; border-radius: 4px; margin-right: 6px; vertical-align: middle;
+        }
+        .perm-ui-role--admin { background: #fee2e2; color: #991b1b; }
+        .perm-ui-role--member { background: #d1fae5; color: #065f46; }
+        .perm-ui-detail-title { font-size: 15px; font-weight: 800; color: #0f172a; margin: 0 0 12px; }
+        .perm-ui-empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
         @media (max-width: 768px) {
             .perm-groups { margin: 0 -16px; width: calc(100% + 32px); }
             .perm-group-toggle,
@@ -281,7 +349,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
     <div class="dashboard-layout">
         <?php include __DIR__ . '/inc/sidebar.php'; ?>
         <main class="dashboard-main">
-    <div class="page-wrap" style="max-width: 560px;">
+    <div class="page-wrap" style="max-width: 920px;">
         <div class="page-header">
             <h2><?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($actor_is_superadmin ? __('perm_scope_all') : __('perm_scope_company'), ENT_QUOTES, 'UTF-8') ?></h2>
             <p class="breadcrumb">
@@ -295,156 +363,132 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
         <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
         <div class="card">
-            <h3 style="margin-top:0;"><?= htmlspecialchars(__('perm_card_member_title'), ENT_QUOTES, 'UTF-8') ?></h3>
-            <form method="get" class="member-select">
-                <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
-                <div class="form-group">
-                    <label><?= htmlspecialchars(__('perm_select_member_label'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <select name="user_id" class="form-control" onchange="this.form.submit()">
-                        <option value=""><?= htmlspecialchars(__('perm_opt_please_select'), ENT_QUOTES, 'UTF-8') ?></option>
-                        <?php foreach ($members as $m):
-                            $m_cc = trim((string)($m['company_code'] ?? ''));
-                            $co_tag = ($actor_is_superadmin && $m_cc !== '') ? (' [' . $m_cc . ']') : '';
-                        ?>
-                            <option value="<?= (int)$m['id'] ?>" <?= $selected_id === (int)$m['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($m['username']) ?>
-                                <?= $m['display_name'] ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($m['display_name']) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '' ?><?= htmlspecialchars($co_tag) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </form>
+            <nav class="perm-ui-seg" aria-label="<?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?>">
+                <a href="<?= htmlspecialchars(perm_ui_build_pick_url('all', 0), ENT_QUOTES, 'UTF-8') ?>" class="<?= $perm_tab === 'all' ? 'is-active' : '' ?>"><?= htmlspecialchars(__('perm_tab_all'), ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="<?= htmlspecialchars(perm_ui_build_pick_url('admin', 0), ENT_QUOTES, 'UTF-8') ?>" class="<?= $perm_tab === 'admin' ? 'is-active' : '' ?>"><?= htmlspecialchars(__('perm_tab_admin'), ENT_QUOTES, 'UTF-8') ?></a>
+                <a href="<?= htmlspecialchars(perm_ui_build_pick_url('member', 0), ENT_QUOTES, 'UTF-8') ?>" class="<?= $perm_tab === 'member' ? 'is-active' : '' ?>"><?= htmlspecialchars(__('perm_tab_member'), ENT_QUOTES, 'UTF-8') ?></a>
+            </nav>
 
-            <?php if ($selected_id > 0): ?>
-            <form method="post">
-                <input type="hidden" name="user_id" value="<?= $selected_id ?>">
-                <?php
-                    // 分组标题与顺序对齐 inc/sidebar.php 的 nav_* 文案（__() 与侧栏一致）
-                    $perm_groups = [
-                        __('nav_home') => ['home_dashboard', 'statement_report'],
-                        __('nav_statement') => ['statement_balance'],
-                        __('nav_transactions') => ['transaction_list'],
-                        __('nav_add') => ['transaction_create', 'customer_create'],
-                        __('nav_expense') => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
-                        __('nav_rebate') => ['rebate', 'agent'],
-                        __('nav_customer_detail') => ['customers', 'product_library', 'customer_edit'],
-                        __('perm_group_legacy') => ['statement'],
-                    ];
-                    $group_id = 0;
-                ?>
-                <ul class="perm-groups" id="perm-groups">
-                    <?php foreach ($perm_groups as $glabel => $keys):
-                        $group_id++;
-                        // 过滤掉不存在的 key（避免未来改名导致报错）
-                        $keys = array_values(array_filter($keys, function($k) use ($options){ return array_key_exists($k, $options); }));
-                        if (!$keys) continue;
-                        $expanded = false;
-                        foreach ($keys as $k) { if (in_array($k, $current, true)) { $expanded = true; break; } }
-                    ?>
-                    <li class="perm-group" data-group="<?= $group_id ?>">
-                        <button type="button" class="perm-group-toggle" aria-expanded="<?= $expanded ? 'true' : 'false' ?>" aria-controls="perm-group-sub-<?= $group_id ?>">
-                            <span><?= htmlspecialchars($glabel) ?></span>
-                            <span class="perm-group-chevron" aria-hidden="true"><?= $expanded ? '▾' : '▸' ?></span>
-                        </button>
-                        <div class="perm-group-sub<?= $expanded ? ' show' : '' ?>" id="perm-group-sub-<?= $group_id ?>">
-                            <?php foreach ($keys as $key):
-                                $label = (string)($options[$key] ?? $key);
-                                $isLegacy = ($key === 'statement');
+            <div class="perm-ui-layout">
+                <div>
+                    <div class="form-hint" style="margin-bottom:8px; font-weight:700;"><?= htmlspecialchars(__('perm_accounts_heading'), ENT_QUOTES, 'UTF-8') ?></div>
+                    <?php if (!$perm_rows_filtered): ?>
+                        <p class="perm-ui-empty"><?= htmlspecialchars(__('perm_no_accounts_in_tab'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php else: ?>
+                    <ul class="perm-ui-list">
+                        <?php foreach ($perm_rows_filtered as $row):
+                            $rid = (int)$row['id'];
+                            $pr = (string)($row['perm_role'] ?? '');
+                            $href = htmlspecialchars(perm_ui_build_pick_url($perm_tab, $rid), ENT_QUOTES, 'UTF-8');
+                            $cc = trim((string)($row['company_code'] ?? ''));
+                            $co_tag = ($actor_is_superadmin && $cc !== '') ? (' [' . htmlspecialchars($cc, ENT_QUOTES, 'UTF-8') . ']') : '';
+                            $dn = trim((string)($row['display_name'] ?? ''));
+                            $line = htmlspecialchars((string)$row['username'], ENT_QUOTES, 'UTF-8')
+                                . ($dn !== '' ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($dn) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '')
+                                . $co_tag;
+                        ?>
+                        <li>
+                            <a href="<?= $href ?>" class="<?= $pick_id === $rid ? 'is-active' : '' ?>">
+                                <span class="perm-ui-role <?= $pr === 'admin' ? 'perm-ui-role--admin' : 'perm-ui-role--member' ?>"><?= htmlspecialchars(strtoupper($pr), ENT_QUOTES, 'UTF-8') ?></span>
+                                <?= $line ?>
+                            </a>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <?php endif; ?>
+                </div>
+                <div>
+                    <?php if ($pick_id <= 0 || !$pick_user_row): ?>
+                        <p class="perm-ui-empty"><?= htmlspecialchars(__('perm_select_user_hint'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php elseif ($pick_role === 'member'): ?>
+                        <h3 class="perm-ui-detail-title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars(__('perm_tab_member'), ENT_QUOTES, 'UTF-8') ?></h3>
+                        <form method="post">
+                            <input type="hidden" name="action" value="save_perm_panel">
+                            <input type="hidden" name="tab" value="<?= htmlspecialchars($perm_tab, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="target_user_id" value="<?= (int)$pick_id ?>">
+                            <?php
+                                $perm_groups = [
+                                    __('nav_home') => ['home_dashboard', 'statement_report'],
+                                    __('nav_statement') => ['statement_balance'],
+                                    __('nav_transactions') => ['transaction_list'],
+                                    __('nav_add') => ['transaction_create', 'customer_create'],
+                                    __('nav_expense') => ['expense_statement', 'kiosk_expense_view', 'kiosk_statement'],
+                                    __('nav_rebate') => ['rebate', 'agent'],
+                                    __('nav_customer_detail') => ['customers', 'product_library', 'customer_edit'],
+                                    __('perm_group_legacy') => ['statement'],
+                                ];
+                                $group_id = 0;
                             ?>
-                            <div class="perm-item">
-                                <input type="checkbox" name="perms[]" value="<?= htmlspecialchars($key) ?>" id="perm_<?= htmlspecialchars($key) ?>" <?= in_array($key, $current, true) ? 'checked' : '' ?>>
-                                <label class="perm-label<?= $isLegacy ? ' perm-legacy' : '' ?>" for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
+                            <ul class="perm-groups" id="perm-groups" style="margin:0; width:100%;">
+                                <?php foreach ($perm_groups as $glabel => $keys):
+                                    $group_id++;
+                                    $keys = array_values(array_filter($keys, static function ($k) use ($options) { return array_key_exists($k, $options); }));
+                                    if (!$keys) {
+                                        continue;
+                                    }
+                                    $expanded = false;
+                                    foreach ($keys as $k) {
+                                        if (in_array($k, $current, true)) {
+                                            $expanded = true;
+                                            break;
+                                        }
+                                    }
+                                ?>
+                                <li class="perm-group" data-group="<?= $group_id ?>">
+                                    <button type="button" class="perm-group-toggle" aria-expanded="<?= $expanded ? 'true' : 'false' ?>" aria-controls="perm-group-sub-<?= $group_id ?>">
+                                        <span><?= htmlspecialchars($glabel) ?></span>
+                                        <span class="perm-group-chevron" aria-hidden="true"><?= $expanded ? '▾' : '▸' ?></span>
+                                    </button>
+                                    <div class="perm-group-sub<?= $expanded ? ' show' : '' ?>" id="perm-group-sub-<?= $group_id ?>">
+                                        <?php foreach ($keys as $key):
+                                            $label = (string)($options[$key] ?? $key);
+                                            $isLegacy = ($key === 'statement');
+                                        ?>
+                                        <div class="perm-item">
+                                            <input type="checkbox" name="perms[]" value="<?= htmlspecialchars($key) ?>" id="perm_<?= htmlspecialchars($key) ?>" <?= in_array($key, $current, true) ? 'checked' : '' ?>>
+                                            <label class="perm-label<?= $isLegacy ? ' perm-legacy' : '' ?>" for="perm_<?= htmlspecialchars($key) ?>"><?= htmlspecialchars($label) ?></label>
+                                        </div>
+                                        <?php endforeach; ?>
+                                    </div>
+                                </li>
+                                <?php endforeach; ?>
+                            </ul>
+                            <?php if ($actor_can_set_contact_view): ?>
+                            <div class="perm-item perm-item-plain" style="margin-top:12px; padding-left:0; padding-right:0;">
+                                <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
+                                <label class="perm-label" for="view_member_contact_m"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
                             </div>
-                            <?php endforeach; ?>
-                        </div>
-                    </li>
-                    <?php endforeach; ?>
-                </ul>
-                <button type="submit" class="btn btn-primary" style="margin-top: 16px;"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
-            </form>
-            <?php else: ?>
-            <?php endif; ?>
+                            <?php endif; ?>
+                            <button type="submit" class="btn btn-primary" style="margin-top: 16px;"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
+                        </form>
+                    <?php elseif ($pick_role === 'admin'): ?>
+                        <h3 class="perm-ui-detail-title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?> · <?= htmlspecialchars(__('perm_tab_admin'), ENT_QUOTES, 'UTF-8') ?></h3>
+                        <?php if (!$actor_can_set_admin_month && !$actor_can_set_contact_view): ?>
+                            <p class="form-hint"><?= htmlspecialchars(__('perm_err_boss_only_admin_opts'), ENT_QUOTES, 'UTF-8') ?></p>
+                        <?php else: ?>
+                        <form method="post">
+                            <input type="hidden" name="action" value="save_perm_panel">
+                            <input type="hidden" name="tab" value="<?= htmlspecialchars($perm_tab, ENT_QUOTES, 'UTF-8') ?>">
+                            <input type="hidden" name="target_user_id" value="<?= (int)$pick_id ?>">
+                            <?php if ($actor_can_set_admin_month): ?>
+                            <div class="perm-item perm-item-plain">
+                                <input type="checkbox" name="dashboard_month_data" value="1" id="admin_dash_month" <?= $admin_has_month ? 'checked' : '' ?>>
+                                <label class="perm-label" for="admin_dash_month"><?= htmlspecialchars(__('perm_allow_dashboard_month'), ENT_QUOTES, 'UTF-8') ?></label>
+                            </div>
+                            <?php endif; ?>
+                            <?php if ($actor_can_set_contact_view): ?>
+                            <div class="perm-item perm-item-plain">
+                                <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_a" <?= $contact_user_has_view ? 'checked' : '' ?>>
+                                <label class="perm-label" for="view_member_contact_a"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
+                            </div>
+                            <?php endif; ?>
+                            <button type="submit" class="btn btn-primary" style="margin-top: 12px;"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
+                        </form>
+                        <?php endif; ?>
+                    <?php endif; ?>
+                </div>
+            </div>
         </div>
-
-        <?php if ($actor_can_set_admin_month): ?>
-        <div class="card" style="margin-top: 20px;">
-            <h3 style="margin-top:0;"><?= htmlspecialchars(__('perm_card_admin_month_title'), ENT_QUOTES, 'UTF-8') ?></h3>
-            <form method="get" class="member-select">
-                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
-                <div class="form-group">
-                    <label><?= htmlspecialchars(__('perm_select_admin_label'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <select name="admin_user_id" class="form-control" onchange="this.form.submit()">
-                        <option value=""><?= htmlspecialchars(__('perm_opt_please_select'), ENT_QUOTES, 'UTF-8') ?></option>
-                        <?php foreach ($admins_for_month as $a):
-                            $a_cc = trim((string)($a['company_code'] ?? ''));
-                            $co_tag = ($actor_is_superadmin && $a_cc !== '') ? (' [' . $a_cc . ']') : '';
-                        ?>
-                            <option value="<?= (int)$a['id'] ?>" <?= $selected_admin_id === (int)$a['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($a['username']) ?>
-                                <?= $a['display_name'] ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($a['display_name']) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '' ?><?= htmlspecialchars($co_tag) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </form>
-            <?php if ($selected_admin_id > 0): ?>
-            <form method="post">
-                <input type="hidden" name="action" value="save_admin_month">
-                <input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>">
-                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
-                <div class="perm-item perm-item-plain">
-                    <input type="checkbox" name="dashboard_month_data" value="1" id="admin_dash_month" <?= $admin_has_month ? 'checked' : '' ?>>
-                    <label class="perm-label" for="admin_dash_month"><?= htmlspecialchars(__('perm_allow_dashboard_month'), ENT_QUOTES, 'UTF-8') ?></label>
-                </div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 12px;"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
-            </form>
-            <?php elseif (empty($admins_for_month)): ?>
-            <p class="form-hint"><?= htmlspecialchars(__('perm_empty_admin_hint'), ENT_QUOTES, 'UTF-8') ?></p>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
-
-        <?php if ($actor_can_set_contact_view): ?>
-        <div class="card" style="margin-top: 20px;">
-            <h3 style="margin-top:0;"><?= htmlspecialchars(__('perm_card_contact_phone'), ENT_QUOTES, 'UTF-8') ?></h3>
-            <form method="get" class="member-select">
-                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
-                <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
-                <div class="form-group">
-                    <label><?= htmlspecialchars(__('perm_select_user_am'), ENT_QUOTES, 'UTF-8') ?></label>
-                    <select name="contact_user_id" class="form-control" onchange="this.form.submit()">
-                        <option value=""><?= htmlspecialchars(__('perm_opt_please_select'), ENT_QUOTES, 'UTF-8') ?></option>
-                        <?php foreach ($contact_permission_users as $u):
-                            $u_cc = trim((string)($u['company_code'] ?? ''));
-                            $co_tag = ($actor_is_superadmin && $u_cc !== '') ? (' [' . $u_cc . ']') : '';
-                            $u_role = strtolower(trim((string)($u['role'] ?? '')));
-                            $role_tag = $u_role !== '' ? ' [' . strtoupper($u_role) . ']' : '';
-                        ?>
-                            <option value="<?= (int)$u['id'] ?>" <?= $selected_contact_user_id === (int)$u['id'] ? 'selected' : '' ?>>
-                                <?= htmlspecialchars($u['username']) ?>
-                                <?= $u['display_name'] ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($u['display_name']) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '' ?><?= htmlspecialchars($role_tag . $co_tag) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-            </form>
-            <?php if ($selected_contact_user_id > 0): ?>
-            <form method="post">
-                <input type="hidden" name="action" value="save_contact_view">
-                <input type="hidden" name="contact_user_id" value="<?= (int)$selected_contact_user_id ?>">
-                <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
-                <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
-                <div class="perm-item perm-item-plain">
-                    <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact" <?= $contact_user_has_view ? 'checked' : '' ?>>
-                    <label class="perm-label" for="view_member_contact"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
-                </div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 12px;"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
-            </form>
-            <?php elseif (empty($contact_permission_users)): ?>
-            <p class="form-hint"><?= htmlspecialchars(__('perm_empty_am_accounts'), ENT_QUOTES, 'UTF-8') ?></p>
-            <?php endif; ?>
-        </div>
-        <?php endif; ?>
     </div>
         </main>
     </div>
