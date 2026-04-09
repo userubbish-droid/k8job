@@ -294,6 +294,8 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
         .perm-nav-panel .perm-nav-groups { margin: 0; padding: 0; }
         .perm-nav-panel .nav-group { border-bottom: 1px solid var(--border); }
         .perm-nav-panel .nav-group:last-child { border-bottom: none; }
+        .perm-nav-panel .perm-other-group { margin-top: 4px; border-top: 1px solid var(--border); }
+        .perm-nav-panel .perm-other-group .nav-group-sub .perm-item-plain:first-child { border-top: none; margin-top: 0; padding-top: 4px; }
         .perm-nav-panel .nav-group-toggle.nav-item {
             width: 100%;
             box-sizing: border-box;
@@ -416,12 +418,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 920px;">
         <div class="page-header">
-            <h2><?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($actor_is_superadmin ? __('perm_scope_all') : __('perm_scope_company'), ENT_QUOTES, 'UTF-8') ?></h2>
-            <p class="breadcrumb">
-                <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
-                <a href="admin_users.php"><?= htmlspecialchars(__('nav_user_management'), ENT_QUOTES, 'UTF-8') ?></a>
-                <?= $actor_is_superadmin ? '' : '<span>·</span><span>' . htmlspecialchars(__('perm_breadcrumb_co_extra'), ENT_QUOTES, 'UTF-8') . '</span>' ?>
-            </p>
+            <h2><?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?></h2>
         </div>
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
@@ -521,13 +518,22 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                 <?php endforeach; ?>
                             </div>
                             <?php if ($actor_can_set_contact_view): ?>
-                            <div class="perm-item perm-item-plain">
-                                <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
-                                <label class="perm-label" for="view_member_contact_m"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
-                            </div>
-                            <div class="perm-item perm-item-plain">
-                                <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_m" <?= $member_dp_wd_has_view ? 'checked' : '' ?>>
-                                <label class="perm-label" for="view_customer_total_dp_wd_m"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <div class="nav-group perm-other-group" data-group="other">
+                                <button type="button" class="nav-group-toggle nav-item" id="perm-toggle-other-m" aria-expanded="false" aria-controls="perm-group-sub-other-m">
+                                    <span class="nav-icon" aria-hidden="true"></span>
+                                    <span class="nav-group-label"><?= htmlspecialchars(__('perm_group_other'), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <span class="nav-group-chevron" aria-hidden="true">▸</span>
+                                </button>
+                                <div class="nav-group-sub" id="perm-group-sub-other-m" role="region" aria-labelledby="perm-toggle-other-m" style="display:none">
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="view_member_contact_m"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_m" <?= $member_dp_wd_has_view ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="view_customer_total_dp_wd_m"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                </div>
                             </div>
                             <?php endif; ?>
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
@@ -550,13 +556,22 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                             </div>
                             <?php endif; ?>
                             <?php if ($actor_can_set_contact_view): ?>
-                            <div class="perm-item perm-item-plain">
-                                <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_a" <?= $contact_user_has_view ? 'checked' : '' ?>>
-                                <label class="perm-label" for="view_member_contact_a"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
-                            </div>
-                            <div class="perm-item perm-item-plain">
-                                <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_a" <?= $admin_dp_wd_has_view ? 'checked' : '' ?>>
-                                <label class="perm-label" for="view_customer_total_dp_wd_a"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
+                            <div class="nav-group perm-other-group" data-group="other-admin">
+                                <button type="button" class="nav-group-toggle nav-item" id="perm-toggle-other-a" aria-expanded="false" aria-controls="perm-group-sub-other-a">
+                                    <span class="nav-icon" aria-hidden="true"></span>
+                                    <span class="nav-group-label"><?= htmlspecialchars(__('perm_group_other'), ENT_QUOTES, 'UTF-8') ?></span>
+                                    <span class="nav-group-chevron" aria-hidden="true">▸</span>
+                                </button>
+                                <div class="nav-group-sub" id="perm-group-sub-other-a" role="region" aria-labelledby="perm-toggle-other-a" style="display:none">
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_a" <?= $contact_user_has_view ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="view_member_contact_a"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_a" <?= $admin_dp_wd_has_view ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="view_customer_total_dp_wd_a"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                </div>
                             </div>
                             <?php endif; ?>
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>

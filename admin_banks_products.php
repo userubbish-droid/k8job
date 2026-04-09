@@ -52,111 +52,111 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         if ($action === 'create_bank') {
             $name = trim($_POST['name'] ?? '');
             $sort = (int)($_POST['sort_order'] ?? 0);
-            if ($name === '') throw new RuntimeException('请输入银行/渠道名称。');
+            if ($name === '') throw new RuntimeException(__('abp_err_bank_name'));
             try {
                 $stmt = $pdo->prepare("INSERT INTO banks (company_id, name, sort_order) VALUES (?, ?, ?)");
                 $stmt->execute([$company_id, $name, $sort]);
-                $msg = '已添加银行/渠道。';
+                $msg = __('abp_msg_bank_added');
             } catch (Throwable $e) {
                 if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
-                    throw new RuntimeException('银行/渠道「' . htmlspecialchars($name) . '」已存在，请换一个名称。');
+                    throw new RuntimeException(__f('abp_err_bank_dup', htmlspecialchars($name)));
                 }
                 throw $e;
             }
         } elseif ($action === 'create_product') {
             $name = trim($_POST['name'] ?? '');
             $sort = (int)($_POST['sort_order'] ?? 0);
-            if ($name === '') throw new RuntimeException('请输入产品名称。');
+            if ($name === '') throw new RuntimeException(__('abp_err_product_name'));
             try {
                 $stmt = $pdo->prepare("INSERT INTO products (company_id, name, sort_order) VALUES (?, ?, ?)");
                 $stmt->execute([$company_id, $name, $sort]);
-                $msg = '已添加产品。';
+                $msg = __('abp_msg_product_added');
             } catch (Throwable $e) {
                 if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
-                    throw new RuntimeException('产品「' . htmlspecialchars($name) . '」已存在，请换一个名称。');
+                    throw new RuntimeException(__f('abp_err_product_dup', htmlspecialchars($name)));
                 }
                 throw $e;
             }
         } elseif ($action === 'create_expense') {
             $name = trim($_POST['name'] ?? '');
             $sort = (int)($_POST['sort_order'] ?? 0);
-            if ($name === '') throw new RuntimeException('请输入 Expense 名称。');
+            if ($name === '') throw new RuntimeException(__('abp_err_expense_name'));
             try {
                 _ensure_expenses_table($pdo);
                 $stmt = $pdo->prepare("INSERT INTO expenses (company_id, name, sort_order) VALUES (?, ?, ?)");
                 $stmt->execute([$company_id, $name, $sort]);
-                $msg = '已添加 Expense。';
+                $msg = __('abp_msg_expense_added');
             } catch (Throwable $e) {
                 if ($e->getCode() == '23000' || strpos($e->getMessage(), 'Duplicate') !== false || strpos($e->getMessage(), '1062') !== false) {
-                    throw new RuntimeException('Expense「' . htmlspecialchars($name) . '」已存在，请换一个名称。');
+                    throw new RuntimeException(__f('abp_err_expense_dup', htmlspecialchars($name)));
                 }
                 throw $e;
             }
         } elseif ($action === 'toggle_bank') {
             $id = (int)($_POST['id'] ?? 0);
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('abp_err_bad_param'));
             $stmt = $pdo->prepare("UPDATE banks SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
-            $msg = '已更新状态。';
+            $msg = __('abp_msg_status_updated');
         } elseif ($action === 'toggle_product') {
             $id = (int)($_POST['id'] ?? 0);
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('abp_err_bad_param'));
             $chk = $pdo->prepare('SELECT is_active, delete_pending_at FROM products WHERE id = ? AND company_id = ? LIMIT 1');
             $chk->execute([$id, $company_id]);
             $pr = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$pr) {
-                throw new RuntimeException('未找到该产品。');
+                throw new RuntimeException(__('abp_err_product_not_found'));
             }
             if ((int)($pr['is_active'] ?? 0) === 0 && !empty($pr['delete_pending_at'])) {
-                throw new RuntimeException('该产品已申请删除，请先撤销删除申请后再启用。');
+                throw new RuntimeException(__('abp_err_enable_before_delete_req'));
             }
             $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
-            $msg = '已更新状态。';
+            $msg = __('abp_msg_status_updated');
         } elseif ($action === 'request_product_delete') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) {
-                throw new RuntimeException('参数错误。');
+                throw new RuntimeException(__('abp_err_bad_param'));
             }
             $chk = $pdo->prepare('SELECT is_active, delete_pending_at, name FROM products WHERE id = ? AND company_id = ? LIMIT 1');
             $chk->execute([$id, $company_id]);
             $pr = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$pr) {
-                throw new RuntimeException('未找到该产品。');
+                throw new RuntimeException(__('abp_err_product_not_found'));
             }
             if ((int)($pr['is_active'] ?? 0) !== 0) {
-                throw new RuntimeException('请先将产品设为「禁用」，再申请删除。');
+                throw new RuntimeException(__('abp_err_disable_before_delete'));
             }
             if (!empty($pr['delete_pending_at'])) {
-                throw new RuntimeException('已提交删除申请，请等待老板审批。');
+                throw new RuntimeException(__('abp_err_delete_already_pending'));
             }
             $uid = (int)($_SESSION['user_id'] ?? 0);
             $pdo->prepare('UPDATE products SET delete_pending_at = NOW(), delete_pending_by = ? WHERE id = ? AND company_id = ?')->execute([$uid > 0 ? $uid : null, $id, $company_id]);
-            $msg = '已提交删除申请：该产品已从记账/下拉中隐藏，待老板批准后将彻底删除。';
+            $msg = __('abp_msg_delete_requested');
         } elseif ($action === 'cancel_product_delete') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) {
-                throw new RuntimeException('参数错误。');
+                throw new RuntimeException(__('abp_err_bad_param'));
             }
             $st = $pdo->prepare('UPDATE products SET delete_pending_at = NULL, delete_pending_by = NULL WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL');
             $st->execute([$id, $company_id]);
             if ($st->rowCount() === 0) {
-                throw new RuntimeException('无待审删除记录或产品不存在。');
+                throw new RuntimeException(__('abp_err_no_pending_delete'));
             }
-            $msg = '已撤销删除申请。';
+            $msg = __('abp_msg_delete_cancelled');
         } elseif ($action === 'approve_product_delete') {
             if (!$actor_is_boss_like) {
-                throw new RuntimeException('仅老板或平台总管理可批准彻底删除产品。');
+                throw new RuntimeException(__('abp_err_boss_only_delete'));
             }
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) {
-                throw new RuntimeException('参数错误。');
+                throw new RuntimeException(__('abp_err_bad_param'));
             }
             $chk = $pdo->prepare('SELECT name FROM products WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL LIMIT 1');
             $chk->execute([$id, $company_id]);
             $pr = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$pr) {
-                throw new RuntimeException('未找到待批准删除的产品。');
+                throw new RuntimeException(__('abp_err_no_pending_approve'));
             }
             $pname = trim((string)($pr['name'] ?? ''));
             $pdo->beginTransaction();
@@ -170,30 +170,30 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
                 throw $e;
             }
-            $msg = '已批准：产品「' . $pname . '」已从系统移除。';
+            $msg = __f('abp_msg_delete_approved', $pname);
         } elseif ($action === 'toggle_expense') {
             $id = (int)($_POST['id'] ?? 0);
-            if ($id <= 0) throw new RuntimeException('参数错误。');
+            if ($id <= 0) throw new RuntimeException(__('abp_err_bad_param'));
             _ensure_expenses_table($pdo);
             $stmt = $pdo->prepare("UPDATE expenses SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
-            $msg = '已更新状态。';
+            $msg = __('abp_msg_status_updated');
         } elseif ($action === 'do_transfer') {
-            if (empty($_POST['confirm_submit'])) throw new RuntimeException('请勾选「确认提交」后再提交。');
+            if (empty($_POST['confirm_submit'])) throw new RuntimeException(__('abp_err_confirm_transfer'));
             $from_bank = trim($_POST['from_bank'] ?? '');
             $to_bank   = trim($_POST['to_bank'] ?? '');
             $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
             $remark    = trim($_POST['transfer_remark'] ?? '');
             $day_raw   = trim($_POST['transfer_day'] ?? '');
-            if ($from_bank === '' || $to_bank === '' || $from_bank === $to_bank) throw new RuntimeException('请选择不同的转出、转入银行。');
-            if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException('请输入正确金额。');
+            if ($from_bank === '' || $to_bank === '' || $from_bank === $to_bank) throw new RuntimeException(__('abp_err_pick_banks'));
+            if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException(__('abp_err_amount'));
             $amount = (float)$amount;
             $day = preg_match('/^\d{4}-\d{2}-\d{2}$/', $day_raw) ? $day_raw : date('Y-m-d');
             $time = date('H:i:s');
             $uid = (int)($_SESSION['user_id'] ?? 0);
             $staff = (string)($_SESSION['user_name'] ?? $uid);
-            $remark_out = $remark !== '' ? '转至 ' . $to_bank . ' ' . $remark : '转至 ' . $to_bank;
-            $remark_in  = $remark !== '' ? '来自 ' . $from_bank . ' ' . $remark : '来自 ' . $from_bank;
+            $remark_out = $remark !== '' ? __f('abp_remark_to_bank_remark', $to_bank, $remark) : __f('abp_remark_to_bank', $to_bank);
+            $remark_in  = $remark !== '' ? __f('abp_remark_from_bank_remark', $from_bank, $remark) : __f('abp_remark_from_bank', $from_bank);
             try {
                 $cols = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
                 $vals = "?, ?, ?, 'WITHDRAW', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
@@ -203,18 +203,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $vals2 = "?, ?, ?, 'DEPOSIT', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
                 $stmt2 = $pdo->prepare("INSERT INTO transactions ($cols2) VALUES ($vals2)");
                 $stmt2->execute([$company_id, $day, $time, $to_bank, $amount, $amount, $staff, $remark_in, $uid, $uid]);
-                $msg = $from_bank . ' 转 ' . number_format($amount, 2) . ' 至 ' . $to_bank . ' 已记录。';
+                $msg = __f('abp_msg_transfer_recorded', $from_bank, number_format($amount, 2), $to_bank);
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
-                    throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_hide_from_member.sql 后再使用转账功能。');
+                    throw new RuntimeException(__('abp_err_migrate_hide'));
                 }
                 throw $e;
             }
         } elseif ($action === 'do_product_topup') {
             $product = trim($_POST['product'] ?? '');
             $amount  = str_replace(',', '', trim($_POST['amount'] ?? '0'));
-            if ($product === '') throw new RuntimeException('请选择产品。');
-            if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException('请输入正确加额数目。');
+            if ($product === '') throw new RuntimeException(__('abp_err_pick_product'));
+            if (!is_numeric($amount) || (float)$amount <= 0) throw new RuntimeException(__('abp_err_topup_amount'));
             $amount = (float)$amount;
             $day = date('Y-m-d');
             $time = date('H:i:s');
@@ -222,13 +222,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $staff = (string)($_SESSION['user_name'] ?? $uid);
             try {
                 $cols = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
-                $vals = "?, ?, ?, 'TOPUP', NULL, NULL, ?, ?, 0, ?, ?, '产品加额', 'approved', ?, ?, NOW(), 1";
+                $vals = "?, ?, ?, 'TOPUP', NULL, NULL, ?, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
                 $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
-                $stmt->execute([$company_id, $day, $time, $product, $amount, $amount, $staff, $uid, $uid]);
-                $msg = $product . ' 已加额 ' . number_format($amount, 2) . '，Balance 已更新。';
+                $stmt->execute([$company_id, $day, $time, $product, $amount, $amount, $staff, __('abp_remark_topup'), $uid, $uid]);
+                $msg = __f('abp_msg_topup_ok', $product, number_format($amount, 2));
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'hide_from_member') !== false || strpos($e->getMessage(), 'Unknown column') !== false) {
-                    throw new RuntimeException('请先在 phpMyAdmin 执行 migrate_hide_from_member.sql 后再使用加额功能。');
+                    throw new RuntimeException(__('abp_err_migrate_hide'));
                 }
                 throw $e;
             }
@@ -255,19 +255,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             if (!is_dir($data_dir)) @mkdir($data_dir, 0755, true);
             $data = ['bank' => $bank_cfg, 'product' => $product_cfg];
-            if (@file_put_contents($config_path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) === false) throw new RuntimeException('无法写入 data/balance_notify.json。');
-            $msg = '余额通知阈值已保存（按银行/产品分别设置）。';
+            if (@file_put_contents($config_path, json_encode($data, JSON_UNESCAPED_UNICODE | JSON_PRETTY_PRINT)) === false) throw new RuntimeException(__('abp_err_write_notify'));
+            $msg = __('abp_msg_notify_saved');
             $open_notify_form = true;
         } elseif ($action === 'save_balance') {
             $type = $_POST['adjust_type'] ?? '';
             $name = trim($_POST['name'] ?? '');
             $val = str_replace(',', '', trim($_POST['balance'] ?? '0'));
-            if ($name === '' || !in_array($type, ['bank', 'product', 'expense'], true) || !is_numeric($val)) throw new RuntimeException('参数错误。');
+            if ($name === '' || !in_array($type, ['bank', 'product', 'expense'], true) || !is_numeric($val)) throw new RuntimeException(__('abp_err_bad_param'));
             try {
                 $stmt = $pdo->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
                     ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
                 $stmt->execute([$company_id, $type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
-                $msg = '已更新为更改余额。';
+                $msg = __('abp_msg_balance_saved');
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'balance_adjust') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
                     _ensure_balance_adjust_table($pdo);
@@ -275,9 +275,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         $stmt = $pdo->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
                             ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
                         $stmt->execute([$company_id, $type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
-                        $msg = '已更新为更改余额。';
+                        $msg = __('abp_msg_balance_saved');
                     } catch (Throwable $e2) {
-                        throw new RuntimeException('无法创建 balance_adjust 表，请检查数据库用户是否有建表权限，或在 phpMyAdmin 执行 migrate_balance_adjust.sql。');
+                        throw new RuntimeException(__('abp_err_balance_adjust_create'));
                     }
                 } else {
                     throw $e;
@@ -486,11 +486,11 @@ try {
 } catch (Throwable $e) {}
 ?>
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>银行与产品 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
 </head>
@@ -500,17 +500,16 @@ try {
         <main class="dashboard-main">
             <div class="page-wrap" style="max-width: 960px;">
                 <div class="page-header">
-                    <h2>银行与产品</h2>
-                    <p class="breadcrumb"><a href="dashboard.php">首页</a><span>·</span>银行/渠道与产品管理</p>
+                    <h2><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?></h2>
                 </div>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
                 <?php if (!empty($diag_error)): ?>
-                <div class="alert alert-error">汇总流水时出错：<?= htmlspecialchars($diag_error) ?></div>
+                <div class="alert alert-error"><?= htmlspecialchars(__('abp_diag_error'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($diag_error) ?></div>
                 <?php endif; ?>
                 <?php if ($cnt_pending > 0): ?>
                 <div class="alert" style="background:#fef3c7;border:1px solid #f59e0b;color:#92400e;">
-                    <span style="font-size:1.2em;" aria-hidden="true">⚠</span> <strong><?= (int)$cnt_pending ?> 笔流水需通过审核</strong>，通过后才会计入上方 In/Out。<a href="admin_approvals.php">去审核</a>
+                    <span style="font-size:1.2em;" aria-hidden="true">⚠</span> <?= htmlspecialchars(__f('abp_pending_txn_line', (int)$cnt_pending), ENT_QUOTES, 'UTF-8') ?> <a href="admin_approvals.php"><?= htmlspecialchars(__('abp_go_approvals'), ENT_QUOTES, 'UTF-8') ?></a>
                 </div>
                 <?php endif; ?>
 
@@ -518,12 +517,12 @@ try {
                     <div class="bank-telegram-header">
                         <div class="bank-telegram-item">
                             <h3 style="display:flex;align-items:center;gap:8px;margin:0;">
-                                银行/渠道
-                                <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="展开互转与添加">+</button>
+                                <?= htmlspecialchars(__('abp_section_bank'), ENT_QUOTES, 'UTF-8') ?>
+                                <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="bank-add-wrap" aria-label="<?= htmlspecialchars(__('abp_aria_expand_transfer'), ENT_QUOTES, 'UTF-8') ?>">+</button>
                             </h3>
                             <div id="bank-add-wrap" style="display:none; margin-top:10px;">
                                 <div class="bank-transfer-box bank-contra-compact">
-                                    <div class="bank-contra-title">银行互转（contra）</div>
+                                    <div class="bank-contra-title"><?= htmlspecialchars(__('abp_bank_contra_title'), ENT_QUOTES, 'UTF-8') ?></div>
                                     <form method="post" id="bank-contra-form" class="bank-contra-form">
                                         <input type="hidden" name="action" value="do_transfer">
                                         <div class="bank-contra-row">
@@ -536,34 +535,34 @@ try {
                                             <select name="from_bank" id="contra-from-bank" class="form-control bank-contra-select" required><option value="">— From —</option><?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); ?><option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option><?php endforeach; ?></select>
                                             <button type="button" class="btn btn-sm btn-outline" id="contra-reverse">Reverse</button>
                                             <span class="bank-contra-label">Amount</span>
-                                            <input type="text" name="amount" class="form-control bank-contra-input" placeholder="金额" inputmode="decimal" required style="width:88px;">
+                                            <input type="text" name="amount" class="form-control bank-contra-input" placeholder="<?= htmlspecialchars(__('abp_placeholder_amount'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" required style="width:88px;">
                                             <span class="bank-contra-label">Remark</span>
-                                            <input type="text" name="transfer_remark" class="form-control bank-contra-input" placeholder="选填" style="width:100px;">
+                                            <input type="text" name="transfer_remark" class="form-control bank-contra-input" placeholder="<?= htmlspecialchars(__('abp_placeholder_optional'), ENT_QUOTES, 'UTF-8') ?>" style="width:100px;">
                                         </div>
                                         <div class="bank-contra-row bank-contra-row-footer">
-                                            <label class="bank-contra-check"><input type="checkbox" name="confirm_submit" value="1" required> 确认提交</label>
-                                            <button type="submit" class="btn btn-primary btn-sm">Submit</button>
+                                            <label class="bank-contra-check"><input type="checkbox" name="confirm_submit" value="1" required> <?= htmlspecialchars(__('abp_confirm_checkbox'), ENT_QUOTES, 'UTF-8') ?></label>
+                                            <button type="submit" class="btn btn-primary btn-sm"><?= htmlspecialchars(__('abp_btn_submit'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </div>
                                     </form>
                                 </div>
                                 <form method="post" style="margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
                                     <input type="hidden" name="action" value="create_bank">
                                     <div class="form-group">
-                                        <label>名称 *</label>
-                                        <input name="name" class="form-control" required placeholder="例如 HLB">
+                                        <label><?= htmlspecialchars(__('abp_label_name_req'), ENT_QUOTES, 'UTF-8') ?></label>
+                                        <input name="name" class="form-control" required placeholder="<?= htmlspecialchars(__('abp_placeholder_bank_ex'), ENT_QUOTES, 'UTF-8') ?>">
                                     </div>
                                     <div class="form-group">
-                                        <label>排序</label>
+                                        <label><?= htmlspecialchars(__('abp_label_sort'), ENT_QUOTES, 'UTF-8') ?></label>
                                         <input name="sort_order" class="form-control" type="number" value="0">
                                     </div>
-                                    <button type="submit" class="btn btn-primary">添加</button>
+                                    <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('abp_btn_add'), ENT_QUOTES, 'UTF-8') ?></button>
                                 </form>
                             </div>
                         </div>
                         <div class="bank-telegram-item">
                             <div class="bank-contra-title" style="display:flex;align-items:center;gap:8px;margin:0;">
-                                Telegram 余额通知
-                                <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="balance-notify-wrap" aria-label="展开设置"><?= $open_notify_form ? '−' : '+' ?></button>
+                                <?= htmlspecialchars(__('abp_telegram_notify'), ENT_QUOTES, 'UTF-8') ?>
+                                <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="balance-notify-wrap" aria-label="<?= htmlspecialchars(__('abp_aria_expand_settings'), ENT_QUOTES, 'UTF-8') ?>"><?= $open_notify_form ? '−' : '+' ?></button>
                             </div>
                             <div id="balance-notify-wrap" style="display:<?= $open_notify_form ? 'block' : 'none' ?>; margin-top:8px;">
                                 <div class="bank-contra-compact bank-notify-settings">
@@ -571,26 +570,26 @@ try {
                                         <input type="hidden" name="action" value="save_balance_notify">
                                         <div class="balance-notify-grid">
                                             <div class="balance-notify-group">
-                                                <span class="bank-contra-label">银行（超过即通知）</span>
+                                                <span class="bank-contra-label"><?= htmlspecialchars(__('abp_notify_bank_above'), ENT_QUOTES, 'UTF-8') ?></span>
                                                 <?php foreach ($banks as $b): $bname = trim((string)$b['name']); $bkey = strtolower($bname); $val = $balance_notify_cfg['bank'][$bkey] ?? ''; ?>
                                                 <div class="balance-notify-row">
                                                     <label class="balance-notify-name"><?= htmlspecialchars($bname) ?></label>
-                                                    <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                                    <input type="text" name="bank[<?= htmlspecialchars($bkey) ?>]" class="form-control bank-contra-input" placeholder="<?= htmlspecialchars(__('abp_placeholder_leave_empty'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
                                                 </div>
                                                 <?php endforeach; ?>
                                             </div>
                                             <div class="balance-notify-group">
-                                                <span class="bank-contra-label">产品（低于即通知）</span>
+                                                <span class="bank-contra-label"><?= htmlspecialchars(__('abp_notify_product_below'), ENT_QUOTES, 'UTF-8') ?></span>
                                                 <?php foreach ($products_full as $p): $pname = trim((string)$p['name']); $pkey = strtolower($pname); $val = $balance_notify_cfg['product'][$pkey] ?? ''; ?>
                                                 <div class="balance-notify-row">
                                                     <label class="balance-notify-name"><?= htmlspecialchars($pname) ?></label>
-                                                    <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="留空" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
+                                                    <input type="text" name="product[<?= htmlspecialchars($pkey) ?>]" class="form-control bank-contra-input" placeholder="<?= htmlspecialchars(__('abp_placeholder_leave_empty'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" value="<?= $val !== '' && $val > 0 ? htmlspecialchars((string)$val) : '' ?>" style="width:88px;">
                                                 </div>
                                                 <?php endforeach; ?>
                                             </div>
                                         </div>
                                         <div class="bank-contra-row bank-contra-row-footer" style="margin-top:10px;">
-                                            <button type="submit" class="btn btn-primary btn-sm">保存</button>
+                                            <button type="submit" class="btn btn-primary btn-sm"><?= htmlspecialchars(__('abp_btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </div>
                                     </form>
                                 </div>
@@ -601,16 +600,16 @@ try {
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>名称</th>
-                                <th>状态</th>
-                                <th>排序</th>
-                                <th>创建时间</th>
-                                <th class="num">Starting Balance</th>
-                                <th class="num">In</th>
-                                <th class="num">Out</th>
-                                <th class="num">Balance</th>
-                                <th>操作</th>
+                                <th><?= htmlspecialchars(__('abp_col_id'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_name'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_status'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_sort'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_created'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_starting_balance'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_in'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_out'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_balance'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_actions'), ENT_QUOTES, 'UTF-8') ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -627,7 +626,7 @@ try {
                             <tr>
                                 <td><?= (int)$b['id'] ?></td>
                                 <td><?= htmlspecialchars($bname) ?></td>
-                                <td><?= ((int)$b['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                                <td><?= ((int)$b['is_active'] === 1) ? htmlspecialchars(__('abp_status_enabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('abp_status_disabled'), ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int)$b['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
@@ -636,42 +635,42 @@ try {
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
-                                        <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
+                                        <button type="button" class="btn btn-sm btn-primary js-balance-change"><?= htmlspecialchars(__('abp_btn_change'), ENT_QUOTES, 'UTF-8') ?></button>
                                         <form method="post" class="balance-inline-form" style="display:none;">
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="bank">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($bname) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="Starting Balance" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>" title="仅修改 Starting Balance">
-                                            <button type="submit" class="btn btn-sm btn-primary">确定</button>
-                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="<?= htmlspecialchars(__('abp_col_starting_balance'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>" title="<?= htmlspecialchars(__('abp_title_starting_balance_only'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <button type="submit" class="btn btn-sm btn-primary"><?= htmlspecialchars(__('abp_btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel"><?= htmlspecialchars(__('abp_btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </form>
                                     </span>
                                     <span class="transfer-cell-inline" style="display:inline-block;">
-                                        <button type="button" class="btn btn-sm btn-outline js-transfer-open" data-bank="<?= htmlspecialchars($bname) ?>">转账</button>
+                                        <button type="button" class="btn btn-sm btn-outline js-transfer-open" data-bank="<?= htmlspecialchars($bname) ?>"><?= htmlspecialchars(__('abp_btn_transfer'), ENT_QUOTES, 'UTF-8') ?></button>
                                         <form method="post" class="transfer-inline-form" style="display:none;">
                                             <input type="hidden" name="action" value="do_transfer">
                                             <input type="hidden" name="from_bank" class="transfer-from-bank" value="">
-                                            <span class="transfer-label">转至</span>
+                                            <span class="transfer-label"><?= htmlspecialchars(__('abp_transfer_to_label'), ENT_QUOTES, 'UTF-8') ?></span>
                                             <select name="to_bank" class="form-control transfer-to-bank" required style="display:inline-block;width:auto;min-width:90px;">
-                                                <option value="">— 选银行 —</option>
+                                                <option value=""><?= htmlspecialchars(__('abp_select_bank_placeholder'), ENT_QUOTES, 'UTF-8') ?></option>
                                                 <?php foreach ($banks as $ob): $oname = trim((string)$ob['name']); if ($oname === $bname) continue; ?>
                                                 <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
                                                 <?php endforeach; ?>
                                             </select>
-                                            <input type="text" name="amount" class="form-control transfer-amount" placeholder="金额" inputmode="decimal" required size="6" style="display:inline-block;width:80px;">
-                                            <button type="submit" class="btn btn-sm btn-primary">确定</button>
-                                            <button type="button" class="btn btn-sm btn-outline js-transfer-cancel">取消</button>
+                                            <input type="text" name="amount" class="form-control transfer-amount" placeholder="<?= htmlspecialchars(__('abp_placeholder_amount'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" required size="6" style="display:inline-block;width:80px;">
+                                            <button type="submit" class="btn btn-sm btn-primary"><?= htmlspecialchars(__('abp_btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-sm btn-outline js-transfer-cancel"><?= htmlspecialchars(__('abp_btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </form>
                                     </span>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_bank">
                                         <input type="hidden" name="id" value="<?= (int)$b['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$b['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$b['is_active'] === 1) ? htmlspecialchars(__('abp_status_disabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('abp_status_enabled'), ENT_QUOTES, 'UTF-8') ?></button>
                                     </form>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$banks): ?><tr><td colspan="10">暂无银行/渠道</td></tr><?php endif; ?>
+                            <?php if (!$banks): ?><tr><td colspan="10"><?= htmlspecialchars(__('abp_empty_banks'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                         </tbody>
                     </table>
                     </div>
@@ -679,74 +678,54 @@ try {
 
                 <div class="card">
                     <h3 class="section-title-inline">
-                        产品管理
-                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="product-add-wrap" aria-label="展开加额与添加">+</button>
+                        <?= htmlspecialchars(__('abp_section_product_mgmt'), ENT_QUOTES, 'UTF-8') ?>
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="product-add-wrap" aria-label="<?= htmlspecialchars(__('abp_aria_expand_topup_add'), ENT_QUOTES, 'UTF-8') ?>">+</button>
                     </h3>
-                    <?php
-                    $pf_q = static function (string $pf) use ($bank_status_filter, $expense_status_filter): string {
-                        $q = ['product_status_filter' => $pf];
-                        if ($bank_status_filter !== 'all') {
-                            $q['bank_status_filter'] = $bank_status_filter;
-                        }
-                        if ($expense_status_filter !== 'all') {
-                            $q['expense_status_filter'] = $expense_status_filter;
-                        }
-                        return htmlspecialchars(http_build_query($q), ENT_QUOTES, 'UTF-8');
-                    };
-                    ?>
-                    <p class="muted" style="font-size:13px;margin:6px 0 12px;line-height:1.6;">
-                        列表筛选：
-                        <a href="admin_banks_products.php?<?= $pf_q('all') ?>"<?= $product_status_filter === 'all' ? ' style="font-weight:700;"' : '' ?>>全部</a>
-                        · <a href="admin_banks_products.php?<?= $pf_q('active') ?>"<?= $product_status_filter === 'active' ? ' style="font-weight:700;"' : '' ?>>仅启用</a>
-                        · <a href="admin_banks_products.php?<?= $pf_q('inactive') ?>"<?= $product_status_filter === 'inactive' ? ' style="font-weight:700;"' : '' ?>>仅禁用</a>
-                        · <a href="admin_banks_products.php?<?= $pf_q('pending_delete') ?>"<?= $product_status_filter === 'pending_delete' ? ' style="font-weight:700;"' : '' ?>>待删审核</a>
-                        <span style="color:#94a3b8;">（删除须先禁用，再申请；老板批准后才会从库中删除）</span>
-                    </p>
                     <div id="product-add-wrap" style="display:none; margin-bottom:16px;">
                         <div class="product-topup-box" style="margin-bottom:16px; padding:12px 14px; background:rgba(248,250,252,0.9); border:1px solid var(--border); border-radius:6px;">
-                            <div style="font-weight:600; margin-bottom:8px; font-size:13px;">产品加额（balance 不够时加分）</div>
+                            <div style="font-weight:600; margin-bottom:8px; font-size:13px;"><?= htmlspecialchars(__('abp_product_topup_title'), ENT_QUOTES, 'UTF-8') ?></div>
                             <form method="post" style="display:flex; flex-wrap:wrap; align-items:center; gap:8px;">
                                 <input type="hidden" name="action" value="do_product_topup">
-                                <span style="font-size:13px;">选择产品</span>
+                                <span style="font-size:13px;"><?= htmlspecialchars(__('abp_select_product'), ENT_QUOTES, 'UTF-8') ?></span>
                                 <select name="product" class="form-control" required style="width:auto; min-width:110px;">
-                                    <option value="">— 请选 —</option>
+                                    <option value=""><?= htmlspecialchars(__('abp_option_select'), ENT_QUOTES, 'UTF-8') ?></option>
                                     <?php foreach ($products_usable as $op): $oname = trim((string)$op['name']); ?>
                                     <option value="<?= htmlspecialchars($oname) ?>"><?= htmlspecialchars($oname) ?></option>
                                     <?php endforeach; ?>
                                 </select>
-                                <span style="font-size:13px;">加</span>
-                                <input type="text" name="amount" class="form-control" placeholder="数目" inputmode="decimal" required style="width:90px;">
-                                <button type="submit" class="btn btn-primary">提交</button>
+                                <span style="font-size:13px;"><?= htmlspecialchars(__('abp_label_add_amount'), ENT_QUOTES, 'UTF-8') ?></span>
+                                <input type="text" name="amount" class="form-control" placeholder="<?= htmlspecialchars(__('abp_placeholder_amount_num'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" required style="width:90px;">
+                                <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('abp_btn_submit'), ENT_QUOTES, 'UTF-8') ?></button>
                             </form>
                         </div>
                         <form method="post" style="padding-top:14px; border-top:1px solid var(--border);">
                             <input type="hidden" name="action" value="create_product">
                             <div class="form-group">
-                                <label>名称 *</label>
-                                <input name="name" class="form-control" required placeholder="例如 MEGA">
+                                <label><?= htmlspecialchars(__('abp_label_name_req'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <input name="name" class="form-control" required placeholder="<?= htmlspecialchars(__('abp_placeholder_product_ex'), ENT_QUOTES, 'UTF-8') ?>">
                             </div>
                             <div class="form-group">
-                                <label>排序</label>
+                                <label><?= htmlspecialchars(__('abp_label_sort'), ENT_QUOTES, 'UTF-8') ?></label>
                                 <input name="sort_order" class="form-control" type="number" value="0">
                             </div>
-                            <button type="submit" class="btn btn-primary">添加</button>
+                            <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('abp_btn_add'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>名称</th>
-                                <th>状态</th>
-                                <th>排序</th>
-                                <th>创建时间</th>
-                                <th class="num">Starting Balance</th>
-                                <th class="num">In</th>
-                                <th class="num">Topup</th>
-                                <th class="num">Out</th>
-                                <th class="num">Balance</th>
-                                <th>操作</th>
+                                <th><?= htmlspecialchars(__('abp_col_id'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_name'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_status'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_sort'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_created'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_starting_balance'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_in'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_topup'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_out'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_balance'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_actions'), ENT_QUOTES, 'UTF-8') ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -761,12 +740,12 @@ try {
                                 $topup = $total_topup_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
                                 $balance_now = $start - $tin + $topup + $tout;
-                                $status_cell = $pend_del ? '禁用 · 待删审核' : (((int)$p['is_active'] === 1) ? '启用' : '禁用');
+                                $status_cell = $pend_del ? __('abp_status_disabled_pending_del') : (((int)$p['is_active'] === 1) ? __('abp_status_enabled') : __('abp_status_disabled'));
                             ?>
                             <tr<?= $pend_del ? ' style="background:rgba(254,242,242,0.88);"' : '' ?>>
                                 <td><?= (int)$p['id'] ?></td>
                                 <td><?= htmlspecialchars($pname) ?></td>
-                                <td><?= htmlspecialchars($status_cell) ?></td>
+                                <td><?= htmlspecialchars($status_cell, ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
                                 <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
@@ -776,48 +755,48 @@ try {
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
-                                        <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
+                                        <button type="button" class="btn btn-sm btn-primary js-balance-change"><?= htmlspecialchars(__('abp_btn_change'), ENT_QUOTES, 'UTF-8') ?></button>
                                         <form method="post" class="balance-inline-form" style="display:none;">
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="product">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($pname) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="Starting Balance" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>" title="仅修改 Starting Balance">
-                                            <button type="submit" class="btn btn-sm btn-primary">确定</button>
-                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="<?= htmlspecialchars(__('abp_col_starting_balance'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" required size="6" value="<?= $cur !== null ? htmlspecialchars(sprintf('%.2f', $cur)) : '' ?>" title="<?= htmlspecialchars(__('abp_title_starting_balance_only'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <button type="submit" class="btn btn-sm btn-primary"><?= htmlspecialchars(__('abp_btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel"><?= htmlspecialchars(__('abp_btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </form>
                                     </span>
                                     <?php if (!$pend_del): ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="toggle_product">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$p['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$p['is_active'] === 1) ? htmlspecialchars(__('abp_status_disabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('abp_status_enabled'), ENT_QUOTES, 'UTF-8') ?></button>
                                     </form>
                                     <?php endif; ?>
                                     <?php if (!$pend_del && (int)$p['is_active'] === 0): ?>
-                                    <form method="post" class="inline" style="display:inline;margin-left:8px;" data-confirm="提交后该产品将从业务下拉中隐藏，需老板批准后才从系统彻底删除。确定申请？">
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;" data-confirm="<?= htmlspecialchars(__('abp_confirm_request_delete'), ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="action" value="request_product_delete">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline" style="border-color:#dc2626;color:#b91c1c;">申请删除</button>
+                                        <button type="submit" class="btn btn-sm btn-outline" style="border-color:#dc2626;color:#b91c1c;"><?= htmlspecialchars(__('abp_btn_request_delete'), ENT_QUOTES, 'UTF-8') ?></button>
                                     </form>
                                     <?php endif; ?>
                                     <?php if ($pend_del): ?>
                                     <form method="post" class="inline" style="display:inline;margin-left:8px;">
                                         <input type="hidden" name="action" value="cancel_product_delete">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline">撤销申请</button>
+                                        <button type="submit" class="btn btn-sm btn-outline"><?= htmlspecialchars(__('abp_btn_cancel_request'), ENT_QUOTES, 'UTF-8') ?></button>
                                     </form>
                                     <?php if ($actor_is_boss_like): ?>
-                                    <form method="post" class="inline" style="display:inline;margin-left:8px;" data-confirm="将永久删除该产品及对应期初余额（balance_adjust）记录，历史流水中的产品名仍会保留。不可恢复，确定？">
+                                    <form method="post" class="inline" style="display:inline;margin-left:8px;" data-confirm="<?= htmlspecialchars(__('abp_confirm_approve_delete'), ENT_QUOTES, 'UTF-8') ?>">
                                         <input type="hidden" name="action" value="approve_product_delete">
                                         <input type="hidden" name="id" value="<?= (int)$p['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-primary">批准删除</button>
+                                        <button type="submit" class="btn btn-sm btn-primary"><?= htmlspecialchars(__('abp_btn_approve_delete'), ENT_QUOTES, 'UTF-8') ?></button>
                                     </form>
                                     <?php endif; ?>
                                     <?php endif; ?>
                                 </td>
                             </tr>
                             <?php endforeach; ?>
-                            <?php if (!$products): ?><tr><td colspan="11">暂无产品</td></tr><?php endif; ?>
+                            <?php if (!$products): ?><tr><td colspan="11"><?= htmlspecialchars(__('abp_empty_products'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                         </tbody>
                     </table>
                     </div>
@@ -825,37 +804,37 @@ try {
 
                 <div class="card">
                     <h3 class="section-title-inline">
-                        Expense 管理
-                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="expense-add-wrap" aria-label="展开添加 Expense">+</button>
+                        <?= htmlspecialchars(__('abp_section_expense_mgmt'), ENT_QUOTES, 'UTF-8') ?>
+                        <button type="button" class="btn btn-sm btn-outline js-toggle-add" data-target="expense-add-wrap" aria-label="<?= htmlspecialchars(__('abp_aria_expand_expense'), ENT_QUOTES, 'UTF-8') ?>">+</button>
                     </h3>
                     <div id="expense-add-wrap" style="display:none; margin-bottom:16px;">
                         <form method="post" style="padding-top:14px; border-top:1px solid var(--border);">
                             <input type="hidden" name="action" value="create_expense">
                             <div class="form-group">
-                                <label>名称 *</label>
-                                <input name="name" class="form-control" required placeholder="例如 Office / Salary / Ads">
+                                <label><?= htmlspecialchars(__('abp_label_name_req'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <input name="name" class="form-control" required placeholder="<?= htmlspecialchars(__('abp_placeholder_expense_ex'), ENT_QUOTES, 'UTF-8') ?>">
                             </div>
                             <div class="form-group">
-                                <label>排序</label>
+                                <label><?= htmlspecialchars(__('abp_label_sort'), ENT_QUOTES, 'UTF-8') ?></label>
                                 <input name="sort_order" class="form-control" type="number" value="0">
                             </div>
-                            <button type="submit" class="btn btn-primary">添加</button>
+                            <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('abp_btn_add'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                     </div>
                     <div style="overflow-x:auto;">
                     <table class="data-table">
                         <thead>
                             <tr>
-                                <th>ID</th>
-                                <th>名称</th>
-                                <th>状态</th>
-                                <th>排序</th>
-                                <th>创建时间</th>
-                                <th class="num">Starting Balance</th>
-                                <th class="num">In</th>
-                                <th class="num">Out</th>
-                                <th class="num">Balance</th>
-                                <th>操作</th>
+                                <th><?= htmlspecialchars(__('abp_col_id'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_name'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_status'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_sort'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_created'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_starting_balance'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_in'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_out'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th class="num"><?= htmlspecialchars(__('abp_col_balance'), ENT_QUOTES, 'UTF-8') ?></th>
+                                <th><?= htmlspecialchars(__('abp_col_actions'), ENT_QUOTES, 'UTF-8') ?></th>
                             </tr>
                         </thead>
                         <tbody>
@@ -863,7 +842,7 @@ try {
                             <tr>
                                 <td><?= (int)$e['id'] ?></td>
                                 <td><?= htmlspecialchars((string)$e['name']) ?></td>
-                                <td><?= ((int)$e['is_active'] === 1) ? '启用' : '禁用' ?></td>
+                                <td><?= ((int)$e['is_active'] === 1) ? htmlspecialchars(__('abp_status_enabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('abp_status_disabled'), ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int)$e['sort_order'] ?></td>
                                 <td><?= htmlspecialchars((string)$e['created_at']) ?></td>
                                 <?php
@@ -881,20 +860,20 @@ try {
                                 <td class="num profit"><?= number_format($ebalance, 2) ?></td>
                                 <td>
                                     <span class="balance-cell-inline">
-                                        <button type="button" class="btn btn-sm btn-primary js-balance-change">更改</button>
+                                        <button type="button" class="btn btn-sm btn-primary js-balance-change"><?= htmlspecialchars(__('abp_btn_change'), ENT_QUOTES, 'UTF-8') ?></button>
                                         <form method="post" class="balance-inline-form" style="display:none;">
                                             <input type="hidden" name="action" value="save_balance">
                                             <input type="hidden" name="adjust_type" value="expense">
                                             <input type="hidden" name="name" value="<?= htmlspecialchars($ename) ?>">
-                                            <input type="text" name="balance" class="balance-inline-input" placeholder="Starting Balance" inputmode="decimal" required size="6" value="<?= $ecur !== null ? htmlspecialchars(sprintf('%.2f', $ecur)) : '' ?>" title="仅修改 Starting Balance">
-                                            <button type="submit" class="btn btn-sm btn-primary">确定</button>
-                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel">取消</button>
+                                            <input type="text" name="balance" class="balance-inline-input" placeholder="<?= htmlspecialchars(__('abp_col_starting_balance'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal" required size="6" value="<?= $ecur !== null ? htmlspecialchars(sprintf('%.2f', $ecur)) : '' ?>" title="<?= htmlspecialchars(__('abp_title_starting_balance_only'), ENT_QUOTES, 'UTF-8') ?>">
+                                            <button type="submit" class="btn btn-sm btn-primary"><?= htmlspecialchars(__('abp_btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
+                                            <button type="button" class="btn btn-sm btn-outline js-balance-inline-cancel"><?= htmlspecialchars(__('abp_btn_cancel'), ENT_QUOTES, 'UTF-8') ?></button>
                                         </form>
                                     </span>
                                     <form method="post" class="inline" style="display:inline;">
                                         <input type="hidden" name="action" value="toggle_expense">
                                         <input type="hidden" name="id" value="<?= (int)$e['id'] ?>">
-                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$e['is_active'] === 1) ? '禁用' : '启用' ?></button>
+                                        <button type="submit" class="btn btn-sm btn-outline"><?= ((int)$e['is_active'] === 1) ? htmlspecialchars(__('abp_status_disabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('abp_status_enabled'), ENT_QUOTES, 'UTF-8') ?></button>
                                     </form>
                                 </td>
                             </tr>
