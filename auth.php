@@ -236,6 +236,8 @@ function role_label(string $role): string
 /**
  * 当前登录者是否可管理目标用户：平台 superadmin 仅由 superadmin 管理；superadmin 可管理任意分公司的账号；
  * 分公司 admin / boss 仅可管理本公司且非 superadmin 的用户。
+ * 另：分公司 Admin 不可管理另一名 Admin（含权限、改资料、改角色等），仅 Boss 或平台 superadmin 可管理 Admin。
+ * 另：分公司 Admin 不可管理更高层级（Boss、平台 superadmin）。
  */
 function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
 {
@@ -248,7 +250,7 @@ function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
     if (!$row) {
         return false;
     }
-    $role = (string)($row['role'] ?? '');
+    $role = strtolower(trim((string)($row['role'] ?? '')));
     $actor_role = (string)($_SESSION['user_role'] ?? '');
     $actor_sa = $actor_role === 'superadmin';
     $actor_company_mgr = in_array($actor_role, ['admin', 'boss'], true);
@@ -257,6 +259,14 @@ function user_is_manageable_by_current_actor(PDO $pdo, int $user_id): bool
     }
     if ($actor_sa) {
         return true;
+    }
+    // 分公司 Admin 不可管理 Boss / 平台 superadmin（列表不展示、也不可直链操作）
+    if ($actor_role === 'admin' && in_array($role, ['boss', 'superadmin'], true)) {
+        return false;
+    }
+    // 分公司 Admin 不能操作另一名 Admin；本人除外（改自己资料/密码等）
+    if ($actor_role === 'admin' && $role === 'admin' && $user_id !== (int)($_SESSION['user_id'] ?? 0)) {
+        return false;
     }
     $cid = current_company_id();
     if ($cid <= 0 || !$actor_company_mgr) {

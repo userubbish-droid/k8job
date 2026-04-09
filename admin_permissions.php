@@ -86,31 +86,31 @@ if ($selected_contact_user_id > 0 && !in_array($selected_contact_user_id, array_
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_admin_month') {
     if (!$actor_can_set_admin_month) {
-        $err = '仅 Boss 或平台 big boss 可设置 Admin 的首页本月数据权限。';
+        $err = __('perm_err_boss_admin_month');
     } elseif ($selected_admin_id <= 0) {
-        $err = '请选择有效的 Admin。';
+        $err = __('perm_err_pick_admin');
     } elseif (!user_is_manageable_by_current_actor($pdo, $selected_admin_id)) {
-        $err = '无权限保存该用户的设置。';
+        $err = __('perm_err_save_user_forbidden');
     } else {
         try {
             $chk = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
             $chk->execute([$selected_admin_id]);
             $rrow = $chk->fetch(PDO::FETCH_ASSOC);
             if (($rrow['role'] ?? '') !== 'admin') {
-                $err = '仅可为角色为 Admin 的用户设置此项。';
+                $err = __('perm_err_admin_only_month');
             } else {
                 $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
                 if (!empty($_POST['dashboard_month_data'])) {
                     $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$selected_admin_id, PERM_DASHBOARD_MONTH_DATA]);
                 }
-                $msg = '已更新该 Admin 的首页「本月数据」权限。';
+                $msg = __('perm_ok_admin_month_updated');
             }
         } catch (Throwable $e) {
             $em = $e->getMessage();
             if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
-                $err = '保存失败：尚未创建权限表。请执行 migrate_user_permissions.sql 中的 SQL 后重试。';
+                $err = __('perm_err_migration_short');
             } else {
-                $err = '保存失败：' . htmlspecialchars($em);
+                $err = __f('perm_err_save_failed_reason', htmlspecialchars($em, ENT_QUOTES, 'UTF-8'));
             }
         }
     }
@@ -134,13 +134,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && !in_array(($_PO
             foreach ($to_insert as $key) {
                 $stmt->execute([$selected_id, $key]);
             }
-            $msg = '已保存该员工的权限。';
+            $msg = __('perm_ok_member_perms_saved');
         } catch (Throwable $e) {
             $msg = $e->getMessage();
             if (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false)) {
-                $err = '保存失败：尚未创建权限表。请到 Hostinger 的 phpMyAdmin 中选中当前数据库，执行一次 <strong>migrate_user_permissions.sql</strong> 里的 SQL（创建 user_permissions 表），保存后再试。';
+                $err = __('perm_err_migration_long');
             } else {
-                $err = '保存失败：' . htmlspecialchars($msg);
+                $err = __f('perm_err_save_failed_reason', htmlspecialchars($msg, ENT_QUOTES, 'UTF-8'));
             }
         }
     }
@@ -148,11 +148,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $selected_id > 0 && !in_array(($_PO
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_contact_view') {
     if (!$actor_can_set_contact_view) {
-        $err = '仅 Boss 或平台 big boss 可设置联系电话查看权限。';
+        $err = __('perm_err_boss_contact');
     } elseif ($selected_contact_user_id <= 0) {
-        $err = '请选择有效的用户。';
+        $err = __('perm_err_pick_user');
     } elseif (!user_is_manageable_by_current_actor($pdo, $selected_contact_user_id)) {
-        $err = '无权限保存该用户的设置。';
+        $err = __('perm_err_save_user_forbidden');
     } else {
         try {
             $chk = $pdo->prepare("SELECT role FROM users WHERE id = ? LIMIT 1");
@@ -160,20 +160,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
             $rrow = $chk->fetch(PDO::FETCH_ASSOC);
             $r = strtolower(trim((string)($rrow['role'] ?? '')));
             if (!in_array($r, ['admin', 'member'], true)) {
-                $err = '仅可为 Admin 或 Member 设置此项。';
+                $err = __('perm_err_am_only_contact');
             } else {
                 $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
                 if (!empty($_POST['view_member_contact'])) {
                     $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$selected_contact_user_id, PERM_VIEW_MEMBER_CONTACT]);
                 }
-                $msg = '已更新该用户的联系电话查看权限。';
+                $msg = __('perm_ok_contact_updated');
             }
         } catch (Throwable $e) {
             $em = $e->getMessage();
             if (strpos($em, 'user_permissions') !== false && (strpos($em, "doesn't exist") !== false || strpos($em, '1146') !== false)) {
-                $err = '保存失败：尚未创建权限表。请执行 migrate_user_permissions.sql 中的 SQL 后重试。';
+                $err = __('perm_err_migration_short');
             } else {
-                $err = '保存失败：' . htmlspecialchars($em);
+                $err = __f('perm_err_save_failed_reason', htmlspecialchars($em, ENT_QUOTES, 'UTF-8'));
             }
         }
     }
@@ -212,17 +212,20 @@ if ($selected_id > 0) {
         $current = [];
         $msg = $e->getMessage();
         if (empty($err) && (strpos($msg, "user_permissions") !== false && (strpos($msg, "doesn't exist") !== false || strpos($msg, '1146') !== false))) {
-            $err = '当前数据库缺少 <strong>user_permissions</strong> 表。请到 phpMyAdmin 选中数据库，执行 <strong>migrate_user_permissions.sql</strong> 中的 SQL 创建该表后刷新本页。';
+            $err = __('perm_err_missing_table_page');
         }
     }
 }
+
+$disp_o = app_lang() === 'en' ? ' (' : '（';
+$disp_c = app_lang() === 'en' ? ')' : '）';
 ?>
 <!doctype html>
-<html lang="zh-CN">
+<html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>权限设置 - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
+    <title><?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <style>
         .perm-list { list-style: none; padding: 0; margin: 0; }
@@ -280,10 +283,10 @@ if ($selected_id > 0) {
         <main class="dashboard-main">
     <div class="page-wrap" style="max-width: 560px;">
         <div class="page-header">
-            <h2>权限设置<?= $actor_is_superadmin ? '（全平台）' : '（本公司）' ?></h2>
+            <h2><?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($actor_is_superadmin ? __('perm_scope_all') : __('perm_scope_company'), ENT_QUOTES, 'UTF-8') ?></h2>
             <p class="breadcrumb">
-                <a href="dashboard.php">首页</a><span>·</span>
-                <a href="admin_users.php">用户管理</a>
+                <a href="dashboard.php"><?= htmlspecialchars(__('nav_home'), ENT_QUOTES, 'UTF-8') ?></a><span>·</span>
+                <a href="admin_users.php"><?= htmlspecialchars(__('nav_user_management'), ENT_QUOTES, 'UTF-8') ?></a>
                 <?= $actor_is_superadmin ? '' : '<span>·</span><span>' . htmlspecialchars(__('perm_breadcrumb_co_extra'), ENT_QUOTES, 'UTF-8') . '</span>' ?>
             </p>
         </div>
@@ -296,16 +299,16 @@ if ($selected_id > 0) {
             <form method="get" class="member-select">
                 <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
                 <div class="form-group">
-                    <label>选择 Member</label>
+                    <label><?= htmlspecialchars(__('perm_select_member_label'), ENT_QUOTES, 'UTF-8') ?></label>
                     <select name="user_id" class="form-control" onchange="this.form.submit()">
-                        <option value="">-- 请选 --</option>
+                        <option value=""><?= htmlspecialchars(__('perm_opt_please_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <?php foreach ($members as $m):
                             $m_cc = trim((string)($m['company_code'] ?? ''));
                             $co_tag = ($actor_is_superadmin && $m_cc !== '') ? (' [' . $m_cc . ']') : '';
                         ?>
                             <option value="<?= (int)$m['id'] ?>" <?= $selected_id === (int)$m['id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($m['username']) ?>
-                                <?= $m['display_name'] ? '（' . htmlspecialchars($m['display_name']) . '）' : '' ?><?= htmlspecialchars($co_tag) ?>
+                                <?= $m['display_name'] ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($m['display_name']) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '' ?><?= htmlspecialchars($co_tag) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -357,7 +360,7 @@ if ($selected_id > 0) {
                     </li>
                     <?php endforeach; ?>
                 </ul>
-                <button type="submit" class="btn btn-primary" style="margin-top: 16px;">保存权限</button>
+                <button type="submit" class="btn btn-primary" style="margin-top: 16px;"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
             </form>
             <?php else: ?>
             <?php endif; ?>
@@ -371,14 +374,14 @@ if ($selected_id > 0) {
                 <div class="form-group">
                     <label><?= htmlspecialchars(__('perm_select_admin_label'), ENT_QUOTES, 'UTF-8') ?></label>
                     <select name="admin_user_id" class="form-control" onchange="this.form.submit()">
-                        <option value="">-- 请选 --</option>
+                        <option value=""><?= htmlspecialchars(__('perm_opt_please_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <?php foreach ($admins_for_month as $a):
                             $a_cc = trim((string)($a['company_code'] ?? ''));
                             $co_tag = ($actor_is_superadmin && $a_cc !== '') ? (' [' . $a_cc . ']') : '';
                         ?>
                             <option value="<?= (int)$a['id'] ?>" <?= $selected_admin_id === (int)$a['id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($a['username']) ?>
-                                <?= $a['display_name'] ? '（' . htmlspecialchars($a['display_name']) . '）' : '' ?><?= htmlspecialchars($co_tag) ?>
+                                <?= $a['display_name'] ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($a['display_name']) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '' ?><?= htmlspecialchars($co_tag) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -391,9 +394,9 @@ if ($selected_id > 0) {
                 <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
                 <div class="perm-item perm-item-plain">
                     <input type="checkbox" name="dashboard_month_data" value="1" id="admin_dash_month" <?= $admin_has_month ? 'checked' : '' ?>>
-                    <label class="perm-label" for="admin_dash_month">允许查看首页本月数据</label>
+                    <label class="perm-label" for="admin_dash_month"><?= htmlspecialchars(__('perm_allow_dashboard_month'), ENT_QUOTES, 'UTF-8') ?></label>
                 </div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 12px;">保存</button>
+                <button type="submit" class="btn btn-primary" style="margin-top: 12px;"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
             </form>
             <?php elseif (empty($admins_for_month)): ?>
             <p class="form-hint"><?= htmlspecialchars(__('perm_empty_admin_hint'), ENT_QUOTES, 'UTF-8') ?></p>
@@ -403,14 +406,14 @@ if ($selected_id > 0) {
 
         <?php if ($actor_can_set_contact_view): ?>
         <div class="card" style="margin-top: 20px;">
-            <h3 style="margin-top:0;">联系电话显示权限（Admin / Member）</h3>
+            <h3 style="margin-top:0;"><?= htmlspecialchars(__('perm_card_contact_phone'), ENT_QUOTES, 'UTF-8') ?></h3>
             <form method="get" class="member-select">
                 <?php if ($selected_id > 0): ?><input type="hidden" name="user_id" value="<?= (int)$selected_id ?>"><?php endif; ?>
                 <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
                 <div class="form-group">
-                    <label>选择用户（Admin / Member）</label>
+                    <label><?= htmlspecialchars(__('perm_select_user_am'), ENT_QUOTES, 'UTF-8') ?></label>
                     <select name="contact_user_id" class="form-control" onchange="this.form.submit()">
-                        <option value="">-- 请选 --</option>
+                        <option value=""><?= htmlspecialchars(__('perm_opt_please_select'), ENT_QUOTES, 'UTF-8') ?></option>
                         <?php foreach ($contact_permission_users as $u):
                             $u_cc = trim((string)($u['company_code'] ?? ''));
                             $co_tag = ($actor_is_superadmin && $u_cc !== '') ? (' [' . $u_cc . ']') : '';
@@ -419,7 +422,7 @@ if ($selected_id > 0) {
                         ?>
                             <option value="<?= (int)$u['id'] ?>" <?= $selected_contact_user_id === (int)$u['id'] ? 'selected' : '' ?>>
                                 <?= htmlspecialchars($u['username']) ?>
-                                <?= $u['display_name'] ? '（' . htmlspecialchars($u['display_name']) . '）' : '' ?><?= htmlspecialchars($role_tag . $co_tag) ?>
+                                <?= $u['display_name'] ? htmlspecialchars($disp_o, ENT_QUOTES, 'UTF-8') . htmlspecialchars($u['display_name']) . htmlspecialchars($disp_c, ENT_QUOTES, 'UTF-8') : '' ?><?= htmlspecialchars($role_tag . $co_tag) ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -433,12 +436,12 @@ if ($selected_id > 0) {
                 <?php if ($selected_admin_id > 0): ?><input type="hidden" name="admin_user_id" value="<?= (int)$selected_admin_id ?>"><?php endif; ?>
                 <div class="perm-item perm-item-plain">
                     <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact" <?= $contact_user_has_view ? 'checked' : '' ?>>
-                    <label class="perm-label" for="view_member_contact">允许查看顾客完整联系电话（customers 页面）</label>
+                    <label class="perm-label" for="view_member_contact"><?= htmlspecialchars(__('perm_allow_view_customer_phone'), ENT_QUOTES, 'UTF-8') ?></label>
                 </div>
-                <button type="submit" class="btn btn-primary" style="margin-top: 12px;">保存</button>
+                <button type="submit" class="btn btn-primary" style="margin-top: 12px;"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
             </form>
             <?php elseif (empty($contact_permission_users)): ?>
-            <p class="form-hint">当前范围内没有可设置的 Admin/Member 账号。</p>
+            <p class="form-hint"><?= htmlspecialchars(__('perm_empty_am_accounts'), ENT_QUOTES, 'UTF-8') ?></p>
             <?php endif; ?>
         </div>
         <?php endif; ?>

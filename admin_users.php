@@ -5,6 +5,7 @@ require_admin();
 $sidebar_current = 'admin_users';
 
 $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+$actor_role = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
 
 $msg = '';
 $err = '';
@@ -371,15 +372,17 @@ if ($view_company_id > 0) {
 
 $company_users = [];
 if (!$actor_is_superadmin && $view_company_id > 0) {
+    // 分公司 Admin：列表不显示更高层级（Boss、superadmin），仅同层及以下
+    $sql_hide_upper = ($actor_role === 'admin') ? " AND (u.role IS NULL OR u.role NOT IN ('boss', 'superadmin'))" : '';
     $sql = "SELECT u.id, u.username, u.role, u.display_name, COALESCE(u.email,'') AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.created_by_user_id,
                    COALESCE(ucr.username, '') AS created_by_username
             FROM users u
             LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
-            WHERE (u.role IS NULL OR u.role <> 'superadmin') AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
+            WHERE (u.role IS NULL OR u.role <> 'superadmin') AND u.company_id = ?" . $sql_hide_upper . $status_sql . ' ORDER BY u.id DESC';
     $sql_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, NULL AS created_by_user_id,
                    '' AS created_by_username
             FROM users u
-            WHERE (u.role IS NULL OR u.role <> 'superadmin') AND u.company_id = ?" . $status_sql . ' ORDER BY u.id DESC';
+            WHERE (u.role IS NULL OR u.role <> 'superadmin') AND u.company_id = ?" . $sql_hide_upper . $status_sql . ' ORDER BY u.id DESC';
     try {
         $stmt = $pdo->prepare($sql);
         $stmt->execute([$view_company_id]);
@@ -392,6 +395,12 @@ if (!$actor_is_superadmin && $view_company_id > 0) {
         } catch (Throwable $e2) {
             $company_users = [];
         }
+    }
+    if ($actor_role === 'admin') {
+        $company_users = array_values(array_filter($company_users, static function (array $u): bool {
+            $r = strtolower(trim((string)($u['role'] ?? '')));
+            return !in_array($r, ['boss', 'superadmin'], true);
+        }));
     }
 }
 
@@ -945,6 +954,7 @@ $session_user_id = (int)($_SESSION['user_id'] ?? 0);
                 <?php foreach ($users_primary_list as $idx => $u):
                     $uid = (int)$u['id'];
                     $is_self = ($uid === $session_user_id);
+                    $can_manage_row = user_is_manageable_by_current_actor($pdo, $uid);
                     $r = (string)($u['role'] ?? '');
                     $co_code = trim((string)($u['company_code'] ?? ''));
                     $co_name = trim((string)($u['company_name'] ?? ''));
@@ -971,6 +981,7 @@ $session_user_id = (int)($_SESSION['user_id'] ?? 0);
                         <td><?= $ll !== '' ? htmlspecialchars($ll) : '—' ?></td>
                         <td><?= $cb !== '' ? htmlspecialchars($cb) : '—' ?></td>
                         <td class="um-actions">
+                            <?php if ($can_manage_row): ?>
                             <a class="um-icon-edit" href="admin_user_edit.php?id=<?= $uid ?>" title="<?= htmlspecialchars(__('btn_edit'), ENT_QUOTES, 'UTF-8') ?>">✎</a>
                             <details class="um-more">
                                 <summary title="<?= htmlspecialchars(__('adm_users_more_actions'), ENT_QUOTES, 'UTF-8') ?>">⋯</summary>
@@ -1009,6 +1020,9 @@ $session_user_id = (int)($_SESSION['user_id'] ?? 0);
                                     </form>
                                 </div>
                             </details>
+                            <?php else: ?>
+                            <span class="form-hint" title="<?= htmlspecialchars(__('adm_users_no_manage_peer_admin'), ENT_QUOTES, 'UTF-8') ?>">—</span>
+                            <?php endif; ?>
                         </td>
                     </tr>
                 <?php endforeach; ?>
