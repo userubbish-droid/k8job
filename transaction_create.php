@@ -58,6 +58,39 @@ if ($quick === 'expense' && $expense_kind_ui_pre === 'kiosk') {
 
 $company_id = current_company_id();
 
+// Ajax: 查询客户某产品的账号列表（用于 DEPOSIT 页面即时选择）
+if (isset($_GET['ajax']) && (string)$_GET['ajax'] === 'customer_product_accounts') {
+    header('Content-Type: application/json; charset=utf-8');
+    $code = trim((string)($_GET['code'] ?? ''));
+    $product = trim((string)($_GET['product'] ?? ''));
+    if ($code === '' || $product === '') {
+        echo json_encode(['ok' => true, 'rows' => []], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+    try {
+        $st = $pdo->prepare(
+            "SELECT a.account, a.password
+             FROM customer_product_accounts a
+             INNER JOIN customers c ON c.id = a.customer_id
+             WHERE c.company_id = ? AND c.code = ? AND a.product_name = ?
+             ORDER BY a.created_at DESC, a.id DESC"
+        );
+        $st->execute([$company_id, $code, $product]);
+        $rows = $st->fetchAll();
+        // 过滤空值，避免展示无意义条目
+        $rows = array_values(array_filter($rows, function($r){
+            $acc = trim((string)($r['account'] ?? ''));
+            $ps = trim((string)($r['password'] ?? ''));
+            return $acc !== '' || $ps !== '';
+        }));
+        echo json_encode(['ok' => true, 'rows' => $rows], JSON_UNESCAPED_UNICODE);
+        exit;
+    } catch (Throwable $e) {
+        echo json_encode(['ok' => false, 'rows' => [], 'error' => 'query_failed'], JSON_UNESCAPED_UNICODE);
+        exit;
+    }
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']) && trim((string)($_POST['expense_kind'] ?? '')) === 'kiosk') {
     if (!in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss'], true)) {
         header('Location: kiosk_expense.php');
@@ -259,7 +292,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved_customer_bank = '';
         if ($code !== '' && $product !== '') {
             try {
-                $acc = $pdo->prepare("SELECT a.account, a.password FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? ORDER BY a.id ASC");
+                $acc = $pdo->prepare("SELECT a.account, a.password FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? ORDER BY a.created_at DESC, a.id DESC");
                 $acc->execute([$company_id, $code, $product]);
                 $saved_accounts = $acc->fetchAll();
                 if (!$saved_accounts) {
@@ -1429,6 +1462,10 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     </select>
                 </div>
             </div>
+            <div class="form-group" id="txn-live-acc-wrap" style="display:none; margin-top:12px;">
+                <div class="form-hint" style="margin-bottom:6px;"><?= app_lang() === 'en' ? 'Account' : '账号' ?></div>
+                <div id="txn-live-acc-line"></div>
+            </div>
         </div>
 
         <div class="form-section">
@@ -1755,6 +1792,137 @@ $ep = $expense_modal_should_open ? $_POST : [];
             var form = amountEl && amountEl.closest('form');
             if (form) form.addEventListener('submit', function(){ updateReward(); });
         })();
+        (function(){
+            // 实时账号提示：DEPOSIT + customer + product 时查询；仅 >=2 才显示选择器
+            function pickMainForm() {
+                var forms = document.querySelectorAll('form.txn-form');
+                for (var i = 0; i < forms.length; i++) {
+                    var f = forms[i];
+                    if (!f.classList.contains('expense-modal-form')) return f;
+                }
+                return null;
+            }
+            var form = pickMainForm();
+            if (!form) return;
+            var modeEl = form.querySelector('[name="mode"]');
+            var codeEl = form.querySelector('[name="code"]');
+            var productEl = form.querySelector('select[name="product"]');
+            var wrap = document.getElementById('txn-live-acc-wrap');
+            var line = document.getElementById('txn-live-acc-line');
+            var modal = document.getElementById('txn-acc-modal');
+            if (!modeEl || !codeEl || !productEl || !wrap || !line) return;
+
+            var latestKey = '';
+            var lastRows = [];
+
+            function esc(s){ return String(s == null ? '' : s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+            function setHidden(){ wrap.style.display = 'none'; line.innerHTML = ''; lastRows = []; latestKey = ''; }
+
+            function ensureModal() {
+                if (modal) return modal;
+                // 如果页面没带（未保存时），动态创建一个简易 modal
+                var m = document.createElement('div');
+                m.className = 'pretty-modal-mask';
+                m.id = 'txn-live-acc-modal';
+                m.setAttribute('aria-hidden', 'true');
+                m.innerHTML =
+                    '<div class="pretty-modal" role="dialog" aria-modal="true" aria-label="Pick account">' +
+                    '  <div class="pretty-modal-head">' + (document.documentElement.lang === 'en' ? 'Pick account' : '选择账号') + '</div>' +
+                    '  <div class="pretty-modal-body">' +
+                    '    <div class="form-hint">' + (document.documentElement.lang === 'en' ? 'Choose one to copy.' : '选择一个账号（会自动复制到剪贴板）') + '</div>' +
+                    '    <div class="txn-acc-list" id="txn-live-acc-list"></div>' +
+                    '  </div>' +
+                    '  <div class="pretty-modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">' +
+                    '    <button type="button" class="pretty-ok" id="txn-live-acc-close">' + (document.documentElement.lang === 'en' ? 'OK' : '确定') + '</button>' +
+                    '  </div>' +
+                    '</div>';
+                document.body.appendChild(m);
+                var closeBtn = document.getElementById('txn-live-acc-close');
+                function closeM(){ m.classList.remove('show'); m.setAttribute('aria-hidden','true'); document.body.style.overflow=''; }
+                if (closeBtn) closeBtn.addEventListener('click', closeM);
+                m.addEventListener('click', function(e){ if (e.target === m) closeM(); });
+                document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && m.classList.contains('show')) closeM(); });
+                modal = m;
+                return m;
+            }
+
+            function openRowsModal(rows, currentSetter) {
+                var m = ensureModal();
+                var list = m.querySelector('#txn-acc-list') || m.querySelector('#txn-live-acc-list');
+                if (!list) return;
+                list.innerHTML = '';
+                rows.forEach(function(r, idx){
+                    var acc = String((r && r.account) || '');
+                    var ps = String((r && r.password) || '');
+                    var suf = (idx === 0) ? '' : ('-' + (idx + 1));
+                    var item = document.createElement('div');
+                    item.className = 'txn-acc-item';
+                    var left = document.createElement('div');
+                    left.innerHTML =
+                        '<div class="form-hint" style="margin:0;">id: <span class="mono">' + esc(acc + suf) + '</span></div>' +
+                        (ps ? '<div class="form-hint" style="margin:0;">ps: <span class="mono">' + esc(ps) + '</span></div>' : '');
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = (document.documentElement.lang === 'en') ? 'Use' : '使用';
+                    btn.addEventListener('click', function(){
+                        try { if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(acc || ''); } catch(e) {}
+                        if (typeof currentSetter === 'function') currentSetter(acc);
+                        m.classList.remove('show'); m.setAttribute('aria-hidden','true'); document.body.style.overflow='';
+                    });
+                    item.appendChild(left);
+                    item.appendChild(btn);
+                    list.appendChild(item);
+                });
+                m.classList.add('show');
+                m.setAttribute('aria-hidden','false');
+                document.body.style.overflow = 'hidden';
+            }
+
+            function render(rows) {
+                lastRows = rows || [];
+                if (!Array.isArray(rows) || rows.length < 2) { setHidden(); return; }
+                var first = rows[0] || {};
+                var current = String(first.account || '—') || '—';
+                wrap.style.display = 'block';
+                line.innerHTML =
+                    '<span class="txn-acc-picker" role="button" tabindex="0" id="txn-live-acc-picker">' +
+                    '  <span class="mono" id="txn-live-acc-current">' + esc(current) + '</span>' +
+                    '  <span class="txn-acc-picker-caret">▾</span>' +
+                    '</span>';
+                var picker = document.getElementById('txn-live-acc-picker');
+                var cur = document.getElementById('txn-live-acc-current');
+                if (!picker) return;
+                function setCur(v){ if (cur) cur.textContent = v || '—'; }
+                picker.addEventListener('click', function(){ openRowsModal(lastRows, setCur); });
+                picker.addEventListener('keydown', function(e){
+                    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openRowsModal(lastRows, setCur); }
+                });
+            }
+
+            async function refresh() {
+                var mode = (modeEl.value || '').trim();
+                var code = (codeEl.value || '').trim();
+                var product = (productEl.value || '').trim();
+                if (mode !== 'DEPOSIT' || !code || !product) { setHidden(); return; }
+                var key = mode + '|' + code + '|' + product;
+                latestKey = key;
+                try {
+                    var url = 'transaction_create.php?ajax=customer_product_accounts&code=' + encodeURIComponent(code) + '&product=' + encodeURIComponent(product);
+                    var res = await fetch(url, { credentials: 'same-origin' });
+                    var data = await res.json();
+                    if (latestKey !== key) return; // 防止快速切换时乱序
+                    if (!data || data.ok !== true) { setHidden(); return; }
+                    render(Array.isArray(data.rows) ? data.rows : []);
+                } catch(e) {
+                    if (latestKey === key) setHidden();
+                }
+            }
+
+            modeEl.addEventListener('change', refresh);
+            codeEl.addEventListener('change', refresh);
+            productEl.addEventListener('change', refresh);
+            refresh();
+        })();
         <?php if ($is_admin && $quick !== 'expense'): ?>
         var cb = document.getElementById('edit_dt');
         if (cb) {
@@ -1797,13 +1965,14 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 var arr = [];
                 try { arr = JSON.parse(raw) || []; } catch(e) { arr = []; }
                 list.innerHTML = '';
-                arr.forEach(function(it){
+                arr.forEach(function(it, idx){
                     var acc = safeText(it && it.account);
                     var ps = safeText(it && it.password);
+                    var suf = (idx === 0) ? '' : ('-' + (idx + 1));
                     var item = document.createElement('div');
                     item.className = 'txn-acc-item';
                     var left = document.createElement('div');
-                    left.innerHTML = '<div class="form-hint" style="margin:0;">id: <span class="mono">' + acc.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>'
+                    left.innerHTML = '<div class="form-hint" style="margin:0;">id: <span class="mono">' + (acc + suf).replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>'
                         + (ps ? '<div class="form-hint" style="margin:0;">ps: <span class="mono">' + ps.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>' : '');
                     var btn = document.createElement('button');
                     btn.type = 'button';

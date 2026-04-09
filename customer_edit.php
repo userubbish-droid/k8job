@@ -43,7 +43,7 @@ if (!$products) {
 // 该顾客已有的产品账号
 $product_accounts = [];
 try {
-    $stmt = $pdo->prepare("SELECT id, product_name, account, password FROM customer_product_accounts WHERE customer_id = ? ORDER BY id ASC");
+    $stmt = $pdo->prepare("SELECT id, product_name, account, password FROM customer_product_accounts WHERE customer_id = ? ORDER BY created_at DESC, id DESC");
     $stmt->execute([$id]);
     $product_accounts = $stmt->fetchAll();
 } catch (Throwable $e) {

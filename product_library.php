@@ -65,7 +65,7 @@ try {
             FROM customer_product_accounts a
             INNER JOIN customers c ON c.id = a.customer_id AND c.company_id = ?
             WHERE a.company_id = ?
-            ORDER BY c.code ASC, a.product_name ASC, a.id ASC");
+            ORDER BY c.code ASC, a.product_name ASC, a.created_at DESC, a.id DESC");
     $st->execute([$company_id, $company_id]);
     $rows = $st->fetchAll();
     foreach ($rows as $r) {
@@ -313,7 +313,8 @@ try {
                                 foreach ($cells as $idx => $entry):
                                     $acc = trim($entry['account'] ?? '');
                                     $pwd = trim($entry['password'] ?? '');
-                                    $suffix = $idx === 0 ? '' : '~' . ($idx + 1);
+                                    // 按“最新排序名次”标记：最新不加；第二新 -2；第三新 -3...
+                                    $suffix = $idx === 0 ? '' : '-' . ($idx + 1);
                                     $accDisplay = $acc !== '' ? htmlspecialchars($acc) . $suffix : '—';
                                     $pwdDisplay = $pwd !== '' ? htmlspecialchars($pwd) : '—';
                             ?>
