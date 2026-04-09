@@ -253,20 +253,28 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved_bonus = $bonus;
         $saved_total = $total;
         $saved_reward_pct = ($reward_pct !== '' && is_numeric($reward_pct)) ? (float)$reward_pct : null;
+        $saved_accounts = [];
         $saved_account = '';
         $saved_customer_name = '';
         $saved_customer_bank = '';
         if ($code !== '' && $product !== '') {
             try {
-                $acc = $pdo->prepare("SELECT a.account FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? LIMIT 1");
+                $acc = $pdo->prepare("SELECT a.account, a.password FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? ORDER BY a.id ASC");
                 $acc->execute([$company_id, $code, $product]);
-                $row = $acc->fetch();
-                $saved_account = $row ? (trim($row['account'] ?? '') ?: '—') : '—';
+                $saved_accounts = $acc->fetchAll();
+                if (!$saved_accounts) {
+                    $saved_account = '—';
+                } else {
+                    $first = $saved_accounts[0];
+                    $saved_account = trim((string)($first['account'] ?? '')) ?: '—';
+                }
             } catch (Throwable $e) {
                 $saved_account = '—';
+                $saved_accounts = [];
             }
         } else {
             $saved_account = '—';
+            $saved_accounts = [];
         }
         if ($mode === 'WITHDRAW' && $code !== '') {
             try {
@@ -624,6 +632,46 @@ $ep = $expense_modal_should_open ? $_POST : [];
         .success-actions { margin-top: 14px; display: flex; flex-wrap: wrap; gap: 10px; }
         .success-actions a { padding: 8px 14px; background: #fff; border: 1px solid #a7f3d0; border-radius: 6px; color: #059669; text-decoration: none; font-size: 13px; }
         .success-actions a:hover { background: #ecfdf5; }
+        .txn-acc-picker {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            border: 1px solid rgba(37, 99, 235, 0.35);
+            background: rgba(239, 246, 255, 0.9);
+            color: #1d4ed8;
+            font-weight: 700;
+            font-size: 12px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .txn-acc-picker:hover { background: rgba(219, 234, 254, 0.9); }
+        .txn-acc-picker:active { transform: scale(0.98); }
+        .txn-acc-picker-caret { font-weight: 900; opacity: 0.85; }
+        .txn-acc-list { display: grid; gap: 8px; margin-top: 10px; }
+        .txn-acc-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 10px 12px;
+            border: 1px solid rgba(148, 163, 184, 0.35);
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 10px;
+        }
+        .txn-acc-item .mono { font-variant-numeric: tabular-nums; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+        .txn-acc-item button {
+            padding: 7px 10px;
+            border-radius: 10px;
+            border: 1px solid rgba(16, 185, 129, 0.35);
+            background: rgba(236, 253, 245, 0.95);
+            color: #059669;
+            font-weight: 800;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .txn-acc-item button:hover { background: #ecfdf5; }
         .expense-statement-wrap { margin-top: 14px; padding: 14px 16px; }
         .expense-statement-title { margin: 0 0 10px; font-size: 14px; }
         .expense-filter-bar { display: grid; grid-template-columns: repeat(4, minmax(120px, 1fr)) auto; gap: 10px; align-items: end; margin-bottom: 12px; }
@@ -1019,7 +1067,25 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 <div class="form-hint"><?= htmlspecialchars(__('txn_hint_bank_colon'), ENT_QUOTES, 'UTF-8') ?><?= htmlspecialchars($saved_customer_bank ?: '—') ?></div>
                 <?php endif; ?>
                 <?php if (!empty($saved_product) && !empty($saved_code)): ?>
-                <div class="form-hint" style="margin-top:4px;"><?= htmlspecialchars(__f('txn_hint_account_line', htmlspecialchars($saved_code, ENT_QUOTES, 'UTF-8'), htmlspecialchars($saved_product, ENT_QUOTES, 'UTF-8'), htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8')), ENT_QUOTES, 'UTF-8') ?></div>
+                <?php
+                    $accCount = is_array($saved_accounts ?? null) ? count($saved_accounts) : 0;
+                    if ($accCount > 1) {
+                        $accBtnText = htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8');
+                        $accBtn = '<span class="txn-acc-picker" id="txn-acc-picker" role="button" tabindex="0" aria-label="Pick account" data-accounts="' . htmlspecialchars(json_encode($saved_accounts, JSON_UNESCAPED_UNICODE), ENT_QUOTES, 'UTF-8') . '">'
+                            . '<span class="mono" id="txn-acc-current">' . $accBtnText . '</span>'
+                            . '<span class="txn-acc-picker-caret">▾</span>'
+                            . '</span>';
+                        $accHtml = $accBtn;
+                    } else {
+                        $accHtml = '<span class="mono">' . htmlspecialchars($saved_account, ENT_QUOTES, 'UTF-8') . '</span>';
+                    }
+                    echo __f(
+                        'txn_hint_account_line',
+                        htmlspecialchars($saved_code, ENT_QUOTES, 'UTF-8'),
+                        htmlspecialchars($saved_product, ENT_QUOTES, 'UTF-8'),
+                        $accHtml
+                    );
+                ?>
                 <?php endif; ?>
                 <?php endif; ?>
             </div>
@@ -1535,6 +1601,20 @@ $ep = $expense_modal_should_open ? $_POST : [];
         </div>
     </div>
     <?php endif; ?>
+    <?php if ($saved && !empty($saved_accounts) && is_array($saved_accounts) && count($saved_accounts) > 1): ?>
+    <div class="pretty-modal-mask" id="txn-acc-modal" aria-hidden="true">
+        <div class="pretty-modal" role="dialog" aria-modal="true" aria-label="Pick account">
+            <div class="pretty-modal-head"><?= app_lang() === 'en' ? 'Pick account' : '选择账号' ?></div>
+            <div class="pretty-modal-body">
+                <div class="form-hint"><?= app_lang() === 'en' ? 'Choose one to use/copy.' : '选择一个账号（会自动复制到剪贴板）' ?></div>
+                <div class="txn-acc-list" id="txn-acc-list"></div>
+            </div>
+            <div class="pretty-modal-foot" style="display:flex; justify-content:flex-end; gap:10px;">
+                <button type="button" class="pretty-ok" id="txn-acc-close"><?= htmlspecialchars(__('btn_ok'), ENT_QUOTES, 'UTF-8') ?></button>
+            </div>
+        </div>
+    </div>
+    <?php endif; ?>
     <script>
         (function() {
             var customerData = <?= json_encode(array_column($customers, null, 'code')) ?>;
@@ -1692,6 +1772,64 @@ $ep = $expense_modal_should_open ? $_POST : [];
             function closeModal(){ mask.classList.remove('show'); }
             ok.addEventListener('click', closeModal);
             mask.addEventListener('click', function(e){ if (e.target === mask) closeModal(); });
+        })();
+        (function(){
+            var picker = document.getElementById('txn-acc-picker');
+            var modal = document.getElementById('txn-acc-modal');
+            var list = document.getElementById('txn-acc-list');
+            var closeBtn = document.getElementById('txn-acc-close');
+            var cur = document.getElementById('txn-acc-current');
+            if (!picker || !modal || !list) return;
+
+            function openM() {
+                modal.classList.add('show');
+                modal.setAttribute('aria-hidden', 'false');
+                document.body.style.overflow = 'hidden';
+            }
+            function closeM() {
+                modal.classList.remove('show');
+                modal.setAttribute('aria-hidden', 'true');
+                document.body.style.overflow = '';
+            }
+            function safeText(x) { return (x == null) ? '' : String(x); }
+            function render() {
+                var raw = picker.getAttribute('data-accounts') || '[]';
+                var arr = [];
+                try { arr = JSON.parse(raw) || []; } catch(e) { arr = []; }
+                list.innerHTML = '';
+                arr.forEach(function(it){
+                    var acc = safeText(it && it.account);
+                    var ps = safeText(it && it.password);
+                    var item = document.createElement('div');
+                    item.className = 'txn-acc-item';
+                    var left = document.createElement('div');
+                    left.innerHTML = '<div class="form-hint" style="margin:0;">id: <span class="mono">' + acc.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>'
+                        + (ps ? '<div class="form-hint" style="margin:0;">ps: <span class="mono">' + ps.replace(/</g,'&lt;').replace(/>/g,'&gt;') + '</span></div>' : '');
+                    var btn = document.createElement('button');
+                    btn.type = 'button';
+                    btn.textContent = (document.documentElement.lang === 'en') ? 'Use' : '使用';
+                    btn.addEventListener('click', function(){
+                        if (cur) cur.textContent = acc || '—';
+                        try {
+                            if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
+                                navigator.clipboard.writeText(acc || '');
+                            }
+                        } catch(e) {}
+                        closeM();
+                    });
+                    item.appendChild(left);
+                    item.appendChild(btn);
+                    list.appendChild(item);
+                });
+            }
+
+            picker.addEventListener('click', function(){ render(); openM(); });
+            picker.addEventListener('keydown', function(e){
+                if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); render(); openM(); }
+            });
+            if (closeBtn) closeBtn.addEventListener('click', closeM);
+            modal.addEventListener('click', function(e){ if (e.target === modal) closeM(); });
+            document.addEventListener('keydown', function(e){ if (e.key === 'Escape' && modal.classList.contains('show')) closeM(); });
         })();
         <?php if ($quick === 'expense' && $expense_kind_ui !== 'kiosk'): ?>
         (function(){
