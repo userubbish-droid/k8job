@@ -10,7 +10,16 @@ function ensure_transactions_expense_kind(PDO $pdo) {
     }
 }
 
+function ensure_transactions_burn(PDO $pdo) {
+    try {
+        $pdo->exec("ALTER TABLE transactions ADD COLUMN burn DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Burn for WITHDRAW/FREE WITHDRAW' AFTER amount");
+    } catch (Throwable $e) {
+        // 列已存在等
+    }
+}
+
 ensure_transactions_expense_kind($pdo);
+ensure_transactions_burn($pdo);
 
 function ensure_products_kiosk_columns(PDO $pdo) {
     try {
@@ -194,6 +203,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $bank    = trim($_POST['bank'] ?? '');
     $product = trim($_POST['product'] ?? '');
     $amount    = str_replace(',', '', trim($_POST['amount'] ?? '0'));
+    $burn_raw  = str_replace(',', '', trim((string)($_POST['burn'] ?? '')));
     $reward_pct = str_replace(',', '', trim((string)($_POST['reward_pct'] ?? '')));
     $bonus_fix  = str_replace(',', '', trim((string)($_POST['bonus'] ?? '0')));
     $remark   = trim($_POST['remark'] ?? '');
@@ -209,8 +219,16 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $error = __('txn_err_expense_bank');
     } elseif (!is_numeric($amount)) {
         $error = __('txn_err_amount_num');
+    } elseif ($burn_raw !== '' && !is_numeric($burn_raw)) {
+        $error = __('txn_err_amount_num');
     } else {
         $amount = (float) $amount;
+        $burn_val = null;
+        if ($mode === 'WITHDRAW' || $mode === 'FREE WITHDRAW') {
+            if ($burn_raw !== '' && is_numeric($burn_raw)) {
+                $burn_val = round((float)$burn_raw, 2);
+            }
+        }
         // Bonus = 金额 × 奖励/返点% / 100；优先用百分比，否则用隐藏域 bonus
         $bonus = 0;
         if ($reward_pct !== '' && is_numeric($reward_pct)) {
@@ -229,15 +247,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
         $saved = false;
         $expKindIns = ($mode === 'EXPENSE') ? $expense_kind_save : null;
-        $insertBase = [$company_id, $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $expKindIns, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
+        $insertBase = [$company_id, $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $expKindIns, $amount, $burn_val, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
         foreach ([true, false] as $withHide) {
             try {
                 if ($withHide) {
-                    $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                    $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, burn, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($insertBase);
                 } else {
-                    $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                    $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, burn, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($insertBase);
                 }
@@ -245,6 +263,25 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 break;
             } catch (Throwable $e) {
                 $msg = $e->getMessage();
+                if (stripos($msg, 'burn') !== false || stripos($msg, 'Unknown column') !== false) {
+                    // burn 列不存在：回退为旧 schema（不记录 burn）
+                    $insertBaseNoBurn = [$company_id, $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $expKindIns, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
+                    try {
+                        if ($withHide) {
+                            $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
+                            $stmt = $pdo->prepare($sql);
+                            $stmt->execute($insertBaseNoBurn);
+                        } else {
+                            $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
+                            $stmt = $pdo->prepare($sql);
+                            $stmt->execute($insertBaseNoBurn);
+                        }
+                        $saved = true;
+                        break;
+                    } catch (Throwable $eBurn) {
+                        // 继续尝试 legacy expense_kind 等 fallback
+                    }
+                }
                 if (stripos($msg, 'expense_kind') !== false || stripos($msg, 'Unknown column') !== false) {
                     $insertBaseLegacy = [$company_id, $day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $staff ?: null, $remark ?: null, $status, (int)($_SESSION['user_id'] ?? 0), $approved_by, $approved_at];
                     try {
@@ -283,6 +320,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved_code = $code;
         $saved_product = $product;
         $saved_amount = $amount;
+        $saved_burn = $burn_val;
         $saved_bonus = $bonus;
         $saved_total = $total;
         $saved_reward_pct = ($reward_pct !== '' && is_numeric($reward_pct)) ? (float)$reward_pct : null;
@@ -1484,6 +1522,13 @@ $ep = $expense_modal_should_open ? $_POST : [];
                     <input type="hidden" name="bonus" id="bonus_hidden" value="0">
                 </div>
             </div>
+            <div class="form-row-2" id="burn_row" style="display:none;">
+                <div class="form-group">
+                    <label><?= htmlspecialchars(__('txn_label_burn'), ENT_QUOTES, 'UTF-8') ?></label>
+                    <input type="text" name="burn" id="burn" class="form-control" placeholder="<?= htmlspecialchars(__('txn_ph_burn'), ENT_QUOTES, 'UTF-8') ?>" inputmode="decimal">
+                </div>
+                <div class="form-group"></div>
+            </div>
             <p class="form-hint" id="reward_hint" style="margin-top:4px; display:none;"><?= htmlspecialchars(__('txn_reward_hint_reward'), ENT_QUOTES, 'UTF-8') ?> <span id="reward_amount">0</span><?= htmlspecialchars(__('txn_reward_hint_total'), ENT_QUOTES, 'UTF-8') ?> <strong id="reward_total">0</strong></p>
             <div class="form-group">
                 <label><?= htmlspecialchars(__('txn_label_remark'), ENT_QUOTES, 'UTF-8') ?></label>
@@ -1652,6 +1697,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
                 'lblExpenseProductOpt' => __('txn_js_label_expense_product'),
                 'lblProductPlain' => __('txn_js_label_product_plain'),
             ], JSON_UNESCAPED_UNICODE) ?>;
+            function applyBurnVisible() {
+                var burnRow = document.getElementById('burn_row');
+                var burnInput = document.getElementById('burn');
+                if (!burnRow) return;
+                var mode = (modeEl && modeEl.value) ? modeEl.value : '';
+                var show = (mode === 'WITHDRAW' || mode === 'FREE WITHDRAW');
+                burnRow.style.display = show ? '' : 'none';
+                if (!show && burnInput) burnInput.value = '';
+            }
             function updateWithdrawCustomer() {
                 var modeEl = document.getElementById('mode');
                 var codeEl = document.getElementById('code');
@@ -1674,6 +1728,8 @@ $ep = $expense_modal_should_open ? $_POST : [];
             if (modeEl) modeEl.addEventListener('change', updateWithdrawCustomer);
             if (codeEl) codeEl.addEventListener('change', updateWithdrawCustomer);
             updateWithdrawCustomer();
+            if (modeEl) modeEl.addEventListener('change', applyBurnVisible);
+            applyBurnVisible();
 
             function applyBankRequired() {
                 var mode = (modeEl && modeEl.value) ? modeEl.value : '';

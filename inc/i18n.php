@@ -707,6 +707,8 @@ function i18n_dictionary(): array
         'cust_csv_created_by' => ['zh' => '填写人', 'en' => 'CREATED BY'],
         'cust_csv_is_active' => ['zh' => '状态', 'en' => 'STATUS'],
         'cust_csv_winlose' => ['zh' => '输赢合计', 'en' => 'TOTAL WIN(LOSE)'],
+        'txn_label_burn' => ['zh' => 'Burn', 'en' => 'Burn'],
+        'txn_ph_burn' => ['zh' => '例如 0.17', 'en' => 'e.g. 0.17'],
 
         /* rebate.php */
         'rebate_msg_marked_given' => ['zh' => '已标记所选客户为「已给」，返点金额已保存。', 'en' => 'Marked selected customers as paid; rebate amounts saved.'],

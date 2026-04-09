@@ -165,26 +165,49 @@ try {
     $stmt = $pdo->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
-    $stmt = $pdo->prepare("SELECT code,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
-        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
-        GROUP BY code");
-    $stmt->execute([$company_id]);
-    foreach ($stmt->fetchAll() as $r) {
-        $balance_by_code[$r['code']] = (float) $r['balance'];
+    try {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS balance
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+            GROUP BY code");
+        $stmt->execute([$company_id]);
+        foreach ($stmt->fetchAll() as $r) {
+            $balance_by_code[$r['code']] = (float) $r['balance'];
+        }
+    } catch (Throwable $eBal) {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+            GROUP BY code");
+        $stmt->execute([$company_id]);
+        foreach ($stmt->fetchAll() as $r) {
+            $balance_by_code[$r['code']] = (float) $r['balance'];
+        }
     }
     $all_deposit_by_code = [];
     $all_withdraw_by_code = [];
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
-    $stmt = $pdo->prepare("SELECT code,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
-        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
-    $stmt->execute([$company_id]);
-    foreach ($stmt->fetchAll() as $r) {
-        $all_deposit_by_code[$r['code']] = (float)$r['ad'];
-        $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
+    try {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS aw
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+        $stmt->execute([$company_id]);
+        foreach ($stmt->fetchAll() as $r) {
+            $all_deposit_by_code[$r['code']] = (float)$r['ad'];
+            $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
+        }
+    } catch (Throwable $eAw) {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
+        $stmt->execute([$company_id]);
+        foreach ($stmt->fetchAll() as $r) {
+            $all_deposit_by_code[$r['code']] = (float)$r['ad'];
+            $all_withdraw_by_code[$r['code']] = (float)$r['aw'];
+        }
     }
     $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
     $stmt->execute([$company_id]);
@@ -196,10 +219,18 @@ try {
     foreach ($stmt->fetchAll() as $r) {
         $all_free_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
-    $stmt->execute([$company_id]);
-    foreach ($stmt->fetchAll() as $r) {
-        $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
+    try {
+        $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount + COALESCE(burn, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+        $stmt->execute([$company_id]);
+        foreach ($stmt->fetchAll() as $r) {
+            $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
+        }
+    } catch (Throwable $eFwd) {
+        $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+        $stmt->execute([$company_id]);
+        foreach ($stmt->fetchAll() as $r) {
+            $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
+        }
     }
     $stmt = $pdo->prepare("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
     $stmt->execute([$company_id]);
@@ -208,31 +239,61 @@ try {
     }
     $month_start = date('Y-m-01');
     $month_end = date('Y-m-t');
-    $stmt = $pdo->prepare("SELECT code,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
-        COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
-        FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
-    $stmt->execute([$company_id, $month_start, $month_end]);
-    foreach ($stmt->fetchAll() as $r) {
-        $month_deposit_by_code[$r['code']] = (float)$r['md'];
-        $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
+    try {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS mw
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
+        $stmt->execute([$company_id, $month_start, $month_end]);
+        foreach ($stmt->fetchAll() as $r) {
+            $month_deposit_by_code[$r['code']] = (float)$r['md'];
+            $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
+        }
+    } catch (Throwable $eMw) {
+        $stmt = $pdo->prepare("SELECT code,
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
+            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
+        $stmt->execute([$company_id, $month_start, $month_end]);
+        foreach ($stmt->fetchAll() as $r) {
+            $month_deposit_by_code[$r['code']] = (float)$r['md'];
+            $month_withdraw_by_code[$r['code']] = (float)$r['mw'];
+        }
     }
     if ($agent_pnl_by_range) {
         // 与 agents.php Win/Loss 同源：按 TRIM(code) 汇总区间内 DEPOSIT−WITHDRAW
-        $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
-            FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
-            AND day >= ? AND day <= ?
-            GROUP BY TRIM(code)");
-        $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
-        foreach ($stmt->fetchAll() as $r) {
-            $ck = trim((string)($r['code'] ?? ''));
-            if ($ck === '') {
-                continue;
+        try {
+            $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
+                COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+                COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount + COALESCE(burn, 0) ELSE 0 END), 0) AS aw
+                FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+                AND day >= ? AND day <= ?
+                GROUP BY TRIM(code)");
+            $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
+            foreach ($stmt->fetchAll() as $r) {
+                $ck = trim((string)($r['code'] ?? ''));
+                if ($ck === '') {
+                    continue;
+                }
+                $agent_range_dp[$ck] = (float)$r['ad'];
+                $agent_range_wd[$ck] = (float)$r['aw'];
             }
-            $agent_range_dp[$ck] = (float)$r['ad'];
-            $agent_range_wd[$ck] = (float)$r['aw'];
+        } catch (Throwable $ePnl) {
+            $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
+                COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
+                COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
+                FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
+                AND day >= ? AND day <= ?
+                GROUP BY TRIM(code)");
+            $stmt->execute([$company_id, $pnl_day_from, $pnl_day_to]);
+            foreach ($stmt->fetchAll() as $r) {
+                $ck = trim((string)($r['code'] ?? ''));
+                if ($ck === '') {
+                    continue;
+                }
+                $agent_range_dp[$ck] = (float)$r['ad'];
+                $agent_range_wd[$ck] = (float)$r['aw'];
+            }
         }
     }
     } catch (Throwable $e) {
