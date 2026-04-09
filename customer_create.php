@@ -187,7 +187,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     }
                     header('Location: customers.php?pending_customer=1');
                 } else {
-                    header('Location: customer_edit.php?id=' . $new_id . '&created=1');
+                    if (function_exists('has_permission') && has_permission('product_library')) {
+                        header('Location: product_library.php?add=1&customer_id=' . $new_id);
+                    } else {
+                        header('Location: customer_edit.php?id=' . $new_id . '&created=1');
+                    }
                 }
                 exit;
             } catch (Throwable $e) {

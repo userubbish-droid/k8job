@@ -58,7 +58,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
 if (isset($_GET['msg'])) {
     $msg = __('pl_msg_added');
 }
-$show_add_box = !empty($err) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product';
+$prefill_customer_id = (int)($_GET['customer_id'] ?? 0);
+$auto_open_add_box = (isset($_GET['add']) && (string)$_GET['add'] === '1');
+$show_add_box = (!empty($err) && ($_SERVER['REQUEST_METHOD'] ?? '') === 'POST' && isset($_POST['action']) && $_POST['action'] === 'add_product')
+    || $auto_open_add_box;
 
 try {
     $st = $pdo->prepare("SELECT a.customer_id, a.product_name, a.account, a.password, c.code
@@ -219,7 +222,7 @@ try {
                                         <select name="customer_id" class="form-control" required>
                                             <option value="">Select Customer</option>
                                             <?php foreach ($customers_list as $c): ?>
-                                            <option value="<?= (int)$c['id'] ?>"><?= htmlspecialchars($c['code']) ?></option>
+                                            <option value="<?= (int)$c['id'] ?>" <?= ((int)$c['id'] === $prefill_customer_id) ? 'selected' : '' ?>><?= htmlspecialchars($c['code']) ?></option>
                                             <?php endforeach; ?>
                                         </select>
                                     </div>
@@ -299,7 +302,13 @@ try {
                     foreach ($by_code[$code] as $list) { if (!empty($list)) { $cid = (int)($list[0]['customer_id'] ?? 0); break; } }
                     ?>
                     <tr>
-                        <td><a href="customer_edit.php?id=<?= $cid ?>"><?= htmlspecialchars($code) ?></a></td>
+                        <td>
+                            <?php if (function_exists('has_permission') && has_permission('customer_edit')): ?>
+                                <a href="customer_edit.php?id=<?= $cid ?>"><?= htmlspecialchars($code) ?></a>
+                            <?php else: ?>
+                                <?= htmlspecialchars($code) ?>
+                            <?php endif; ?>
+                        </td>
                         <?php foreach ($products as $p): ?>
                         <td class="product-cell">
                             <?php
@@ -360,6 +369,12 @@ try {
                     hidden.value = b.getAttribute('data-alert') || 'yes';
                 });
             });
+        }
+
+        // Auto-open (e.g. redirected after creating customer)
+        var autoOpen = <?= json_encode($auto_open_add_box) ?>;
+        if (autoOpen) {
+            openM();
         }
     })();
     </script>
