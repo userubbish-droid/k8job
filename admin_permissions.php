@@ -50,6 +50,19 @@ if (in_array($actor_role, ['boss', 'superadmin'], true)) {
     }
 }
 
+$bosses_list_ui = [];
+if ($actor_is_superadmin) {
+    try {
+        $bosses_list_ui = $pdo->query("SELECT u.id, u.username, u.display_name, u.company_id, COALESCE(c.code, '') AS company_code
+            FROM users u
+            LEFT JOIN companies c ON c.id = u.company_id
+            WHERE u.role = 'boss'
+            ORDER BY u.company_id ASC, u.username ASC")->fetchAll();
+    } catch (Throwable $e) {
+        $bosses_list_ui = [];
+    }
+}
+
 $perm_tab = trim((string)($_GET['tab'] ?? 'all'));
 if (!in_array($perm_tab, ['all', 'admin', 'member'], true)) {
     $perm_tab = 'all';
@@ -57,7 +70,8 @@ if (!in_array($perm_tab, ['all', 'admin', 'member'], true)) {
 
 $allowed_perm_user_ids = array_values(array_unique(array_merge(
     array_map('intval', array_column($members, 'id')),
-    array_map('intval', array_column($admins_list_ui, 'id'))
+    array_map('intval', array_column($admins_list_ui, 'id')),
+    array_map('intval', array_column($bosses_list_ui, 'id'))
 )));
 
 $pick_id = (int)($_GET['pick'] ?? 0);
@@ -71,6 +85,9 @@ foreach ($members as $m) {
 }
 foreach ($admins_list_ui as $a) {
     $perm_rows_all[] = array_merge($a, ['perm_role' => 'admin']);
+}
+foreach ($bosses_list_ui as $b) {
+    $perm_rows_all[] = array_merge($b, ['perm_role' => 'boss']);
 }
 usort($perm_rows_all, static function (array $x, array $y): int {
     $cmp = strcmp((string)($x['username'] ?? ''), (string)($y['username'] ?? ''));
@@ -138,7 +155,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                 }
                 header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
                 exit;
-            } elseif ($trole === 'admin') {
+            } elseif ($trole === 'admin' || $trole === 'boss') {
                 if (!$actor_can_set_admin_month && !$actor_can_set_contact_view) {
                     $err = __('perm_err_boss_only_admin_opts');
                 } else {
@@ -189,7 +206,7 @@ if ($pick_id > 0) {
         $pick_user_row = null;
         $pick_role = '';
     }
-    if (!$pick_user_row || !in_array($pick_role, ['member', 'admin'], true)) {
+    if (!$pick_user_row || !in_array($pick_role, ['member', 'admin', 'boss'], true)) {
         $pick_id = 0;
         $pick_user_row = null;
         $pick_role = '';
@@ -199,7 +216,7 @@ if ($pick_id > 0) {
 $admin_has_month = false;
 $contact_user_has_view = false;
 $admin_dp_wd_has_view = false;
-if ($pick_id > 0 && $pick_role === 'admin') {
+if ($pick_id > 0 && in_array($pick_role, ['admin', 'boss'], true)) {
     if ($actor_can_set_admin_month) {
         try {
             $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
@@ -408,6 +425,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
             padding: 2px 6px; border-radius: 4px; margin-right: 6px; vertical-align: middle;
         }
         .perm-ui-role--admin { background: #fee2e2; color: #991b1b; }
+        .perm-ui-role--boss { background: #ffedd5; color: #9a3412; }
         .perm-ui-role--member { background: #d1fae5; color: #065f46; }
         .perm-ui-empty { color: var(--muted); font-size: 14px; padding: 12px 0; }
     </style>
@@ -451,7 +469,7 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                         ?>
                         <li>
                             <a href="<?= $href ?>" class="<?= $pick_id === $rid ? 'is-active' : '' ?>">
-                                <span class="perm-ui-role <?= $pr === 'admin' ? 'perm-ui-role--admin' : 'perm-ui-role--member' ?>"><?= htmlspecialchars(strtoupper($pr), ENT_QUOTES, 'UTF-8') ?></span>
+                                <span class="perm-ui-role <?= $pr === 'admin' ? 'perm-ui-role--admin' : ($pr === 'boss' ? 'perm-ui-role--boss' : 'perm-ui-role--member') ?>"><?= htmlspecialchars(strtoupper($pr), ENT_QUOTES, 'UTF-8') ?></span>
                                 <?= $line ?>
                             </a>
                         </li>
@@ -530,6 +548,12 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                         <label class="perm-label" for="perm_other_tx_edit_req_m"><?= htmlspecialchars((string)($options['transaction_edit_request'] ?? 'transaction_edit_request'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
                                     <?php endif; ?>
+                                    <?php if (array_key_exists('transaction_time_filter', $options)): ?>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="perms[]" value="transaction_time_filter" id="perm_other_tx_time_filter_m" <?= in_array('transaction_time_filter', $current, true) ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="perm_other_tx_time_filter_m"><?= htmlspecialchars((string)($options['transaction_time_filter'] ?? 'transaction_time_filter'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <?php endif; ?>
                                     <?php if ($actor_can_set_contact_view): ?>
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
@@ -545,9 +569,9 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('perm_btn_save_permissions'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                         </div>
-                    <?php elseif ($pick_role === 'admin'): ?>
+                    <?php elseif ($pick_role === 'admin' || $pick_role === 'boss'): ?>
                         <div class="perm-nav-panel" role="region" aria-label="<?= htmlspecialchars(__('perm_page_title'), ENT_QUOTES, 'UTF-8') ?>">
-                        <h3 class="perm-ui-detail-title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?><span><?= htmlspecialchars(__('perm_tab_admin'), ENT_QUOTES, 'UTF-8') ?></span></h3>
+                        <h3 class="perm-ui-detail-title"><?= htmlspecialchars((string)$pick_user_row['username'], ENT_QUOTES, 'UTF-8') ?><span><?= htmlspecialchars(strtoupper($pick_role), ENT_QUOTES, 'UTF-8') ?></span></h3>
                         <?php if (!$actor_can_set_admin_month && !$actor_can_set_contact_view): ?>
                             <p class="form-hint"><?= htmlspecialchars(__('perm_err_boss_only_admin_opts'), ENT_QUOTES, 'UTF-8') ?></p>
                         <?php else: ?>

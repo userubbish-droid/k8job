@@ -35,6 +35,40 @@ $page     = max(1, (int)($_GET['page'] ?? 1));
 
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $can_request_edit = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_edit_request');
+$can_member_time_filter = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_time_filter');
+
+/**
+ * 支持 date 或 datetime-local（2026-04-15 或 2026-04-15T23:59）
+ * @return array{day:string,time:string}
+ */
+function txn_parse_day_time(string $raw, string $default_day, string $default_time): array {
+    $raw = trim($raw);
+    if ($raw === '') {
+        return ['day' => $default_day, 'time' => $default_time];
+    }
+    // datetime-local: YYYY-MM-DDTHH:MM[:SS]
+    if (preg_match('/^(\d{4}-\d{2}-\d{2})[T\s](\d{2}):(\d{2})(?::(\d{2}))?/', $raw, $m)) {
+        $d = $m[1];
+        $hh = $m[2];
+        $mm = $m[3];
+        $ss = isset($m[4]) && $m[4] !== '' ? $m[4] : '00';
+        return ['day' => $d, 'time' => sprintf('%02d:%02d:%02d', (int)$hh, (int)$mm, (int)$ss)];
+    }
+    // date only: YYYY-MM-DD
+    if (preg_match('/^\d{4}-\d{2}-\d{2}/', $raw)) {
+        return ['day' => substr($raw, 0, 10), 'time' => $default_time];
+    }
+    return ['day' => $default_day, 'time' => $default_time];
+}
+
+// member 若未开通时间筛选权限：强制锁定为“今天”，避免手改 URL 越权查看历史
+if (!$is_admin && !$can_member_time_filter) {
+    $today = date('Y-m-d');
+    $day_from = $today;
+    $day_to = $today;
+    $day_from_raw = $today;
+    $day_to_raw = $today;
+}
 
 $params = [];
 $where  = ['1=1', 'company_id = ?'];
@@ -74,13 +108,32 @@ if ($is_admin) {
     }
 }
 
-if ($day_from !== '') {
-    $where[] = 'day >= ?';
-    $params[] = $day_from;
-}
-if ($day_to !== '') {
-    $where[] = 'day <= ?';
-    $params[] = $day_to;
+// 支持“按天”或“按时间范围”（day+time）
+$use_time_range = ($is_admin || $can_member_time_filter);
+$from_dt = txn_parse_day_time((string)$day_from_raw, date('Y-m-d'), '00:00:00');
+$to_dt   = txn_parse_day_time((string)$day_to_raw, date('Y-m-d'), '23:59:59');
+$day_from = $from_dt['day'];
+$day_to   = $to_dt['day'];
+if ($use_time_range) {
+    // day > fromDay OR (day = fromDay AND time >= fromTime)
+    $where[] = '(day > ? OR (day = ? AND time >= ?))';
+    $params[] = $from_dt['day'];
+    $params[] = $from_dt['day'];
+    $params[] = $from_dt['time'];
+    // day < toDay OR (day = toDay AND time <= toTime)
+    $where[] = '(day < ? OR (day = ? AND time <= ?))';
+    $params[] = $to_dt['day'];
+    $params[] = $to_dt['day'];
+    $params[] = $to_dt['time'];
+} else {
+    if ($day_from !== '') {
+        $where[] = 'day >= ?';
+        $params[] = $day_from;
+    }
+    if ($day_to !== '') {
+        $where[] = 'day <= ?';
+        $params[] = $day_to;
+    }
 }
 if ($mode !== '') {
     $where[] = 'mode = ?';
@@ -369,6 +422,23 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         <div class="summary-item"><strong><?= app_lang() === 'en' ? 'Profit' : '利润' ?></strong><span class="num"><?= number_format($profit, 2) ?></span></div>
     </div>
     </div>
+    <?php endif; ?>
+
+    <?php if (!$is_admin && $can_member_time_filter): ?>
+    <form class="filters-bar" method="get" style="margin-bottom: 12px;">
+        <div class="filters-row filters-row-main" style="flex-wrap: wrap;">
+            <div class="filter-group">
+                <label><?= app_lang() === 'en' ? 'From' : '从' ?>:</label>
+                <input type="datetime-local" name="day_from" value="<?= htmlspecialchars($day_from_raw) ?>" step="60">
+            </div>
+            <div class="filter-group">
+                <label><?= app_lang() === 'en' ? 'To' : '到' ?>:</label>
+                <input type="datetime-local" name="day_to" value="<?= htmlspecialchars($day_to_raw) ?>" step="60">
+            </div>
+            <input type="hidden" name="page" value="1">
+            <button type="submit" class="btn btn-search"><?= app_lang() === 'en' ? 'Search' : '查询' ?></button>
+        </div>
+    </form>
     <?php endif; ?>
 
     <p class="form-hint">共 <?= $total_rows ?> 条，第 <?= $page ?>/<?= $total_pages ?> 页</p>

@@ -21,6 +21,7 @@ function get_permission_options(): array
         'transaction_create' => __('perm_transaction_create'),
         'transaction_list'   => __('perm_transaction_list'),
         'transaction_edit_request' => __('perm_transaction_edit_request'),
+        'transaction_time_filter' => __('perm_transaction_time_filter'),
         'rebate'             => __('perm_rebate'),
         'customers'          => __('perm_customers'),
         'customer_create'    => __('perm_customer_create'),
@@ -35,6 +36,8 @@ const PERM_DASHBOARD_MONTH_DATA = 'dashboard_month_data';
 const PERM_VIEW_MEMBER_CONTACT = 'view_member_contact';
 /** Customers 列表 Total DP / Total WD 列（Boss/Superadmin 在权限页为 Admin/Member 勾选） */
 const PERM_VIEW_CUSTOMER_TOTAL_DP_WD = 'view_customer_total_dp_wd';
+/** Transactions：允许 member 按时间范围筛选查看 */
+const PERM_TRANSACTION_TIME_FILTER = 'transaction_time_filter';
 
 /**
  * 当前用户是否拥有某权限。boss / superadmin 全允许；admin 除「本月数据」外全允许；member 查 user_permissions。
@@ -46,7 +49,25 @@ function has_permission(string $key): bool
         return true;
     }
     if ($role === 'boss') {
-        return true;
+        // boss 默认全允许，但部分敏感权限允许由权限面板控制开关
+        if (!in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT, PERM_VIEW_CUSTOMER_TOTAL_DP_WD], true)) {
+            return true;
+        }
+        $uid = (int)($_SESSION['user_id'] ?? 0);
+        if ($uid <= 0) {
+            return false;
+        }
+        global $pdo;
+        if (!isset($pdo)) {
+            return false;
+        }
+        try {
+            $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stmt->execute([$uid, $key]);
+            return (bool) $stmt->fetch();
+        } catch (Throwable $e) {
+            return false;
+        }
     }
     if ($role === 'admin') {
         if (in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT, PERM_VIEW_CUSTOMER_TOTAL_DP_WD], true)) {

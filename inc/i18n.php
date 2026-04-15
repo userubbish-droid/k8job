@@ -199,6 +199,7 @@ function i18n_dictionary(): array
         'perm_transaction_create' => ['zh' => '记一笔', 'en' => 'Add Transaction'],
         'perm_transaction_list' => ['zh' => '流水', 'en' => 'Transactions'],
         'perm_transaction_edit_request' => ['zh' => '流水 · 申请修改（待批准）', 'en' => 'Transactions · Request edit (pending approval)'],
+        'perm_transaction_time_filter' => ['zh' => '流水 · 允许按时间范围查看', 'en' => 'Transactions · Allow time range filter'],
         'perm_rebate' => ['zh' => '客户返点', 'en' => 'Customer Rebate'],
         'perm_customers' => ['zh' => '客户列表', 'en' => 'Customers'],
         'perm_customer_create' => ['zh' => '新客户', 'en' => 'New Customer'],
