@@ -12,6 +12,9 @@ $err = '';
 
 // ensure table exists (still recommend migrate)
 try { $pdo->query("SELECT 1 FROM transaction_edit_requests LIMIT 1"); } catch (Throwable $e) {}
+require_once __DIR__ . '/inc/ensure_txedit_request_orig_columns.php';
+ensure_txedit_request_orig_columns($pdo);
+require_once __DIR__ . '/inc/txedit_request_diff.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = (string)($_POST['action'] ?? '');
@@ -79,9 +82,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 }
 
 $rows = [];
-$txJoinCols = "t.day AS orig_day, t.time AS orig_time, t.mode AS orig_mode, t.code AS orig_code,
-                t.bank AS orig_bank, t.product AS orig_product, t.amount AS orig_amount,
-                t.burn AS orig_burn, t.bonus AS orig_bonus, t.total AS orig_total, t.remark AS orig_remark";
+$txJoinCols = "COALESCE(r.orig_day, t.day) AS orig_day, COALESCE(r.orig_time, t.time) AS orig_time, COALESCE(r.orig_mode, t.mode) AS orig_mode, COALESCE(r.orig_code, t.code) AS orig_code,
+                COALESCE(r.orig_bank, t.bank) AS orig_bank, COALESCE(r.orig_product, t.product) AS orig_product, COALESCE(r.orig_amount, t.amount) AS orig_amount,
+                COALESCE(r.orig_burn, t.burn) AS orig_burn, COALESCE(r.orig_bonus, t.bonus) AS orig_bonus, COALESCE(r.orig_total, t.total) AS orig_total, COALESCE(r.orig_remark, t.remark) AS orig_remark";
 try {
     if ($head_office_scope) {
         $sql = "SELECT r.*, u.username AS created_by_name, c.code AS company_code, {$txJoinCols}
@@ -109,72 +112,6 @@ try {
 
 $htmlLang = app_lang() === 'en' ? 'en' : 'zh-CN';
 $txeditColCount = 14 + ($head_office_scope ? 1 : 0);
-
-/** @return string HTML */
-function txedit_h(?string $s): string
-{
-    return htmlspecialchars((string)($s ?? ''), ENT_QUOTES, 'UTF-8');
-}
-
-function txedit_time_disp(?string $t): string
-{
-    if ($t === null || $t === '') {
-        return '';
-    }
-    return substr(trim((string)$t), 0, 8);
-}
-
-/** @param mixed $v */
-function txedit_money_disp($v): string
-{
-    if ($v === null || $v === '') {
-        return '—';
-    }
-    return number_format((float)$v, 2);
-}
-
-/** @param mixed $a @param mixed $b */
-function txedit_money_eq($a, $b): bool
-{
-    $fa = ($a === null || $a === '') ? null : round((float)$a, 2);
-    $fb = ($b === null || $b === '') ? null : round((float)$b, 2);
-    if ($fa === null && $fb === null) {
-        return true;
-    }
-    if ($fa === null || $fb === null) {
-        return false;
-    }
-    return abs($fa - $fb) < 0.0001;
-}
-
-/** @return string HTML */
-function txedit_diff_text(?string $old, ?string $new): string
-{
-    $o = trim((string)($old ?? ''));
-    $n = trim((string)($new ?? ''));
-    if ($o === $n) {
-        $one = $n === '' ? '—' : txedit_h($n);
-        return $one;
-    }
-    $os = $o === '' ? '—' : txedit_h($o);
-    $ns = $n === '' ? '—' : txedit_h($n);
-    return $os . ' <span class="muted">→</span> ' . $ns;
-}
-
-/** @return string HTML */
-function txedit_diff_time(?string $old, ?string $new): string
-{
-    return txedit_diff_text(txedit_time_disp($old), txedit_time_disp($new));
-}
-
-/** @param mixed $old @param mixed $new @return string HTML */
-function txedit_diff_money($old, $new): string
-{
-    if (txedit_money_eq($old, $new)) {
-        return txedit_h(txedit_money_disp($new));
-    }
-    return txedit_h(txedit_money_disp($old)) . ' <span class="muted">→</span> ' . txedit_h(txedit_money_disp($new));
-}
 ?>
 <!doctype html>
 <html lang="<?= txedit_h($htmlLang) ?>">
@@ -193,6 +130,9 @@ function txedit_diff_money($old, $new): string
             <div class="page-header">
                 <h2><?= txedit_h(__('txedit_page_title')) ?></h2>
                 <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
+                <?php if (in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true)): ?>
+                <p class="breadcrumb" style="margin-top:4px;"><a href="admin_txn_edit_audit.php"><?= txedit_h(__('txedit_link_audit_log')) ?></a></p>
+                <?php endif; ?>
             </div>
             <?php if ($msg): ?><div class="alert alert-success"><?= txedit_h($msg) ?></div><?php endif; ?>
             <?php if ($err): ?><div class="alert alert-error"><?= txedit_h($err) ?></div><?php endif; ?>

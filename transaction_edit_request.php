@@ -14,6 +14,17 @@ try {
       id INT UNSIGNED NOT NULL AUTO_INCREMENT,
       company_id INT NOT NULL,
       transaction_id INT UNSIGNED NOT NULL,
+      orig_day DATE NULL,
+      orig_time TIME NULL,
+      orig_mode VARCHAR(32) NULL,
+      orig_code VARCHAR(255) NULL,
+      orig_bank VARCHAR(255) NULL,
+      orig_product VARCHAR(255) NULL,
+      orig_amount DECIMAL(14,2) NULL,
+      orig_burn DECIMAL(14,2) NULL,
+      orig_bonus DECIMAL(14,2) NULL,
+      orig_total DECIMAL(14,2) NULL,
+      orig_remark TEXT NULL,
       day DATE NOT NULL,
       time TIME NOT NULL,
       mode VARCHAR(32) NOT NULL,
@@ -36,6 +47,8 @@ try {
       KEY idx_txn (transaction_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (Throwable $e) {}
+require_once __DIR__ . '/inc/ensure_txedit_request_orig_columns.php';
+ensure_txedit_request_orig_columns($pdo);
 
 $id = (int)($_GET['id'] ?? 0);
 $return_to = trim((string)($_GET['return_to'] ?? 'transaction_list.php'));
@@ -93,12 +106,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uid = (int)($_SESSION['user_id'] ?? 0);
 
         try {
+            ensure_txedit_request_orig_columns($pdo);
+            $sqlSnap = "SELECT day, time, mode, code, bank, product, amount, burn, bonus, total, remark FROM transactions WHERE id = ? AND company_id = ?";
+            try {
+                $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+                $sqlSnap .= ' AND deleted_at IS NULL';
+            } catch (Throwable $e) {
+            }
+            $stSnap = $pdo->prepare($sqlSnap);
+            $stSnap->execute([$id, $company_id]);
+            $snap = $stSnap->fetch(PDO::FETCH_ASSOC);
+            if (!$snap) {
+                $err = app_lang() === 'en' ? 'Transaction not found or no longer editable.' : '找不到该流水或已不可编辑。';
+            } else {
             $ins = $pdo->prepare("INSERT INTO transaction_edit_requests
-                (company_id, transaction_id, day, time, mode, code, bank, product, amount, burn, bonus, total, remark, status, created_by, created_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())");
+                (company_id, transaction_id,
+                orig_day, orig_time, orig_mode, orig_code, orig_bank, orig_product, orig_amount, orig_burn, orig_bonus, orig_total, orig_remark,
+                day, time, mode, code, bank, product, amount, burn, bonus, total, remark, status, created_by, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, NOW())");
             $ins->execute([
                 $company_id,
                 $id,
+                (string)$snap['day'],
+                (string)$snap['time'],
+                (string)$snap['mode'],
+                $snap['code'] !== null && trim((string)$snap['code']) !== '' ? trim((string)$snap['code']) : null,
+                $snap['bank'] !== null && trim((string)$snap['bank']) !== '' ? trim((string)$snap['bank']) : null,
+                $snap['product'] !== null && trim((string)$snap['product']) !== '' ? trim((string)$snap['product']) : null,
+                (float)$snap['amount'],
+                isset($snap['burn']) && $snap['burn'] !== null && $snap['burn'] !== '' ? (float)$snap['burn'] : null,
+                (float)$snap['bonus'],
+                (float)$snap['total'],
+                $snap['remark'] !== null && trim((string)$snap['remark']) !== '' ? trim((string)$snap['remark']) : null,
                 $day,
                 $time,
                 $mode,
@@ -123,6 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
             $saved = true;
             $msg = '已提交修改申请，等待批准后才会生效。';
+            }
         } catch (Throwable $e) {
             $err = $e->getMessage();
         }

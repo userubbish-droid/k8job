@@ -196,6 +196,17 @@ function require_superadmin(): void
     }
 }
 
+/** 分公司 Boss 或平台 big boss（superadmin）專用頁 */
+function require_boss_or_superadmin(): void
+{
+    require_login();
+    if (!in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true)) {
+        http_response_code(403);
+        echo htmlspecialchars(__('err_403_boss_audit_only'), ENT_QUOTES, 'UTF-8');
+        exit;
+    }
+}
+
 /** superadmin 在侧栏选择「总公司」时 session 为 0，表示全部分公司合计（仅部分页面如 Dashboard 做汇总） */
 function is_superadmin_all_companies_scope(): bool {
     return ($_SESSION['user_role'] ?? '') === 'superadmin'

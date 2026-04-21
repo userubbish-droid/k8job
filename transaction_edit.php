@@ -9,7 +9,9 @@ $company_id = current_company_id();
 
 $id = (int)($_GET['id'] ?? 0);
 $return_to = trim($_GET['return_to'] ?? 'transaction_list.php');
-if (strpos($return_to, 'transaction_list.php') !== 0) {
+if (strpos($return_to, 'transaction_list.php') !== 0
+    && strpos($return_to, 'admin_txn_edit_approvals.php') !== 0
+    && strpos($return_to, 'admin_txn_edit_audit.php') !== 0) {
     $return_to = 'transaction_list.php';
 }
 

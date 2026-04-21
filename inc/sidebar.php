@@ -285,6 +285,9 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         <a href="admin_users.php" class="nav-item <?= $sidebar_current === 'admin_users' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_user_management'), ENT_QUOTES, 'UTF-8') ?></a>
         <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?></a>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_permissions'), ENT_QUOTES, 'UTF-8') ?></a>
+        <?php if (in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true)): ?>
+        <a href="admin_txn_edit_audit.php" class="nav-item <?= $sidebar_current === 'admin_txn_edit_audit' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_txn_edit_audit'), ENT_QUOTES, 'UTF-8') ?></a>
+        <?php endif; ?>
         <div class="sidebar-nav-divider sidebar-nav-divider--before-logout" role="presentation" aria-hidden="true"></div>
     <?php endif; ?>
     <a href="change_password.php" class="nav-item <?= $sidebar_current === 'change_password' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_change_password'), ENT_QUOTES, 'UTF-8') ?></a>
