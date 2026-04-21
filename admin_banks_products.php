@@ -374,7 +374,8 @@ try {
     $balance_expense = [];
 }
 
-// Balance Now = Starting Balance + 入账(deposit) − 出账(withdraw)，按银行/产品对扣
+// Balance 與 balance_summary（statement）同源：inc/game_platform_statement_compute.php
+// 區間＝本公司最早已核准流水日～今天（與把 statement 日期拉到全歷史時一致）；銀行提款 Out 不含 burn。
 $total_in_bank = [];
 $total_out_bank = [];
 $total_in_product = [];
@@ -385,55 +386,61 @@ $total_out_expense = [];
 $diag_bank_rows = [];
 $diag_product_rows = [];
 $diag_error = '';
+$cum_in_bank = [];
+$cum_out_bank = [];
+$cum_in_product = [];
+$cum_topup_product = [];
+$cum_out_product = [];
+$initial_bank = [];
+$initial_product = [];
+$range_in_bank = [];
+$range_out_bank = [];
+$range_in_product = [];
+$range_topup_product = [];
+$range_out_product = [];
+$abp_has_deleted_at = true;
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
-        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE status = 'approved' AND company_id = ? GROUP BY COALESCE(bank, '')");
-    $stmt->execute([$company_id]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($rows as $r) {
-        $bankVal = $r['bank'] ?? $r['Bank'] ?? '';
-        $k = strtolower(trim((string)$bankVal));
-        if ($k === '') continue;
-        $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
-        $to = (float)($r['tout'] ?? $r['TO'] ?? 0);
-        $total_in_bank[$k] = $ti;
-        $total_out_bank[$k] = $to;
-        $diag_bank_rows[$k] = ['in' => $ti, 'out' => $to];
-    }
+    $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
 } catch (Throwable $e) {
-    $diag_error = $e->getMessage();
+    $abp_has_deleted_at = false;
 }
-$__gpc_gp_key = require __DIR__ . '/inc/gpc_effective_product_key_sql.php';
+$abp_del = $abp_has_deleted_at ? ' AND deleted_at IS NULL' : '';
 try {
-    $stmt = $pdo->prepare("SELECT {$__gpc_gp_key} AS gp,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS topup,
-        COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('WITHDRAW','EXPENSE') THEN t.amount ELSE 0 END), 0) AS tout
-        FROM transactions t WHERE t.status = 'approved' AND t.company_id = ? GROUP BY gp");
-    $stmt->execute([$company_id]);
-    $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-    foreach ($rows as $r) {
-        $prodVal = $r['gp'] ?? $r['GP'] ?? '';
-        $k = strtolower(trim((string)$prodVal));
-        if ($k === '') continue;
-        $ti = (float)($r['ti'] ?? $r['TI'] ?? 0);
-        $topup = (float)($r['topup'] ?? 0);
-        $to = (float)($r['tout'] ?? $r['TO'] ?? 0);
-        $total_in_product[$k] = $ti;
-        $total_topup_product[$k] = $topup;
-        $total_out_product[$k] = $to;
-        $diag_product_rows[$k] = ['in' => $ti, 'topup' => $topup, 'out' => $to];
+    $stMin = $pdo->prepare("SELECT MIN(day) AS d FROM transactions WHERE company_id = ? AND status = 'approved'{$abp_del}");
+    $stMin->execute([$company_id]);
+    $minD = $stMin->fetchColumn();
+} catch (Throwable $e) {
+    $minD = null;
+}
+$day_from = (is_string($minD) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $minD)) ? $minD : '1970-01-01';
+$day_to = date('Y-m-d');
+try {
+    require_once __DIR__ . '/inc/game_platform_statement_compute.php';
+    $total_in_bank = $range_in_bank;
+    $total_out_bank = $range_out_bank;
+    $total_in_product = $range_in_product;
+    $total_topup_product = $range_topup_product;
+    $total_out_product = $range_out_product;
+    foreach ($total_in_bank as $bk => $ti) {
+        $diag_bank_rows[$bk] = ['in' => (float)$ti, 'out' => (float)($total_out_bank[$bk] ?? 0)];
+    }
+    foreach ($total_in_product as $pk => $ti) {
+        $diag_product_rows[$pk] = [
+            'in' => (float)$ti,
+            'topup' => (float)($total_topup_product[$pk] ?? 0),
+            'out' => (float)($total_out_product[$pk] ?? 0),
+        ];
     }
 } catch (Throwable $e) {
-    if (empty($diag_error)) $diag_error = $e->getMessage();
+    if ($diag_error === '') {
+        $diag_error = $e->getMessage();
+    }
 }
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS expense_name,
         COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions
-        WHERE status = 'approved' AND company_id = ?
+        WHERE status = 'approved' AND company_id = ?{$abp_del}
         GROUP BY COALESCE(product, '')");
     $stmt->execute([$company_id]);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
@@ -455,10 +462,10 @@ foreach ($banks as $b) {
     if ((int)($b['is_active'] ?? 1) !== 1) continue;
     $bname = trim((string)$b['name']);
     $bkey = strtolower($bname);
-    $start = (float)($balance_bank[$bkey] ?? 0);
     $tin = (float)($total_in_bank[$bkey] ?? 0);
     $tout = (float)($total_out_bank[$bkey] ?? 0);
-    $bank_balances_for_notify[$bname] = $start + $tin - $tout;
+    $merged_open = isset($initial_bank[$bname]) ? (float)$initial_bank[$bname] : (float)(($cum_in_bank[$bkey] ?? 0) - ($cum_out_bank[$bkey] ?? 0));
+    $bank_balances_for_notify[$bname] = $merged_open + $tin - $tout;
 }
 foreach ($products_full as $p) {
     if ((int)($p['is_active'] ?? 1) !== 1) continue;
@@ -467,11 +474,12 @@ foreach ($products_full as $p) {
     }
     $pname = trim((string)$p['name']);
     $pkey = strtolower($pname);
-    $start = (float)($balance_product[$pkey] ?? 0);
     $tin = (float)($total_in_product[$pkey] ?? 0);
     $topup = (float)($total_topup_product[$pkey] ?? 0);
     $tout = (float)($total_out_product[$pkey] ?? 0);
-    $product_balances_for_notify[$pname] = $start - $tin + $topup + $tout;
+    $merged_open = isset($initial_product[$pname]) ? (float)$initial_product[$pname]
+        : (float)(-($cum_in_product[$pkey] ?? 0) + ($cum_topup_product[$pkey] ?? 0) + ($cum_out_product[$pkey] ?? 0));
+    $product_balances_for_notify[$pname] = $merged_open - $tin + $topup + $tout;
 }
 require_once __DIR__ . '/inc/balance_notify.php';
 check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
@@ -618,10 +626,10 @@ try {
                                 $bname = trim((string)$b['name']);
                                 $bkey = strtolower($bname);
                                 $cur = $balance_bank[$bkey] ?? null;
-                                $start = $cur !== null ? (float)$cur : 0;
+                                $merged_open = isset($initial_bank[$bname]) ? (float)$initial_bank[$bname] : (float)(($cum_in_bank[$bkey] ?? 0) - ($cum_out_bank[$bkey] ?? 0));
                                 $tin = $total_in_bank[$bkey] ?? 0;
                                 $tout = $total_out_bank[$bkey] ?? 0;
-                                $balance_now = $start + $tin - $tout;
+                                $balance_now = $merged_open + $tin - $tout;
                             ?>
                             <tr>
                                 <td><?= (int)$b['id'] ?></td>
@@ -629,7 +637,7 @@ try {
                                 <td><?= ((int)$b['is_active'] === 1) ? htmlspecialchars(__('abp_status_enabled'), ENT_QUOTES, 'UTF-8') : htmlspecialchars(__('abp_status_disabled'), ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int)$b['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($b['created_at']) ?></td>
-                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
+                                <td class="num" title="<?= htmlspecialchars(__('abp_starting_col_title'), ENT_QUOTES, 'UTF-8') ?>"><?= number_format($merged_open, 2) ?></td>
                                 <td class="num in"><?= number_format($tin, 2) ?></td>
                                 <td class="num out"><?= number_format($tout, 2) ?></td>
                                 <td class="num profit"><?= number_format($balance_now, 2) ?></td>
@@ -673,6 +681,7 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="10"><?= htmlspecialchars(__('abp_empty_banks'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    <p class="form-hint" style="margin:10px 0 0; font-size:12px; line-height:1.5; color:var(--muted); max-width:52rem;"><?= htmlspecialchars(__('abp_bank_inout_footnote'), ENT_QUOTES, 'UTF-8') ?></p>
                     </div>
                 </div>
 
@@ -735,11 +744,12 @@ try {
                                 $pkey = strtolower($pname);
                                 $pend_del = !empty($p['delete_pending_at']);
                                 $cur = $balance_product[$pkey] ?? null;
-                                $start = $cur !== null ? (float)$cur : 0;
+                                $merged_open = isset($initial_product[$pname]) ? (float)$initial_product[$pname]
+                                    : (float)(-($cum_in_product[$pkey] ?? 0) + ($cum_topup_product[$pkey] ?? 0) + ($cum_out_product[$pkey] ?? 0));
                                 $tin = $total_in_product[$pkey] ?? 0;
                                 $topup = $total_topup_product[$pkey] ?? 0;
                                 $tout = $total_out_product[$pkey] ?? 0;
-                                $balance_now = $start - $tin + $topup + $tout;
+                                $balance_now = $merged_open - $tin + $topup + $tout;
                                 $status_cell = $pend_del ? __('abp_status_disabled_pending_del') : (((int)$p['is_active'] === 1) ? __('abp_status_enabled') : __('abp_status_disabled'));
                             ?>
                             <tr<?= $pend_del ? ' style="background:rgba(254,242,242,0.88);"' : '' ?>>
@@ -748,7 +758,7 @@ try {
                                 <td><?= htmlspecialchars($status_cell, ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= (int)$p['sort_order'] ?></td>
                                 <td><?= htmlspecialchars($p['created_at']) ?></td>
-                                <td class="num"><?= $cur !== null ? number_format($cur, 2) : '0.00' ?></td>
+                                <td class="num" title="<?= htmlspecialchars(__('abp_starting_col_title'), ENT_QUOTES, 'UTF-8') ?>"><?= number_format($merged_open, 2) ?></td>
                                 <td class="num in"><?= $tin != 0 ? '−' . number_format($tin, 2) : '—' ?></td>
                                 <td class="num topup"><?= $topup != 0 ? number_format($topup, 2) : '—' ?></td>
                                 <td class="num out"><?= $tout != 0 ? number_format($tout, 2) : '—' ?></td>
@@ -799,6 +809,7 @@ try {
                             <?php if (!$products): ?><tr><td colspan="11"><?= htmlspecialchars(__('abp_empty_products'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                         </tbody>
                     </table>
+                    <p class="form-hint" style="margin:10px 0 0; font-size:12px; line-height:1.5; color:var(--muted); max-width:52rem;"><?= htmlspecialchars(__('abp_product_stmt_footnote'), ENT_QUOTES, 'UTF-8') ?></p>
                     </div>
                 </div>
 
