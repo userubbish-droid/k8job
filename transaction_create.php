@@ -176,6 +176,9 @@ $sidebar_current = $quick === 'expense'
 $saved = false;
 $error = '';
 $submitted_status = '';
+$saved_bank = '';
+$saved_modal_bank_balance = null;
+$saved_modal_product_balance = null;
 $expense_day_from_raw = trim((string)($_GET['expense_day_from'] ?? date('Y-m-01')));
 $expense_day_to_raw = trim((string)($_GET['expense_day_to'] ?? date('Y-m-d')));
 $expense_bank_filter = trim((string)($_GET['expense_bank'] ?? ''));
@@ -310,6 +313,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($saved) {
         $submitted_status = $status;
+            $saved_bank = $bank;
             if ($status === 'pending') {
                 if (file_exists(__DIR__ . '/inc/notify.php')) {
                     require_once __DIR__ . '/inc/notify.php';
@@ -368,6 +372,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $saved_customer_bank = $crow ? trim($crow['bank_details'] ?? '') : '';
             } catch (Throwable $e) {}
         }
+            if ($submitted_status === 'approved') {
+                require_once __DIR__ . '/inc/txn_post_save_balances.php';
+                try {
+                    $balSnap = txn_balance_now_for_labels($pdo, $company_id, $saved_bank, $saved_product);
+                    $saved_modal_bank_balance = $balSnap['bank_balance'];
+                    $saved_modal_product_balance = $balSnap['product_balance'];
+                } catch (Throwable $e) {
+                    $saved_modal_bank_balance = null;
+                    $saved_modal_product_balance = null;
+                }
+            }
         }
     }
 }
@@ -823,6 +838,15 @@ $ep = $expense_modal_should_open ? $_POST : [];
             color: #0f172a;
             font-size: 15px;
             line-height: 1.6;
+        }
+        .pretty-modal-body .saved-done-lead {
+            font-weight: 700;
+            margin: 0 0 10px;
+        }
+        .pretty-modal-body .saved-bal-line {
+            margin: 6px 0 0;
+            font-size: 14px;
+            color: #334155;
         }
         .pretty-modal-foot {
             display: flex;
@@ -1672,6 +1696,14 @@ $ep = $expense_modal_should_open ? $_POST : [];
             <div class="pretty-modal-body">
                 <?php if ($submitted_status === 'pending'): ?>
                     <?= htmlspecialchars(__('txn_saved_pending'), ENT_QUOTES, 'UTF-8') ?>
+                <?php elseif ($submitted_status === 'approved' && ($saved_modal_bank_balance !== null || $saved_modal_product_balance !== null)): ?>
+                    <p class="saved-done-lead"><?= htmlspecialchars(__('txn_saved_done_lead'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php if ($saved_modal_bank_balance !== null && trim($saved_bank) !== ''): ?>
+                    <p class="saved-bal-line"><?= htmlspecialchars(__f('txn_saved_bal_bank_line', trim($saved_bank), number_format($saved_modal_bank_balance, 2)), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
+                    <?php if ($saved_modal_product_balance !== null && trim($saved_product) !== ''): ?>
+                    <p class="saved-bal-line"><?= htmlspecialchars(__f('txn_saved_bal_product_line', trim($saved_product), number_format($saved_modal_product_balance, 2)), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php endif; ?>
                 <?php else: ?>
                     <?= htmlspecialchars(__('txn_saved_ok'), ENT_QUOTES, 'UTF-8') ?>
                 <?php endif; ?>
