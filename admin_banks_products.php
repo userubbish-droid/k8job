@@ -374,30 +374,24 @@ try {
     $balance_expense = [];
 }
 
-// Balance 與 balance_summary（statement）同源：inc/game_platform_statement_compute.php
-// 區間＝本公司最早已核准流水日～今天（與把 statement 日期拉到全歷史時一致）；銀行提款 Out 不含 burn。
-$total_in_bank = [];
-$total_out_bank = [];
-$total_in_product = [];
-$total_topup_product = [];
-$total_out_product = [];
+// Balance 與 balance_summary（statement）同源（balance_notify_ledger_snapshot）；區間＝最早已核准流水日～今天。
+require_once __DIR__ . '/inc/balance_notify_ledger_snapshot.php';
+$snap = balance_notify_ledger_snapshot($pdo, $company_id);
+$total_in_bank = $snap['total_in_bank'];
+$total_out_bank = $snap['total_out_bank'];
+$total_in_product = $snap['total_in_product'];
+$total_topup_product = $snap['total_topup_product'];
+$total_out_product = $snap['total_out_product'];
+$cum_in_bank = $snap['cum_in_bank'];
+$cum_out_bank = $snap['cum_out_bank'];
+$cum_in_product = $snap['cum_in_product'];
+$cum_topup_product = $snap['cum_topup_product'];
+$cum_out_product = $snap['cum_out_product'];
+$initial_bank = $snap['initial_bank'];
+$initial_product = $snap['initial_product'];
+$diag_error = $snap['diag_error'];
 $total_in_expense = [];
 $total_out_expense = [];
-$diag_bank_rows = [];
-$diag_product_rows = [];
-$diag_error = '';
-$cum_in_bank = [];
-$cum_out_bank = [];
-$cum_in_product = [];
-$cum_topup_product = [];
-$cum_out_product = [];
-$initial_bank = [];
-$initial_product = [];
-$range_in_bank = [];
-$range_out_bank = [];
-$range_in_product = [];
-$range_topup_product = [];
-$range_out_product = [];
 $abp_has_deleted_at = true;
 try {
     $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
@@ -405,37 +399,6 @@ try {
     $abp_has_deleted_at = false;
 }
 $abp_del = $abp_has_deleted_at ? ' AND deleted_at IS NULL' : '';
-try {
-    $stMin = $pdo->prepare("SELECT MIN(day) AS d FROM transactions WHERE company_id = ? AND status = 'approved'{$abp_del}");
-    $stMin->execute([$company_id]);
-    $minD = $stMin->fetchColumn();
-} catch (Throwable $e) {
-    $minD = null;
-}
-$day_from = (is_string($minD) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $minD)) ? $minD : '1970-01-01';
-$day_to = date('Y-m-d');
-try {
-    require_once __DIR__ . '/inc/game_platform_statement_compute.php';
-    $total_in_bank = $range_in_bank;
-    $total_out_bank = $range_out_bank;
-    $total_in_product = $range_in_product;
-    $total_topup_product = $range_topup_product;
-    $total_out_product = $range_out_product;
-    foreach ($total_in_bank as $bk => $ti) {
-        $diag_bank_rows[$bk] = ['in' => (float)$ti, 'out' => (float)($total_out_bank[$bk] ?? 0)];
-    }
-    foreach ($total_in_product as $pk => $ti) {
-        $diag_product_rows[$pk] = [
-            'in' => (float)$ti,
-            'topup' => (float)($total_topup_product[$pk] ?? 0),
-            'out' => (float)($total_out_product[$pk] ?? 0),
-        ];
-    }
-} catch (Throwable $e) {
-    if ($diag_error === '') {
-        $diag_error = $e->getMessage();
-    }
-}
 try {
     $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS expense_name,
         COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS tout
@@ -455,34 +418,9 @@ try {
     if (empty($diag_error)) $diag_error = $e->getMessage();
 }
 
-// 余额阈值 Telegram 通知：银行超过设定 / 产品低于设定（隐藏设置见 admin_balance_notify.php）
-$bank_balances_for_notify = [];
-$product_balances_for_notify = [];
-foreach ($banks as $b) {
-    if ((int)($b['is_active'] ?? 1) !== 1) continue;
-    $bname = trim((string)$b['name']);
-    $bkey = strtolower($bname);
-    $tin = (float)($total_in_bank[$bkey] ?? 0);
-    $tout = (float)($total_out_bank[$bkey] ?? 0);
-    $merged_open = isset($initial_bank[$bname]) ? (float)$initial_bank[$bname] : (float)(($cum_in_bank[$bkey] ?? 0) - ($cum_out_bank[$bkey] ?? 0));
-    $bank_balances_for_notify[$bname] = $merged_open + $tin - $tout;
-}
-foreach ($products_full as $p) {
-    if ((int)($p['is_active'] ?? 1) !== 1) continue;
-    if (!empty($p['delete_pending_at'])) {
-        continue;
-    }
-    $pname = trim((string)$p['name']);
-    $pkey = strtolower($pname);
-    $tin = (float)($total_in_product[$pkey] ?? 0);
-    $topup = (float)($total_topup_product[$pkey] ?? 0);
-    $tout = (float)($total_out_product[$pkey] ?? 0);
-    $merged_open = isset($initial_product[$pname]) ? (float)$initial_product[$pname]
-        : (float)(-($cum_in_product[$pkey] ?? 0) + ($cum_topup_product[$pkey] ?? 0) + ($cum_out_product[$pkey] ?? 0));
-    $product_balances_for_notify[$pname] = $merged_open - $tin + $topup + $tout;
-}
+// 余额阈值 Telegram：与 snapshot 内 notify 映射一致（全公司启用中的银行/产品，不受本页筛选影响）
 require_once __DIR__ . '/inc/balance_notify.php';
-check_balance_notify($bank_balances_for_notify, $product_balances_for_notify);
+check_balance_notify($snap['bank_balances_for_notify'], $snap['product_balances_for_notify']);
 $balance_notify_cfg = balance_notify_get_config();
 
 // 仅当有待审核流水时显示提示

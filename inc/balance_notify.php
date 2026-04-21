@@ -4,6 +4,9 @@
  * 银行：余额超过设定值时通知；产品：余额低于设定值时通知。
  * 阈值在银行与产品页按项设置，存于 data/balance_notify.json
  * 同一银行/产品 24 小时内只通知一次（cooldown 存于 data/balance_notify_sent.json）
+ *
+ * 触发：check_balance_notify() 由调用方执行。admin_banks_products 与 dashboard 均会调用。
+ * 若需不打开任何后台页也提醒，请用服务器 cron 等定期执行 PHP，自行 require config + balance_notify_ledger_snapshot + check_balance_notify。
  */
 
 /**
@@ -120,4 +123,36 @@ function check_balance_notify(array $bank_balances, array $product_balances) {
     }
 
     if ($changed) balance_notify_save_sent_log($sent);
+}
+
+/**
+ * 在任意后台页面触发阈值检查（例如首页 dashboard），不必打开 Banks 页。
+ * 无阈值、未配置 Telegram、或非 admin/boss/superadmin 时立即返回，不做重查询。
+ */
+function balance_notify_try_run_on_dashboard(PDO $pdo): void
+{
+    $role = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
+    if (!in_array($role, ['admin', 'boss', 'superadmin'], true)) {
+        return;
+    }
+    global $NOTIFY_TELEGRAM_BOT_TOKEN, $NOTIFY_TELEGRAM_CHAT_ID;
+    if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {
+        return;
+    }
+    $cfg = balance_notify_get_config();
+    if (empty($cfg['bank']) && empty($cfg['product'])) {
+        return;
+    }
+    if (!function_exists('effective_admin_company_id')) {
+        return;
+    }
+    $cid = effective_admin_company_id($pdo);
+    if ($cid <= 0) {
+        return;
+    }
+    if (!function_exists('balance_notify_ledger_snapshot')) {
+        require_once __DIR__ . '/balance_notify_ledger_snapshot.php';
+    }
+    $snap = balance_notify_ledger_snapshot($pdo, $cid);
+    check_balance_notify($snap['bank_balances_for_notify'], $snap['product_balances_for_notify']);
 }

@@ -16,6 +16,10 @@ $month_end   = date('Y-m-t');
 $company_id = current_company_id();
 $dashboard_all_companies = function_exists('is_superadmin_all_companies_scope') && is_superadmin_all_companies_scope();
 
+// 余额 Telegram：此前仅在 Banks 页触发；在首页一并检查，登入后进 dashboard 即可提醒（仍受 24h 冷却与阈值配置约束）
+require_once __DIR__ . '/inc/balance_notify.php';
+balance_notify_try_run_on_dashboard($pdo);
+
 $sidebar_current = 'dashboard';
 $db_error = '';
 $day_in = $day_out = $day_profit = 0;
