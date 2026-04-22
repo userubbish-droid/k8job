@@ -14,6 +14,16 @@ if ($gpc_cid <= 0) {
 
 $gpc_gp_key_sql = require __DIR__ . '/gpc_effective_product_key_sql.php';
 
+// 兼容旧库：transactions 可能没有 deleted_at（软删）字段
+$gpc_has_deleted_at = true;
+try {
+    $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+} catch (Throwable $e) {
+    $gpc_has_deleted_at = false;
+}
+$gpc_del = $gpc_has_deleted_at ? ' AND deleted_at IS NULL' : '';
+$gpc_del_t = $gpc_has_deleted_at ? ' AND t.deleted_at IS NULL' : '';
+
 /** 客户代号 → 游戏平台键（与 gpc 回推一致：该客户 id 最小的产品账号） */
 $gpc_code_to_gp = [];
 try {
@@ -43,7 +53,7 @@ try {
     $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS tout
-        FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
+        FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved'{$gpc_del} AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
     $stmt->execute([$gpc_cid, $day_from]);
     foreach ($stmt->fetchAll() as $r) {
         $b = strtolower(trim((string)$r['bank']));
@@ -58,7 +68,7 @@ try {
         $stmt = $pdo->prepare("SELECT COALESCE(bank, '') AS bank,
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ti,
             COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','EXPENSE') THEN amount ELSE 0 END), 0) AS tout
-            FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
+            FROM transactions WHERE company_id = ? AND day < ? AND status = 'approved'{$gpc_del} AND bank IS NOT NULL AND TRIM(bank) != '' GROUP BY bank");
         $stmt->execute([$gpc_cid, $day_from]);
         foreach ($stmt->fetchAll() as $r) {
             $b = strtolower(trim((string)$r['bank']));
@@ -76,7 +86,7 @@ try {
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN $line + (CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN COALESCE(t.burn,0) ELSE 0 END) ELSE 0 END), 0) AS ti,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN $line ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'WITHDRAW' THEN t.amount + COALESCE(t.burn,0) WHEN TRIM(COALESCE(t.mode,'')) = 'EXPENSE' THEN t.amount ELSE 0 END), 0) AS tout
-        FROM transactions t WHERE t.company_id = ? AND t.day < ? AND t.status = 'approved' AND t.deleted_at IS NULL GROUP BY gp");
+        FROM transactions t WHERE t.company_id = ? AND t.day < ? AND t.status = 'approved'{$gpc_del_t} GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from]);
     foreach ($stmt->fetchAll() as $r) {
         $p = strtolower(trim((string)($r['gp'] ?? '')));
@@ -92,7 +102,7 @@ try {
             COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS ti,
             COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN (CASE WHEN t.total IS NOT NULL AND t.total != 0 THEN t.total ELSE t.amount + COALESCE(t.bonus,0) END) ELSE 0 END), 0) AS topup,
             COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('WITHDRAW','EXPENSE') THEN t.amount ELSE 0 END), 0) AS tout
-            FROM transactions t WHERE t.company_id = ? AND t.day < ? AND t.status = 'approved' AND t.deleted_at IS NULL GROUP BY gp");
+            FROM transactions t WHERE t.company_id = ? AND t.day < ? AND t.status = 'approved'{$gpc_del_t} GROUP BY gp");
         $stmt->execute([$gpc_cid, $day_from]);
         foreach ($stmt->fetchAll() as $r) {
             $p = strtolower(trim((string)($r['gp'] ?? '')));
@@ -109,7 +119,7 @@ try {
     $stmt = $pdo->prepare("SELECT bank,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_out
-        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND bank IS NOT NULL AND TRIM(bank) != ''
+        FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved'{$gpc_del} AND bank IS NOT NULL AND TRIM(bank) != ''
         GROUP BY bank");
     $stmt->execute([$gpc_cid, $day_from, $day_to]);
     $range_in_bank = [];
@@ -133,7 +143,7 @@ try {
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW') THEN $line + (CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN COALESCE(t.burn,0) ELSE 0 END) ELSE 0 END), 0) AS total_in,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'TOPUP' THEN $line ELSE 0 END), 0) AS topup,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'WITHDRAW' THEN t.amount + COALESCE(t.burn,0) WHEN TRIM(COALESCE(t.mode,'')) = 'EXPENSE' THEN t.amount ELSE 0 END), 0) AS total_out
-        FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
+        FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved'{$gpc_del_t}
         GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from, $day_to]);
     $range_in_product = [];
@@ -164,7 +174,7 @@ try {
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) = 'FREE WITHDRAW' THEN $line + COALESCE(t.burn,0) ELSE 0 END), 0) AS fwd,
         COALESCE(SUM(CASE WHEN TRIM(COALESCE(t.mode,'')) IN ('DEPOSIT','REBATE','FREE','FREE WITHDRAW')
             THEN COALESCE(t.bonus,0) + GREATEST(0, $line - t.amount - COALESCE(t.bonus,0)) ELSE 0 END), 0) AS bns
-        FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved' AND t.deleted_at IS NULL
+        FROM transactions t WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved'{$gpc_del_t}
         GROUP BY gp");
     $stmt->execute([$gpc_cid, $day_from, $day_to]);
     foreach ($stmt->fetchAll() as $r) {
