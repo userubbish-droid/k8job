@@ -448,6 +448,9 @@ try {
                 <div class="page-header">
                     <h2><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?></h2>
                 </div>
+                <p class="form-hint" style="margin:-6px 0 12px;">
+                    <a href="admin_balance_reconcile.php">对账调试</a>
+                </p>
                 <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
                 <?php if (!empty($diag_error)): ?>

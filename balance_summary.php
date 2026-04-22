@@ -49,6 +49,23 @@ if ($head_office_stmt) {
     }
 }
 
+$has_deleted_at = true;
+try {
+    $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+} catch (Throwable $e) {
+    $has_deleted_at = false;
+}
+$del = $has_deleted_at ? ' AND deleted_at IS NULL' : '';
+$min_approved_day = null;
+try {
+    $stMin = $pdo->prepare("SELECT MIN(day) AS d FROM transactions WHERE company_id = ? AND status = 'approved'{$del}");
+    $stMin->execute([$company_id]);
+    $min_approved_day = $stMin->fetchColumn();
+} catch (Throwable $e) {
+    $min_approved_day = null;
+}
+$min_approved_day = (is_string($min_approved_day) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $min_approved_day)) ? $min_approved_day : null;
+
 require_once __DIR__ . '/inc/game_platform_statement_compute.php';
 
 /** @param array<string, scalar> $extra */
@@ -144,6 +161,9 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                             <span style="font-size:13px; color:var(--muted);"><?= app_lang() === 'en' ? 'Quick:' : '快捷：' ?></span>
                             <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="7"><?= app_lang() === 'en' ? '1 week' : '一个星期' ?></button>
                             <button type="button" class="btn btn-sm btn-outline stmt-quick-range" data-days="30"><?= app_lang() === 'en' ? '1 month' : '一个月' ?></button>
+                            <?php if ($is_admin && $min_approved_day): ?>
+                            <button type="button" class="btn btn-sm btn-outline" id="stmt-quick-all" data-from="<?= htmlspecialchars($min_approved_day, ENT_QUOTES, 'UTF-8') ?>"><?= app_lang() === 'en' ? 'All history' : '全历史' ?></button>
+                            <?php endif; ?>
                         </form>
                     </div>
                     <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
@@ -252,6 +272,20 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
             if (form) form.submit();
         });
     });
+    var allBtn = document.getElementById('stmt-quick-all');
+    if (allBtn) {
+        allBtn.addEventListener('click', function(){
+            var df = allBtn.getAttribute('data-from');
+            var end = new Date();
+            var fmt = function(d) {
+                var y = d.getFullYear(), m = String(d.getMonth() + 1).padStart(2, '0'), day = String(d.getDate()).padStart(2, '0');
+                return y + '-' + m + '-' + day;
+            };
+            if (fromEl) fromEl.value = df;
+            if (toEl) toEl.value = fmt(end);
+            if (form) form.submit();
+        });
+    }
 })();
 </script>
 </body>
