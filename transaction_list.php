@@ -133,11 +133,25 @@ if (!$can_view_internal_txn) {
 
     // 3) Expense Statement 的特殊项目：product=Bank（你现在把 Office 改为 Bank）也只给 boss/bigboss 看
     // 兼容旧数据：mode/product 可能有大小写、尾随空格或不可见字符（NBSP/换行/Tab）
-    $where[] = "(
-        UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(mode,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'EXPENSE'
-        OR
-        LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(product,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'bank'
-    )";
+    // 优先：若新库有 expense_kind，则只隐藏「Expense Statement 录入」的开销（expense_kind=statement）
+    try {
+        $pdo->query("SELECT expense_kind FROM transactions LIMIT 0");
+        $where[] = "(
+            UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(mode,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'EXPENSE'
+            OR
+            LOWER(TRIM(COALESCE(expense_kind,''))) <> 'statement'
+        )";
+    } catch (Throwable $e) {
+        if (strpos($e->getMessage(), 'expense_kind') === false) {
+            throw $e;
+        }
+        // 旧库回退：按 product=Bank 识别内部开销
+        $where[] = "(
+            UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(mode,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'EXPENSE'
+            OR
+            LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(product,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'bank'
+        )";
+    }
 }
 
 // 支持“按天”或“按时间范围”（day+time）
