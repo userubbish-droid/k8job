@@ -33,7 +33,9 @@ $export   = ($_GET['export'] ?? '') === 'csv';
 $per_page = 20;
 $page     = max(1, (int)($_GET['page'] ?? 1));
 
-$is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
+$role = (string)($_SESSION['user_role'] ?? '');
+$is_admin = in_array($role, ['admin', 'superadmin', 'boss'], true);
+$is_boss_like = in_array($role, ['boss', 'superadmin'], true); // boss / big boss 才可看内部隐藏流水
 $can_request_edit = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_edit_request');
 $can_member_time_filter = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_time_filter');
 
@@ -100,12 +102,26 @@ if ($is_admin) {
         $where[] = "status = 'approved'";
         $status = 'approved';
     }
+}
+
+// 内部流水隐藏：除 boss / big boss 外，其余角色（含 admin/member）一律不显示
+if (!$is_boss_like) {
+    // 1) 优先使用 hide_from_member 标记（如存在）
     try {
         $pdo->query("SELECT hide_from_member FROM transactions LIMIT 0");
         $where[] = "COALESCE(hide_from_member, 0) = 0";
     } catch (Throwable $e) {
-        if (strpos($e->getMessage(), 'hide_from_member') === false) throw $e;
+        if (strpos($e->getMessage(), 'hide_from_member') === false) {
+            throw $e;
+        }
+        // 若旧库没有字段：回退用备注识别互转
     }
+
+    // 2) 互转（contra）回退识别：备注前缀 To/From/转至/来自
+    $where[] = "(remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %' AND remark NOT LIKE 'To %' AND remark NOT LIKE 'From %'))";
+
+    // 3) Expense Statement 的特殊项目：product=Bank（你现在把 Office 改为 Bank）也只给 boss/bigboss 看
+    $where[] = "(mode <> 'EXPENSE' OR LOWER(TRIM(COALESCE(product,''))) <> 'bank')";
 }
 
 // 支持“按天”或“按时间范围”（day+time）
