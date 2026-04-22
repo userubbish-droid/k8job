@@ -36,6 +36,7 @@ $page     = max(1, (int)($_GET['page'] ?? 1));
 $role = (string)($_SESSION['user_role'] ?? '');
 $is_admin = in_array($role, ['admin', 'superadmin', 'boss'], true);
 $is_boss_like = in_array($role, ['boss', 'superadmin'], true); // boss / big boss 才可看内部隐藏流水
+$can_view_internal_txn = $is_boss_like || has_permission(PERM_TRANSACTION_VIEW_INTERNAL);
 $can_request_edit = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_edit_request');
 $can_member_time_filter = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_time_filter');
 
@@ -104,8 +105,9 @@ if ($is_admin) {
     }
 }
 
-// 内部流水隐藏：除 boss / big boss 外，其余角色（含 admin/member）一律不显示
-if (!$is_boss_like) {
+// 内部流水隐藏：默认隐藏；勾选权限后可见（boss/bigboss 永远可见）
+$where_before_internal = $where;
+if (!$can_view_internal_txn) {
     // 1) 优先使用 hide_from_member 标记（如存在）
     try {
         $pdo->query("SELECT hide_from_member FROM transactions LIMIT 0");
@@ -215,6 +217,18 @@ $count_sql = "SELECT COUNT(*) FROM transactions WHERE $sql_where_list";
 $count_stmt = $pdo->prepare($count_sql);
 $count_stmt->execute($params);
 $total_rows = (int) $count_stmt->fetchColumn();
+$hidden_internal_rows = 0;
+if (!$can_view_internal_txn) {
+    try {
+        $count_all_sql = "SELECT COUNT(*) FROM transactions WHERE " . implode(' AND ', $where_before_internal);
+        $count_all_stmt = $pdo->prepare($count_all_sql);
+        $count_all_stmt->execute($params);
+        $all_rows = (int) $count_all_stmt->fetchColumn();
+        $hidden_internal_rows = max(0, $all_rows - $total_rows);
+    } catch (Throwable $e) {
+        $hidden_internal_rows = 0;
+    }
+}
 $total_pages = $total_rows > 0 ? (int) ceil($total_rows / $per_page) : 1;
 $page = min($page, max(1, $total_pages));
 $offset = ($page - 1) * $per_page;
@@ -458,6 +472,11 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
     <?php endif; ?>
 
     <p class="form-hint">共 <?= $total_rows ?> 条，第 <?= $page ?>/<?= $total_pages ?> 页</p>
+    <?php if ($hidden_internal_rows > 0): ?>
+        <p class="form-hint" style="margin-top:-6px; color:#64748b;">
+            已隐藏 <?= (int)$hidden_internal_rows ?> 条内部流水（互转/内部开销）。如需查看请让 Boss 在权限设置中开启。
+        </p>
+    <?php endif; ?>
 
     <div class="card" style="overflow-x:auto; padding:0;">
     <table class="data-table">
