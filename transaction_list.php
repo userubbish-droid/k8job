@@ -132,8 +132,12 @@ if (!$can_view_internal_txn) {
     )";
 
     // 3) Expense Statement 的特殊项目：product=Bank（你现在把 Office 改为 Bank）也只给 boss/bigboss 看
-    // 兼容旧数据：mode/product 可能有大小写或尾随空格
-    $where[] = "(UPPER(TRIM(COALESCE(mode,''))) <> 'EXPENSE' OR LOWER(TRIM(COALESCE(product,''))) <> 'bank')";
+    // 兼容旧数据：mode/product 可能有大小写、尾随空格或不可见字符（NBSP/换行/Tab）
+    $where[] = "(
+        UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(mode,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'EXPENSE'
+        OR
+        LOWER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(product,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'bank'
+    )";
 }
 
 // 支持“按天”或“按时间范围”（day+time）
