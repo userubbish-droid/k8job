@@ -107,6 +107,7 @@ if ($is_admin) {
 
 // 内部流水隐藏：默认隐藏；勾选权限后可见（boss/bigboss 永远可见）
 $where_before_internal = $where;
+$params_before_internal = $params;
 if (!$can_view_internal_txn) {
     // 1) 优先使用 hide_from_member 标记（如存在）
     try {
@@ -120,7 +121,15 @@ if (!$can_view_internal_txn) {
     }
 
     // 2) 互转（contra）回退识别：备注前缀 To/From/转至/来自（兼容大小写与前后空格）
-    $where[] = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
+    $where[] = "(remark IS NULL
+        OR TRIM(COALESCE(remark,'')) = ''
+        OR (
+            TRIM(COALESCE(remark,'')) NOT LIKE '转至 %'
+            AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %'
+            AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %'
+            AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'
+        )
+    )";
 
     // 3) Expense Statement 的特殊项目：product=Bank（你现在把 Office 改为 Bank）也只给 boss/bigboss 看
     $where[] = "(mode <> 'EXPENSE' OR LOWER(TRIM(COALESCE(product,''))) <> 'bank')";
@@ -222,7 +231,7 @@ if (!$can_view_internal_txn) {
     try {
         $count_all_sql = "SELECT COUNT(*) FROM transactions WHERE " . implode(' AND ', $where_before_internal);
         $count_all_stmt = $pdo->prepare($count_all_sql);
-        $count_all_stmt->execute($params);
+        $count_all_stmt->execute($params_before_internal);
         $all_rows = (int) $count_all_stmt->fetchColumn();
         $hidden_internal_rows = max(0, $all_rows - $total_rows);
     } catch (Throwable $e) {
