@@ -119,7 +119,7 @@ if (!$can_view_internal_txn) {
     }
 
     // 2) 互转（contra）回退识别：备注前缀 To/From/转至/来自（兼容大小写与前后空格）
-    $where[] = "(remark IS NULL OR (TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %')))";
+    $where[] = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
 
     // 3) Expense Statement 的特殊项目：product=Bank（你现在把 Office 改为 Bank）也只给 boss/bigboss 看
     $where[] = "(mode <> 'EXPENSE' OR LOWER(TRIM(COALESCE(product,''))) <> 'bank')";
