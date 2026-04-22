@@ -18,9 +18,10 @@ $day_to   = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw)   ? substr($day_to_r
 if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 $day = $day_to; // 提交「已给」时写入 rebate_given 的 day（区间结束日）
 
-// 与 dashboard 一致：入账/出账只计「有银行」且排除 remark 银行互转（转至%/来自%）；出款列另含 FREE WITHDRAW。按 TRIM(code) 汇总避免代号空格拆行。
-$rebate_case_dep = "CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END";
-$rebate_case_wd = "CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END";
+// 与 dashboard 一致：入账/出账只计「有银行」且排除 remark 银行互转（转至/来自/To/From）；出款列另含 FREE WITHDRAW。按 TRIM(code) 汇总避免代号空格拆行。
+$contra_exclude = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
+$rebate_case_dep = "CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND {$contra_exclude} THEN amount ELSE 0 END";
+$rebate_case_wd = "CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND {$contra_exclude} THEN amount WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END";
 
 // 提交勾选的「已给了」或 取消单个（仅 admin）
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

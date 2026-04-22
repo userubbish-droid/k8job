@@ -45,8 +45,9 @@ try {
     $tx_day_where = $dashboard_all_companies ? "day = ? AND status = 'approved' AND deleted_at IS NULL" : "company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL";
     $tx_month_where = $dashboard_all_companies ? "day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL" : "company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL";
 
-    $sum_line = "COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
-                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
+    $contra_exclude = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
+    $sum_line = "COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND {$contra_exclude} THEN amount ELSE 0 END), 0) AS total_in,
+                                  COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND {$contra_exclude} THEN amount ELSE 0 END), 0) AS total_out,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
                                   COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
                                   COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
@@ -66,8 +67,8 @@ try {
 
     if ($show_dashboard_month) {
         // 本月统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
-        $sum_line_month = "COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_in,
-                                      COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %')) THEN amount ELSE 0 END), 0) AS total_out,
+        $sum_line_month = "COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND bank IS NOT NULL AND TRIM(bank) != '' AND {$contra_exclude} THEN amount ELSE 0 END), 0) AS total_in,
+                                      COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND bank IS NOT NULL AND TRIM(bank) != '' AND {$contra_exclude} THEN amount ELSE 0 END), 0) AS total_out,
                                       COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
                                       COALESCE(SUM(CASE WHEN mode = 'FREE' THEN amount ELSE 0 END), 0) AS free,
                                       COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,

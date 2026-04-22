@@ -30,15 +30,16 @@ $expense_rows = [];
 $expense_product_rows = [];
 
 try {
+    $contra_exclude = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
     $stmt = $pdo->prepare("
         SELECT
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT'
                                AND bank IS NOT NULL AND TRIM(bank) <> ''
-                               AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %'))
+                               AND {$contra_exclude}
                               THEN amount ELSE 0 END), 0) AS total_in,
             COALESCE(SUM(CASE WHEN mode = 'WITHDRAW'
                                AND bank IS NOT NULL AND TRIM(bank) <> ''
-                               AND (remark IS NULL OR (remark NOT LIKE '转至 %' AND remark NOT LIKE '来自 %'))
+                               AND {$contra_exclude}
                               THEN amount ELSE 0 END), 0) AS total_out,
             COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS total_expenses,
             COUNT(*) AS approved_count
@@ -79,8 +80,8 @@ try {
     // Bank Contra（互转）：按备注「转至/来自」识别
     $stmt = $pdo->prepare("
         SELECT
-            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND remark LIKE '来自 %' THEN amount ELSE 0 END), 0) AS contra_in,
-            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND remark LIKE '转至 %' THEN amount ELSE 0 END), 0) AS contra_out
+            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND (TRIM(COALESCE(remark,'')) LIKE '来自 %' OR LOWER(TRIM(COALESCE(remark,''))) LIKE 'from %') THEN amount ELSE 0 END), 0) AS contra_in,
+            COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND (TRIM(COALESCE(remark,'')) LIKE '转至 %' OR LOWER(TRIM(COALESCE(remark,''))) LIKE 'to %') THEN amount ELSE 0 END), 0) AS contra_out
         FROM transactions
         WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND day >= ? AND day <= ?
     ");
@@ -93,8 +94,8 @@ try {
         SELECT day, time, bank, mode, amount, remark
         FROM transactions
         WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND day >= ? AND day <= ?
-          AND ((mode = 'DEPOSIT' AND remark LIKE '来自 %')
-            OR (mode = 'WITHDRAW' AND remark LIKE '转至 %'))
+          AND ((mode = 'DEPOSIT' AND (TRIM(COALESCE(remark,'')) LIKE '来自 %' OR LOWER(TRIM(COALESCE(remark,''))) LIKE 'from %'))
+            OR (mode = 'WITHDRAW' AND (TRIM(COALESCE(remark,'')) LIKE '转至 %' OR LOWER(TRIM(COALESCE(remark,''))) LIKE 'to %')))
         ORDER BY day DESC, time DESC
         LIMIT 30
     ");
