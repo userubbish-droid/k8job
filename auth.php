@@ -22,7 +22,6 @@ function get_permission_options(): array
         'transaction_list'   => __('perm_transaction_list'),
         'transaction_edit_request' => __('perm_transaction_edit_request'),
         'transaction_time_filter' => __('perm_transaction_time_filter'),
-        'transaction_view_internal' => __('perm_transaction_view_internal'),
         'rebate'             => __('perm_rebate'),
         'customers'          => __('perm_customers'),
         'customer_create'    => __('perm_customer_create'),
@@ -53,7 +52,7 @@ function has_permission(string $key): bool
     }
     if ($role === 'boss') {
         // boss 默认全允许，但部分敏感权限允许由权限面板控制开关
-        if (!in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT, PERM_VIEW_CUSTOMER_TOTAL_DP_WD], true)) {
+        if (!in_array($key, [PERM_DASHBOARD_MONTH_DATA, PERM_VIEW_MEMBER_CONTACT, PERM_VIEW_CUSTOMER_TOTAL_DP_WD, PERM_TRANSACTION_VIEW_INTERNAL], true)) {
             return true;
         }
         $uid = (int)($_SESSION['user_id'] ?? 0);

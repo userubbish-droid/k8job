@@ -154,6 +154,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                 if ($actor_can_set_contact_view && !empty($_POST['view_customer_total_dp_wd'])) {
                     $stmt->execute([$tid, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
                 }
+                if ($actor_can_set_internal_txn) {
+                    if (!empty($_POST['transaction_view_internal'])) {
+                        $stmt->execute([$tid, PERM_TRANSACTION_VIEW_INTERNAL]);
+                    }
+                }
                 header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
                 exit;
             } elseif ($trole === 'admin' || $trole === 'boss') {
@@ -265,6 +270,7 @@ $options = get_permission_options();
 $current = [];
 $member_contact_has_view = false;
 $member_dp_wd_has_view = false;
+$member_has_internal_txn = false;
 if ($pick_id > 0 && $pick_role === 'member') {
     try {
         $stmt = $pdo->prepare('SELECT permission_key FROM user_permissions WHERE user_id = ?');
@@ -290,6 +296,15 @@ if ($pick_id > 0 && $pick_role === 'member') {
             $member_dp_wd_has_view = (bool) $stc->fetch();
         } catch (Throwable $e) {
             $member_dp_wd_has_view = false;
+        }
+    }
+    if ($actor_can_set_internal_txn) {
+        try {
+            $stc = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
+            $stc->execute([$pick_id, PERM_TRANSACTION_VIEW_INTERNAL]);
+            $member_has_internal_txn = (bool) $stc->fetch();
+        } catch (Throwable $e) {
+            $member_has_internal_txn = false;
         }
     }
 }
@@ -571,12 +586,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                         <label class="perm-label" for="perm_other_tx_time_filter_m"><?= htmlspecialchars((string)($options['transaction_time_filter'] ?? 'transaction_time_filter'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
                                     <?php endif; ?>
-                                    <?php if (array_key_exists('transaction_view_internal', $options)): ?>
-                                    <div class="perm-item perm-item-plain">
-                                        <input type="checkbox" name="perms[]" value="transaction_view_internal" id="perm_other_tx_internal_m" <?= in_array('transaction_view_internal', $current, true) ? 'checked' : '' ?>>
-                                        <label class="perm-label" for="perm_other_tx_internal_m"><?= htmlspecialchars((string)($options['transaction_view_internal'] ?? 'transaction_view_internal'), ENT_QUOTES, 'UTF-8') ?></label>
-                                    </div>
-                                    <?php endif; ?>
                                     <?php if ($actor_can_set_contact_view): ?>
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
@@ -585,6 +594,12 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_customer_total_dp_wd" value="1" id="view_customer_total_dp_wd_m" <?= $member_dp_wd_has_view ? 'checked' : '' ?>>
                                         <label class="perm-label" for="view_customer_total_dp_wd_m"><?= htmlspecialchars(__('perm_allow_view_customer_total_dp_wd'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <?php endif; ?>
+                                    <?php if ($actor_can_set_internal_txn): ?>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="transaction_view_internal" value="1" id="member_txn_internal" <?= $member_has_internal_txn ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="member_txn_internal"><?= htmlspecialchars(__('perm_allow_transaction_view_internal'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
                                     <?php endif; ?>
                                 </div>
