@@ -8,7 +8,6 @@ $actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
 $actor_role = strtolower(trim((string)($_SESSION['user_role'] ?? '')));
 $actor_can_set_admin_month = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 $actor_can_set_contact_view = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
-$actor_can_set_internal_txn = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 
 $msg = '';
 $err = '';
@@ -157,7 +156,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                 header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
                 exit;
             } elseif ($trole === 'admin' || $trole === 'boss') {
-                if (!$actor_can_set_admin_month && !$actor_can_set_contact_view && !$actor_can_set_internal_txn) {
+                if (!$actor_can_set_admin_month && !$actor_can_set_contact_view) {
                     $err = __('perm_err_boss_only_admin_opts');
                 } else {
                     if ($actor_can_set_admin_month) {
@@ -174,12 +173,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action'] ?? '') === 'save_
                         $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$tid, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
                         if (!empty($_POST['view_customer_total_dp_wd'])) {
                             $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$tid, PERM_VIEW_CUSTOMER_TOTAL_DP_WD]);
-                        }
-                    }
-                    if ($actor_can_set_internal_txn) {
-                        $pdo->prepare('DELETE FROM user_permissions WHERE user_id = ? AND permission_key = ?')->execute([$tid, PERM_TRANSACTION_VIEW_INTERNAL]);
-                        if (!empty($_POST['transaction_view_internal'])) {
-                            $pdo->prepare('INSERT INTO user_permissions (user_id, permission_key) VALUES (?, ?)')->execute([$tid, PERM_TRANSACTION_VIEW_INTERNAL]);
                         }
                     }
                     header('Location: admin_permissions.php?tab=' . rawurlencode($tab_post) . '&pick=' . $tid . '&ok=1');
@@ -223,7 +216,6 @@ if ($pick_id > 0) {
 $admin_has_month = false;
 $contact_user_has_view = false;
 $admin_dp_wd_has_view = false;
-$admin_has_internal_txn = false;
 if ($pick_id > 0 && in_array($pick_role, ['admin', 'boss'], true)) {
     if ($actor_can_set_admin_month) {
         try {
@@ -248,15 +240,6 @@ if ($pick_id > 0 && in_array($pick_role, ['admin', 'boss'], true)) {
             $admin_dp_wd_has_view = (bool) $stmt->fetch();
         } catch (Throwable $e) {
             $admin_dp_wd_has_view = false;
-        }
-    }
-    if ($actor_can_set_internal_txn) {
-        try {
-            $stmt = $pdo->prepare('SELECT 1 FROM user_permissions WHERE user_id = ? AND permission_key = ? LIMIT 1');
-            $stmt->execute([$pick_id, PERM_TRANSACTION_VIEW_INTERNAL]);
-            $admin_has_internal_txn = (bool) $stmt->fetch();
-        } catch (Throwable $e) {
-            $admin_has_internal_txn = false;
         }
     }
 }
@@ -571,12 +554,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                         <label class="perm-label" for="perm_other_tx_time_filter_m"><?= htmlspecialchars((string)($options['transaction_time_filter'] ?? 'transaction_time_filter'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
                                     <?php endif; ?>
-                                    <?php if (array_key_exists('transaction_view_internal', $options)): ?>
-                                    <div class="perm-item perm-item-plain">
-                                        <input type="checkbox" name="perms[]" value="transaction_view_internal" id="perm_other_tx_internal_m" <?= in_array('transaction_view_internal', $current, true) ? 'checked' : '' ?>>
-                                        <label class="perm-label" for="perm_other_tx_internal_m"><?= htmlspecialchars((string)($options['transaction_view_internal'] ?? 'transaction_view_internal'), ENT_QUOTES, 'UTF-8') ?></label>
-                                    </div>
-                                    <?php endif; ?>
                                     <?php if ($actor_can_set_contact_view): ?>
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
@@ -606,12 +583,6 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                             <div class="perm-item perm-item-plain">
                                 <input type="checkbox" name="dashboard_month_data" value="1" id="admin_dash_month" <?= $admin_has_month ? 'checked' : '' ?>>
                                 <label class="perm-label" for="admin_dash_month"><?= htmlspecialchars(__('perm_allow_dashboard_month'), ENT_QUOTES, 'UTF-8') ?></label>
-                            </div>
-                            <?php endif; ?>
-                            <?php if ($actor_can_set_internal_txn): ?>
-                            <div class="perm-item perm-item-plain">
-                                <input type="checkbox" name="transaction_view_internal" value="1" id="admin_txn_internal" <?= $admin_has_internal_txn ? 'checked' : '' ?>>
-                                <label class="perm-label" for="admin_txn_internal"><?= htmlspecialchars(__('perm_allow_transaction_view_internal'), ENT_QUOTES, 'UTF-8') ?></label>
                             </div>
                             <?php endif; ?>
                             <div class="nav-group perm-other-group" data-group="other-admin">
