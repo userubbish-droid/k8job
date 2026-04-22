@@ -35,7 +35,8 @@ $page     = max(1, (int)($_GET['page'] ?? 1));
 
 $role = (string)($_SESSION['user_role'] ?? '');
 $is_admin = in_array($role, ['admin', 'superadmin', 'boss'], true);
-$is_boss_like = in_array($role, ['boss', 'superadmin'], true); // boss / big boss 才可看内部隐藏流水
+$is_boss_like = in_array($role, ['boss', 'superadmin'], true); // boss / big boss 永远可看内部隐藏流水
+$can_view_internal_txn = $is_boss_like || has_permission(PERM_TRANSACTION_VIEW_INTERNAL);
 $can_request_edit = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_edit_request');
 $can_member_time_filter = (($_SESSION['user_role'] ?? '') === 'member') && has_permission('transaction_time_filter');
 
@@ -104,8 +105,8 @@ if ($is_admin) {
     }
 }
 
-// 内部流水隐藏：除 boss / big boss 外，其余角色（含 admin/member）一律不显示
-if (!$is_boss_like) {
+// 内部流水隐藏：默认隐藏；需 boss 在权限页为该账号勾选后才可见（boss/bigboss 永远可见）
+if (!$can_view_internal_txn) {
     // 1) 优先使用 hide_from_member 标记（如存在）
     try {
         $pdo->query("SELECT hide_from_member FROM transactions LIMIT 0");
