@@ -436,7 +436,32 @@ try {
 if ($is_admin) {
     if (!$banks) $banks = ['HLB', 'CASH', 'DOUGLAS', 'KAYDEN', 'RHB', 'CIMB', 'Digi', 'Maxis', 'KAYDEN TNG'];
     if (!$products) $products = ['MEGA', 'PUSSY', '918KISS', 'JOKER', 'KING855', 'LIVE22', 'ACE333', 'VPOWER', 'LPE888', 'ALIPAY', 'STANDBY'];
-    if (!$expenses) $expenses = ['Office', 'Salary', 'Ads', 'Transport'];
+    if (!$expenses) $expenses = ['Bank', 'Salary', 'Ads', 'Transport', 'Bonus'];
+}
+
+// Expense 弹窗快捷项：统一把 Office 显示为 Bank，并补上 Bonus 选项
+if ($expenses) {
+    $normalized = [];
+    $seen = [];
+    foreach ($expenses as $ex) {
+        $exs = trim((string)$ex);
+        if ($exs === '') {
+            continue;
+        }
+        if (strcasecmp($exs, 'office') === 0) {
+            $exs = 'Bank';
+        }
+        $k = strtolower($exs);
+        if (isset($seen[$k])) {
+            continue;
+        }
+        $seen[$k] = true;
+        $normalized[] = $exs;
+    }
+    if (!isset($seen['bonus'])) {
+        $normalized[] = 'Bonus';
+    }
+    $expenses = $normalized;
 }
 
 if ($quick === 'expense') {
