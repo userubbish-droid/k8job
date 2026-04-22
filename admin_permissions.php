@@ -571,6 +571,12 @@ $disp_c = app_lang() === 'en' ? ')' : '）';
                                         <label class="perm-label" for="perm_other_tx_time_filter_m"><?= htmlspecialchars((string)($options['transaction_time_filter'] ?? 'transaction_time_filter'), ENT_QUOTES, 'UTF-8') ?></label>
                                     </div>
                                     <?php endif; ?>
+                                    <?php if (array_key_exists('transaction_view_internal', $options)): ?>
+                                    <div class="perm-item perm-item-plain">
+                                        <input type="checkbox" name="perms[]" value="transaction_view_internal" id="perm_other_tx_internal_m" <?= in_array('transaction_view_internal', $current, true) ? 'checked' : '' ?>>
+                                        <label class="perm-label" for="perm_other_tx_internal_m"><?= htmlspecialchars((string)($options['transaction_view_internal'] ?? 'transaction_view_internal'), ENT_QUOTES, 'UTF-8') ?></label>
+                                    </div>
+                                    <?php endif; ?>
                                     <?php if ($actor_can_set_contact_view): ?>
                                     <div class="perm-item perm-item-plain">
                                         <input type="checkbox" name="view_member_contact" value="1" id="view_member_contact_m" <?= $member_contact_has_view ? 'checked' : '' ?>>
