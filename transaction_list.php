@@ -213,7 +213,7 @@ if ($is_admin && $has_deleted_at) {
 if ($export) {
     $export_extra = $has_deleted_at ? ', deleted_at, deleted_by' : '';
     $export_sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark{$export_extra}
-                   FROM transactions WHERE $sql_where_active ORDER BY day DESC, time DESC";
+                   FROM transactions WHERE $sql_where_active ORDER BY day DESC, time DESC, id DESC";
     $export_stmt = $pdo->prepare($export_sql);
     $export_stmt->execute($params);
     $export_rows = $export_stmt->fetchAll();
@@ -265,7 +265,7 @@ $sel_extra = $has_deleted_at ? ', deleted_at, deleted_by' : '';
 $sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark{$sel_extra}
         FROM transactions
         WHERE $sql_where_list
-        ORDER BY day DESC, time DESC
+        ORDER BY day DESC, time DESC, id DESC
         LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
 
 // member：若 12 小时内有 pending 修改申请，则“临时显示”为申请内容（不改变数据库原流水）
@@ -291,7 +291,7 @@ if ($can_request_edit) {
             ) m ON m.max_id = x.id
         ) r ON r.transaction_id = t.id
         WHERE $sql_where_list_t
-        ORDER BY t.day DESC, t.time DESC
+        ORDER BY t.day DESC, t.time DESC, t.id DESC
         LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
         $stmt = $pdo->prepare($sql);
         $params2 = array_merge([(int)$company_id, (int)($_SESSION['user_id'] ?? 0)], $params);
