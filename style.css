@@ -343,10 +343,13 @@ body::before {
     text-shadow: 0 1px 0 rgba(0, 0, 0, 0.08);
 }
 .data-table tbody tr:nth-child(even) {
-    background: rgba(248, 250, 252, 0.92);
+    background: rgba(238, 242, 255, 0.92);
+}
+.data-table tbody tr:nth-child(odd) {
+    background: rgba(255, 255, 255, 0.9);
 }
 .data-table tbody tr:hover {
-    background: rgba(238, 242, 255, 0.95);
+    background: rgba(224, 231, 255, 0.95);
 }
 .data-table tbody tr:last-child td { border-bottom: none; }
 .data-table a {
