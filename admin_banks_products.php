@@ -545,7 +545,7 @@ try {
                             </div>
                         </div>
                     </div>
-                    <div style="overflow-x:auto;">
+                    <div style="overflow:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -622,7 +622,6 @@ try {
                             <?php if (!$banks): ?><tr><td colspan="10"><?= htmlspecialchars(__('abp_empty_banks'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin:10px 0 0; font-size:12px; line-height:1.5; color:var(--muted); max-width:52rem;"><?= htmlspecialchars(__('abp_bank_inout_footnote'), ENT_QUOTES, 'UTF-8') ?></p>
                     </div>
                 </div>
 
@@ -661,7 +660,7 @@ try {
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('abp_btn_add'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                     </div>
-                    <div style="overflow-x:auto;">
+                    <div style="overflow:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
                     <table class="data-table">
                         <thead>
                             <tr>
@@ -750,7 +749,6 @@ try {
                             <?php if (!$products): ?><tr><td colspan="11"><?= htmlspecialchars(__('abp_empty_products'), ENT_QUOTES, 'UTF-8') ?></td></tr><?php endif; ?>
                         </tbody>
                     </table>
-                    <p class="form-hint" style="margin:10px 0 0; font-size:12px; line-height:1.5; color:var(--muted); max-width:52rem;"><?= htmlspecialchars(__('abp_product_stmt_footnote'), ENT_QUOTES, 'UTF-8') ?></p>
                     </div>
                 </div>
 
@@ -773,7 +771,7 @@ try {
                             <button type="submit" class="btn btn-primary"><?= htmlspecialchars(__('abp_btn_add'), ENT_QUOTES, 'UTF-8') ?></button>
                         </form>
                     </div>
-                    <div style="overflow-x:auto;">
+                    <div style="overflow:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
                     <table class="data-table">
                         <thead>
                             <tr>

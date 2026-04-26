@@ -503,11 +503,6 @@ if ($can_export_customers_csv) {
                 <a href="<?= htmlspecialchars($export_csv_href, ENT_QUOTES, 'UTF-8') ?>" class="btn btn-sm btn-outline cust-export-csv-link" data-confirm="<?= htmlspecialchars(__('cust_export_confirm_download'), ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars(__('ui_btn_export'), ENT_QUOTES, 'UTF-8') ?></a>
                 <?php endif; ?>
             </div>
-            <?php if ($agent_pnl_by_range): ?>
-            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(__f('cust_agent_pnl_range', $pnl_day_from, $pnl_day_to), ENT_QUOTES, 'UTF-8') ?></p>
-            <?php else: ?>
-            <p class="form-hint" style="margin:-6px 0 14px; color:var(--muted);"><?= htmlspecialchars(__('cust_agent_pnl_alltime'), ENT_QUOTES, 'UTF-8') ?></p>
-            <?php endif; ?>
             <table class="data-table">
                 <thead>
                     <tr>

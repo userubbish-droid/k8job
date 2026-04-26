@@ -513,6 +513,20 @@ function i18n_dictionary(): array
         'agent_msg_enabled' => ['zh' => '已启用该代理的返水。', 'en' => 'Rebate enabled for this agent.'],
         'agent_msg_paused' => ['zh' => '已暂停该代理的返水。', 'en' => 'Rebate paused for this agent.'],
 
+        // 报表 report.php
+        'report_kpi_total_in' => ['zh' => '总入', 'en' => 'Total In'],
+        'report_kpi_total_out' => ['zh' => '总出', 'en' => 'Total Out'],
+        'report_kpi_expenses' => ['zh' => '开销', 'en' => 'Expenses'],
+        'report_kpi_profit' => ['zh' => '利润', 'en' => 'Profit'],
+        'report_legacy_profit_hint' => ['zh' => '已包含历史利润结转 %1$s（开账日：%2$s）。', 'en' => 'Includes legacy profit adjustment %1$s (as of %2$s).'],
+        'report_legacy_profit_no_asof' => ['zh' => '未设置', 'en' => 'not set'],
+        'report_legacy_profit_title' => ['zh' => '历史利润结转', 'en' => 'Legacy profit adjustment'],
+        'report_legacy_profit_desc' => ['zh' => '用于把旧 Excel 时代的「累计利润」结转进系统报表。不会影响银行/产品对账与流水明细。', 'en' => 'Carry over legacy all-time profit from Excel into reports. Does not affect bank/product statements or transaction records.'],
+        'report_legacy_profit_amount' => ['zh' => '历史累计利润（结转值）', 'en' => 'Legacy profit (carry-over)'],
+        'report_legacy_profit_asof' => ['zh' => '开账日（可选）', 'en' => 'As-of date (optional)'],
+        'report_legacy_profit_saved' => ['zh' => '已保存历史利润结转。', 'en' => 'Legacy profit saved.'],
+        'report_legacy_profit_err_num' => ['zh' => '请输入有效数字。', 'en' => 'Please enter a valid number.'],
+
         // 记一笔 transaction_create（与侧栏「记一笔」一致）
         'txn_page_add' => ['zh' => '记一笔', 'en' => 'Add Transaction'],
         'txn_page_kiosk' => ['zh' => 'Kiosk 开销', 'en' => 'Kiosk Expense'],

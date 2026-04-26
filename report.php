@@ -28,8 +28,41 @@ $contra_rows = [];
 $expense_total = 0.0;
 $expense_rows = [];
 $expense_product_rows = [];
+$profit_display = 0.0;
+$legacy_profit = 0.0;
+$legacy_as_of = '';
+$legacy_applied = 0.0;
 
 try {
+    // 历史利润结转（公司级，不影响银行/产品对账）
+    try {
+        $pdo->exec("CREATE TABLE IF NOT EXISTS company_profit_adjust (
+            company_id INT UNSIGNED NOT NULL,
+            legacy_profit DECIMAL(14,2) NOT NULL DEFAULT 0,
+            as_of DATE NULL,
+            updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+            updated_by INT UNSIGNED NULL,
+            PRIMARY KEY (company_id)
+        )");
+        $stLP = $pdo->prepare("SELECT legacy_profit, as_of FROM company_profit_adjust WHERE company_id = ? LIMIT 1");
+        $stLP->execute([$company_id]);
+        $lpRow = $stLP->fetch(PDO::FETCH_ASSOC) ?: null;
+        if ($lpRow) {
+            $legacy_profit = (float)($lpRow['legacy_profit'] ?? 0);
+            $legacy_as_of = trim((string)($lpRow['as_of'] ?? ''));
+            // 仅当报表区间覆盖开账日（或未填开账日）时，才把历史利润并入“利润”展示
+            if ($legacy_profit != 0.0) {
+                if ($legacy_as_of === '' || $day_from <= $legacy_as_of) {
+                    $legacy_applied = $legacy_profit;
+                }
+            }
+        }
+    } catch (Throwable $eLP) {
+        $legacy_profit = 0.0;
+        $legacy_as_of = '';
+        $legacy_applied = 0.0;
+    }
+
     $contra_exclude = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
     $stmt = $pdo->prepare("
         SELECT
@@ -53,6 +86,7 @@ try {
     $total_expenses = (float)($row['total_expenses'] ?? 0);
     $approved_count = (int)($row['approved_count'] ?? 0);
     $profit = $total_in - $total_out - $total_expenses;
+    $profit_display = $profit + $legacy_applied;
 
     $stmt = $pdo->prepare("
         SELECT mode, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS amt
@@ -251,11 +285,16 @@ try {
                 <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
                 <div class="report-kpi-grid">
-                    <div class="report-kpi-item"><strong>总入</strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
-                    <div class="report-kpi-item"><strong>总出</strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
-                    <div class="report-kpi-item"><strong>开销</strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
-                    <div class="report-kpi-item"><strong>利润</strong><span class="num"><?= number_format($profit, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong><?= htmlspecialchars(__('report_kpi_total_in'), ENT_QUOTES, 'UTF-8') ?></strong><span class="num" style="color:var(--success);"><?= number_format($total_in, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong><?= htmlspecialchars(__('report_kpi_total_out'), ENT_QUOTES, 'UTF-8') ?></strong><span class="num" style="color:var(--danger);"><?= number_format($total_out, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong><?= htmlspecialchars(__('report_kpi_expenses'), ENT_QUOTES, 'UTF-8') ?></strong><span class="num" style="color:#b45309;"><?= number_format($total_expenses, 2) ?></span></div>
+                    <div class="report-kpi-item"><strong><?= htmlspecialchars(__('report_kpi_profit'), ENT_QUOTES, 'UTF-8') ?></strong><span class="num"><?= number_format($profit_display, 2) ?></span></div>
                 </div>
+                <?php if ($legacy_applied != 0.0): ?>
+                    <p class="form-hint" style="margin-top:-6px; color:var(--muted);">
+                        <?= htmlspecialchars(__f('report_legacy_profit_hint', number_format($legacy_applied, 2), ($legacy_as_of !== '' ? $legacy_as_of : __('report_legacy_profit_no_asof'))), ENT_QUOTES, 'UTF-8') ?>
+                    </p>
+                <?php endif; ?>
 
                 <div class="card report-section-card">
                     <h3 class="report-collapse-head">
