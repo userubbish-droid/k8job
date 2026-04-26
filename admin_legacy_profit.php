@@ -4,7 +4,39 @@ require 'auth.php';
 require_boss_or_superadmin();
 $sidebar_current = 'admin_legacy_profit';
 
+$actor_is_superadmin = (($_SESSION['user_role'] ?? '') === 'superadmin');
+$session_company_id = current_company_id();
 $company_id = effective_admin_company_id($pdo);
+$company_pick = $company_id;
+$companies = [];
+$company_pick_label = '';
+
+if ($actor_is_superadmin) {
+    try {
+        $companies = $pdo->query('SELECT id, code, name, is_active FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+        $companies = [];
+    }
+    $pick_raw = (int)($_GET['company_id'] ?? $_POST['company_id'] ?? 0);
+    if ($pick_raw > 0) {
+        $company_pick = $pick_raw;
+    }
+    // 不允许选择 0（总公司汇总）来写入，避免混淆
+    if ($company_pick <= 0) {
+        $company_pick = $company_id > 0 ? $company_id : 1;
+    }
+    foreach ($companies as $c) {
+        if ((int)($c['id'] ?? 0) === (int)$company_pick) {
+            $cc = trim((string)($c['code'] ?? ''));
+            $cn = trim((string)($c['name'] ?? ''));
+            $company_pick_label = trim($cc !== '' ? ($cc . ($cn !== '' ? ' - ' . $cn : '')) : ($cn !== '' ? $cn : ''));
+            break;
+        }
+    }
+} else {
+    // boss：只能写入自己公司（session company_id）
+    $company_pick = $company_id;
+}
 $msg = '';
 $err = '';
 
@@ -35,7 +67,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
         $st = $pdo->prepare("INSERT INTO company_profit_adjust (company_id, legacy_profit, as_of, updated_by)
                              VALUES (?, ?, ?, ?)
                              ON DUPLICATE KEY UPDATE legacy_profit = VALUES(legacy_profit), as_of = VALUES(as_of), updated_by = VALUES(updated_by)");
-        $st->execute([$company_id, $legacy_profit, $as_of, $uid > 0 ? $uid : null]);
+        $st->execute([$company_pick, $legacy_profit, $as_of, $uid > 0 ? $uid : null]);
         $msg = __('report_legacy_profit_saved');
     } catch (Throwable $e) {
         $err = $e->getMessage();
@@ -47,7 +79,7 @@ $as_of_cur = '';
 if (!$err) {
     try {
         $st = $pdo->prepare("SELECT legacy_profit, as_of FROM company_profit_adjust WHERE company_id = ? LIMIT 1");
-        $st->execute([$company_id]);
+        $st->execute([$company_pick]);
         $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
         if ($row) {
             $legacy_profit_cur = (float)($row['legacy_profit'] ?? 0);
@@ -82,7 +114,31 @@ if (!$err) {
 
                 <div class="card">
                     <p class="form-hint" style="margin-top:0;"><?= htmlspecialchars(__('report_legacy_profit_desc'), ENT_QUOTES, 'UTF-8') ?></p>
+                    <?php if ($actor_is_superadmin): ?>
+                        <form method="get" style="display:flex; flex-wrap:wrap; gap:10px; align-items:flex-end; margin-bottom: 14px;">
+                            <div style="min-width: 260px; flex: 1;">
+                                <label style="font-weight:700; font-size:13px; display:block; margin-bottom:6px;"><?= htmlspecialchars(__('lbl_company'), ENT_QUOTES, 'UTF-8') ?></label>
+                                <select class="form-control" name="company_id" style="width:100%;" onchange="this.form.submit()">
+                                    <?php foreach ($companies as $c):
+                                        $cid = (int)($c['id'] ?? 0);
+                                        $cc = trim((string)($c['code'] ?? ''));
+                                        $cn = trim((string)($c['name'] ?? ''));
+                                        $lab = trim($cc !== '' ? ($cc . ($cn !== '' ? ' - ' . $cn : '')) : ($cn !== '' ? $cn : (string)$cid));
+                                        if ($cid <= 0) continue;
+                                    ?>
+                                        <option value="<?= $cid ?>" <?= $cid === (int)$company_pick ? 'selected' : '' ?>>
+                                            <?= htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') ?><?= ((int)($c['is_active'] ?? 1) === 0) ? ' (Disabled)' : '' ?>
+                                        </option>
+                                    <?php endforeach; ?>
+                                </select>
+                            </div>
+                            <noscript><button class="btn btn-primary" type="submit"><?= htmlspecialchars(__('btn_search'), ENT_QUOTES, 'UTF-8') ?></button></noscript>
+                        </form>
+                    <?php endif; ?>
                     <form method="post" style="display:flex; flex-wrap:wrap; gap:12px; align-items:flex-end;">
+                        <?php if ($actor_is_superadmin): ?>
+                            <input type="hidden" name="company_id" value="<?= (int)$company_pick ?>">
+                        <?php endif; ?>
                         <div style="min-width: 240px; flex: 1;">
                             <label style="font-weight:700; font-size:13px; display:block; margin-bottom:6px;"><?= htmlspecialchars(__('report_legacy_profit_amount'), ENT_QUOTES, 'UTF-8') ?></label>
                             <input class="form-control" type="text" name="legacy_profit" inputmode="decimal" value="<?= htmlspecialchars(sprintf('%.2f', $legacy_profit_cur), ENT_QUOTES, 'UTF-8') ?>" required>

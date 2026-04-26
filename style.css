@@ -115,10 +115,21 @@ body::before {
     .form-control { padding: 12px 14px; font-size: 16px; min-height: 44px; }
     select.form-control { min-height: 44px; }
     .alert { padding: 14px; font-size: 14px; }
-    .data-table { font-size: 13px; display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    .data-table { font-size: 13px; }
     .data-table th, .data-table td { padding: 8px 10px; }
     .filters-bar { padding: 12px; gap: 10px; }
     .summary-item { min-width: 100%; }
+}
+
+/* 表格横向滑动容器（移动端友好） */
+.table-scroll {
+    width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+/* 让表格在窄屏下保留最小宽度，从而可左右滑 */
+@media (max-width: 768px) {
+    .table-scroll .data-table { min-width: 860px; }
 }
 
 /* 页面标题与面包屑（每页标题居中） */

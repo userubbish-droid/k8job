@@ -506,7 +506,8 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         </p>
     <?php endif; ?>
 
-    <div class="card" style="overflow-x:auto; padding:0;">
+    <div class="card" style="padding:0;">
+    <div class="table-scroll">
     <table class="data-table">
         <thead>
             <tr>
@@ -593,6 +594,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
             <?php endif; ?>
         </tbody>
     </table>
+    </div>
     </div>
 
     <?php if ($total_pages > 1): ?>
