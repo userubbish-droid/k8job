@@ -261,10 +261,26 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             return ['ok' => true];
         }
 
-        // upsert config
+        // upsert config（合并白名单：不覆盖已有 admin）
         $allow = [];
-        if ($tgUserId > 0) $allow[] = (string)$tgUserId;
-        elseif ($tgUsername !== '') $allow[] = $tgUsername;
+        try {
+            $stCur = $pdo->prepare("SELECT allowed_user_ids FROM telegram_quick_txn_config WHERE company_id = ? LIMIT 1");
+            $stCur->execute([$pickCompanyId]);
+            $curJson = (string)($stCur->fetchColumn() ?: '');
+            $curArr = tqx_json_decode_map($curJson);
+            foreach ($curArr as $v) {
+                $v = trim((string)$v);
+                if ($v !== '') $allow[] = $v;
+            }
+        } catch (Throwable $e) {
+            $allow = [];
+        }
+        $me = '';
+        if ($tgUserId > 0) $me = (string)$tgUserId;
+        elseif ($tgUsername !== '') $me = $tgUsername;
+        if ($me !== '' && !in_array($me, $allow, true)) {
+            $allow[] = $me;
+        }
 
         $uid0 = null;
         $stUp = $pdo->prepare("INSERT INTO telegram_quick_txn_config
