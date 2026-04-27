@@ -36,9 +36,12 @@ if (isset($PG_TELEGRAM_BOT_TOKEN)) {
 
 // 浏览器 GET：自检是否读到 token、PHP 是否正常（勿公开传播此 URL）
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    $notifyPath = __DIR__ . '/notify_config.php';
     echo json_encode([
         'pg_webhook' => 'ok',
+        'notify_config_file_exists' => is_file($notifyPath),
         'token_configured' => ($token !== ''),
+        'fix_if_token_false' => '在项目根目录（与 config.php 同级）放 notify_config.php，内写：$PG_TELEGRAM_BOT_TOKEN = \'数字:字母...\'; 保存后上传覆盖线上同名文件；勿只改 notify_config.php.example。',
         'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
     ], JSON_UNESCAPED_UNICODE);
     exit;
