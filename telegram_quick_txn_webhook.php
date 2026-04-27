@@ -67,6 +67,35 @@ function tqx_parse_command(string $text): array {
     $text = trim($text);
     if ($text === '') return ['ok' => false, 'err' => 'Empty'];
 
+    // id: return chat_id/user_id/username
+    if (preg_match('/^(id|\\/id)\\b/i', $text)) {
+        return ['ok' => true, 'cmd' => 'id'];
+    }
+
+    // admin whitelist management
+    // - add admin 123456
+    // - remove admin 123456
+    // - list admin
+    if (preg_match('/^(add\\s+admin|remove\\s+admin|del\\s+admin|list\\s+admin)\\b/i', $text)) {
+        $t = strtolower($text);
+        if (strpos($t, 'list admin') === 0) {
+            return ['ok' => true, 'cmd' => 'admin_list'];
+        }
+        if (preg_match('/^(add\\s+admin)\\s+([0-9]{4,20})\\b/i', $text, $m)) {
+            return ['ok' => true, 'cmd' => 'admin_add', 'data' => ['user_id' => (string)$m[2]]];
+        }
+        if (preg_match('/^((remove|del)\\s+admin)\\s+([0-9]{4,20})\\b/i', $text, $m)) {
+            return ['ok' => true, 'cmd' => 'admin_remove', 'data' => ['user_id' => (string)$m[3]]];
+        }
+        if (preg_match('/^(add\\s+admin)\\s*$/i', $text)) {
+            return ['ok' => true, 'cmd' => 'admin_add_reply'];
+        }
+        if (preg_match('/^((remove|del)\\s+admin)\\s*$/i', $text)) {
+            return ['ok' => true, 'cmd' => 'admin_remove_reply'];
+        }
+        return ['ok' => false, 'err' => "格式：add admin <id> / remove admin <id> / list admin（也可回复某人消息发 add admin）"];
+    }
+
     // cancel (reply-to bot receipt preferred)
     if (preg_match('/^(cancel|撤销|取消)\b/i', $text)) {
         // optional token: cancel XXXXX
@@ -140,8 +169,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $text = trim((string)($msg['text'] ?? ''));
     if ($chatId === '' || $text === '') return ['ok' => true];
 
-    // 仅处理 + / - / undo
-    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消)/i', $text)) return ['ok' => true];
+    // 仅处理快捷记账/撤销/管理命令
+    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b)/i', $text)) {
+        return ['ok' => true];
+    }
 
     // company_id：目前按“当前网站公司”配置，webhook 不带 session，所以要求配置里显式填 company_id 对应 chat_id
     // 做法：用配置表里 chat_id 反查 company_id
@@ -164,6 +195,19 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $tgUsername = trim((string)($from['username'] ?? ''));
     $who = $tgUsername !== '' ? $tgUsername : ($tgUserId > 0 ? (string)$tgUserId : 'telegram');
 
+    $parsed = tqx_parse_command($text);
+    if (!$parsed['ok']) {
+        tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
+        return ['ok' => true];
+    }
+
+    // id：不需要白名单（但只在已配置 chat 生效）
+    if (($parsed['cmd'] ?? '') === 'id') {
+        $out = "chat_id={$chatId}\nuser_id=" . ($tgUserId > 0 ? (string)$tgUserId : '-') . "\nusername=" . ($tgUsername !== '' ? $tgUsername : '-');
+        tqx_reply($botToken, $chatId, $out);
+        return ['ok' => true];
+    }
+
     // 白名单（必填）：只允许指定 Telegram 用户记账/撤销
     $allowJson = (string)($cfg['allowed_user_ids'] ?? '');
     $allowArr = tqx_json_decode_map($allowJson);
@@ -181,14 +225,49 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         return ['ok' => true];
     }
 
-    $parsed = tqx_parse_command($text);
-    if (!$parsed['ok']) {
-        tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
-        return ['ok' => true];
-    }
-
     $bankAlias = tqx_json_decode_map((string)($cfg['bank_alias_json'] ?? ''));
     $prodAlias = tqx_json_decode_map((string)($cfg['product_alias_json'] ?? ''));
+
+    // admin 白名单管理（仅现有 admin 可操作）
+    if (in_array(($parsed['cmd'] ?? ''), ['admin_list', 'admin_add', 'admin_remove', 'admin_add_reply', 'admin_remove_reply'], true)) {
+        $cmd = (string)$parsed['cmd'];
+        if ($cmd === 'admin_list') {
+            tqx_reply($botToken, $chatId, $allow ? ("Admins:\n" . implode("\n", $allow)) : "白名单为空。");
+            return ['ok' => true];
+        }
+        $targetId = '';
+        if ($cmd === 'admin_add' || $cmd === 'admin_remove') {
+            $targetId = trim((string)($parsed['data']['user_id'] ?? ''));
+        } else {
+            $rep = $msg['reply_to_message'] ?? null;
+            $repFrom = is_array($rep) ? ($rep['from'] ?? null) : null;
+            $repUid = is_array($repFrom) ? (string)($repFrom['id'] ?? '') : '';
+            $targetId = trim($repUid);
+            if ($targetId === '') {
+                tqx_reply($botToken, $chatId, "请回复要添加/移除的那个人的消息。");
+                return ['ok' => true];
+            }
+        }
+        if ($targetId === '' || !preg_match('/^[0-9]{4,20}$/', $targetId)) {
+            tqx_reply($botToken, $chatId, "ID 不正确。");
+            return ['ok' => true];
+        }
+        $new = $allow;
+        if ($cmd === 'admin_add' || $cmd === 'admin_add_reply') {
+            if (!in_array($targetId, $new, true)) $new[] = $targetId;
+        } else {
+            // 防止把自己移除导致“无人可管”
+            if ($tgUserId > 0 && (string)$tgUserId === $targetId) {
+                tqx_reply($botToken, $chatId, "不能移除自己（避免锁死管理权限）。");
+                return ['ok' => true];
+            }
+            $new = array_values(array_filter($new, fn($x) => (string)$x !== $targetId));
+        }
+        $pdo->prepare("UPDATE telegram_quick_txn_config SET allowed_user_ids = ? WHERE company_id = ? LIMIT 1")
+            ->execute([json_encode($new, JSON_UNESCAPED_UNICODE), $companyId]);
+        tqx_reply($botToken, $chatId, "✅ 已更新 admin 列表。可用：list admin");
+        return ['ok' => true];
+    }
 
     if (($parsed['cmd'] ?? '') === 'cancel') {
         // 必须 reply 到机器人回执，才能定位 token
