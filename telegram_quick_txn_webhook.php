@@ -505,11 +505,53 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             return ['ok' => true];
         }
 
+        // 先取回单据内容（即使已删除也尽量显示）
+        $tx = null;
+        try {
+            $stTx = $pdo->prepare("SELECT day, time, mode, code, bank, product, amount, bonus, total, remark, deleted_at
+                                   FROM transactions
+                                   WHERE id = ? AND company_id = ?
+                                   LIMIT 1");
+            $stTx->execute([$txId, $companyId]);
+            $tx = $stTx->fetch(PDO::FETCH_ASSOC);
+        } catch (Throwable $e) {
+            $tx = null;
+        }
+
         transaction_ensure_soft_delete_columns($pdo);
         $stmt = $pdo->prepare("UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL");
         $stmt->execute([$who, $txId, $companyId]);
         if ($stmt->rowCount() > 0) {
-            tqx_reply($botToken, $chatId, "✅ 已撤销 #{$token}");
+            $msg = "✅ 已撤销 #{$token}";
+            if (is_array($tx)) {
+                $m = trim((string)($tx['mode'] ?? ''));
+                $c = trim((string)($tx['code'] ?? ''));
+                $p = trim((string)($tx['product'] ?? ''));
+                $b = trim((string)($tx['bank'] ?? ''));
+                $amt = isset($tx['amount']) ? (float)$tx['amount'] : 0.0;
+                $bon = isset($tx['bonus']) ? (float)$tx['bonus'] : 0.0;
+                $tot = isset($tx['total']) ? (float)$tx['total'] : ($amt + $bon);
+                $d = trim((string)($tx['day'] ?? ''));
+                $t = trim((string)($tx['time'] ?? ''));
+                $rm = trim((string)($tx['remark'] ?? ''));
+                $line1 = trim(($m !== '' ? $m : '') . ($c !== '' ? " ({$c})" : ''));
+                if ($line1 !== '') $msg .= "\n" . $line1;
+                if ($p !== '' || $b !== '') {
+                    $msg .= "\n" . ($p !== '' ? ("🎮：" . $p) : "🎮：-");
+                    if ($b !== '') $msg .= "\n银行：" . $b;
+                }
+                $msg .= "\n💰：" . number_format($tot, 2, '.', '');
+                if ($d !== '' || $t !== '') {
+                    $msg .= "\n时间：" . trim($d . ' ' . $t);
+                }
+                if ($rm !== '') {
+                    if (mb_strlen($rm, 'UTF-8') > 120) {
+                        $rm = mb_substr($rm, 0, 120, 'UTF-8') . '…';
+                    }
+                    $msg .= "\n备注：" . $rm;
+                }
+            }
+            tqx_reply($botToken, $chatId, $msg);
         } else {
             tqx_reply($botToken, $chatId, "撤销失败（可能已删除/不存在）。");
         }
