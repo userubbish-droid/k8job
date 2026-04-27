@@ -28,7 +28,22 @@ require_once __DIR__ . '/inc/notify.php';
 http_response_code(200);
 header('Content-Type: application/json; charset=utf-8');
 
-$token = trim((string)($PG_TELEGRAM_BOT_TOKEN ?? ''));
+// notify_config.php 与 config.php 同级；变量在 include 后应已存在（勿写在别的路径）
+$token = '';
+if (isset($PG_TELEGRAM_BOT_TOKEN)) {
+    $token = trim((string)$PG_TELEGRAM_BOT_TOKEN);
+}
+
+// 浏览器 GET：自检是否读到 token、PHP 是否正常（勿公开传播此 URL）
+if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
+    echo json_encode([
+        'pg_webhook' => 'ok',
+        'token_configured' => ($token !== ''),
+        'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
+    ], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
 if ($token === '') {
     echo json_encode(['ok' => true]);
     exit;
@@ -36,14 +51,28 @@ if ($token === '') {
 
 $input = file_get_contents('php://input');
 $update = json_decode((string)$input, true);
-if (!is_array($update) || !isset($update['message'])) {
+if (!is_array($update)) {
     echo json_encode(['ok' => true]);
     exit;
 }
 
-require_once __DIR__ . '/telegram_pg_quick_txn_webhook.php';
-if (function_exists('telegram_pg_quick_txn_handle_update')) {
-    telegram_pg_quick_txn_handle_update($pdo, $update, $token);
+// 群消息在 message；少数客户端为 edited_message
+$msgBlock = $update['message'] ?? ($update['edited_message'] ?? null);
+if (!is_array($msgBlock)) {
+    echo json_encode(['ok' => true]);
+    exit;
+}
+$update['message'] = $msgBlock;
+
+try {
+    require_once __DIR__ . '/telegram_pg_quick_txn_webhook.php';
+    if (function_exists('telegram_pg_quick_txn_handle_update')) {
+        telegram_pg_quick_txn_handle_update($pdo, $update, $token);
+    }
+} catch (Throwable $e) {
+    if (function_exists('error_log')) {
+        error_log('[telegram_pg_webhook] ' . $e->getMessage() . ' @ ' . $e->getFile() . ':' . $e->getLine());
+    }
 }
 
 echo json_encode(['ok' => true]);
