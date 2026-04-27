@@ -289,6 +289,7 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         <?php if (in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true)): ?>
         <a href="admin_txn_edit_audit.php" class="nav-item <?= $sidebar_current === 'admin_txn_edit_audit' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_txn_edit_audit'), ENT_QUOTES, 'UTF-8') ?></a>
         <a href="admin_telegram_pg.php" class="nav-item <?= $sidebar_current === 'admin_telegram_pg' ? 'primary' : '' ?>"><span class="nav-icon"></span>PG Telegram</a>
+        <a href="admin_telegram_bot_status.php" class="nav-item <?= $sidebar_current === 'admin_telegram_bot_status' ? 'primary' : '' ?>"><span class="nav-icon"></span>Telegram 连线</a>
         <?php endif; ?>
         <div class="sidebar-nav-divider sidebar-nav-divider--before-logout" role="presentation" aria-hidden="true"></div>
     <?php endif; ?>

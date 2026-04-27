@@ -67,6 +67,37 @@ function telegram_api_post($bot_token, string $method, array $payload) {
     return @file_get_contents($url, false, $ctx);
 }
 
+/** GET 调用 Telegram Bot API（如 getWebhookInfo、getMe），返回 JSON 字符串或 false */
+function telegram_api_get(string $bot_token, string $method): string|false
+{
+    $method = trim($method, '/');
+    if ($bot_token === '' || $method === '') {
+        return false;
+    }
+    $url = 'https://api.telegram.org/bot' . $bot_token . '/' . $method;
+
+    if (function_exists('curl_init')) {
+        $ch = curl_init($url);
+        curl_setopt($ch, CURLOPT_HTTPGET, true);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 15);
+        curl_setopt($ch, CURLOPT_SSL_VERIFYPEER, true);
+        $out = curl_exec($ch);
+        $err = curl_error($ch);
+        curl_close($ch);
+        return $err === '' && is_string($out) ? $out : false;
+    }
+
+    $ctx = stream_context_create([
+        'http' => [
+            'method'  => 'GET',
+            'timeout' => 15,
+        ],
+    ]);
+    $out = @file_get_contents($url, false, $ctx);
+    return is_string($out) && $out !== '' ? $out : false;
+}
+
 function send_telegram_message_with_keyboard($bot_token, $chat_id, $text, array $inline_keyboard) {
     return telegram_api_post($bot_token, 'sendMessage', [
         'chat_id' => $chat_id,
