@@ -42,7 +42,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         'notify_config_file_exists' => is_file($notifyPath),
         'token_configured' => ($token !== ''),
         'pg_token_length_on_this_server' => strlen($token),
-        'fix_if_token_false' => '本 URL 所在服务器上的 notify_config.php 里，$PG_TELEGRAM_BOT_TOKEN 仍为空或未上传。请把本地已改好的 notify_config.php 用 FTP/主机面板上传到与 telegram_pg_webhook.php、config.php 同一目录并覆盖；改完后刷新本页应 token_configured=true。若仍 false，检查是否传错目录（子域名/子目录另一套文件）。',
+        'fix_if_token_false' => '本服务器仍读不到 PG token。任选其一：1) 将 notify_config.php 上传到与本脚本、config.php 同一目录，且内含 $PG_TELEGRAM_BOT_TOKEN=完整token；2) 或在 Hostinger「环境变量」新增 PG_TELEGRAM_BOT_TOKEN（无需把密钥写进文件）。改后刷新本页。若仍 false，用文件管理器打开线上 notify_config.php 确认第10行是否真已保存。',
         'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
     ], JSON_UNESCAPED_UNICODE);
     exit;

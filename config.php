@@ -182,6 +182,14 @@ if (is_file(__DIR__ . '/notify_config.php')) {
     include __DIR__ . '/notify_config.php';
 }
 
+// PG Bot token：notify_config 里未填时，可读主机环境变量（Hostinger：hPanel → Advanced → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）
+if (!isset($PG_TELEGRAM_BOT_TOKEN) || trim((string)$PG_TELEGRAM_BOT_TOKEN) === '') {
+    $ev = getenv('PG_TELEGRAM_BOT_TOKEN');
+    if (is_string($ev) && trim($ev) !== '') {
+        $PG_TELEGRAM_BOT_TOKEN = trim($ev);
+    }
+}
+
 // 可选：PG 分库（catalog 仍为全局 $pdo，业务表用 pdo_business()）
 require_once __DIR__ . '/inc/shard_pdo.php';
 shard_register_catalog($pdo);
