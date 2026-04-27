@@ -23,12 +23,18 @@ function tqx_ensure_tables(PDO $pdo): void {
         bank_alias_json TEXT NULL,
         product_alias_json TEXT NULL,
         staff_alias_json TEXT NULL,
+        receipt_prefix TEXT NULL,
+        receipt_slogan TEXT NULL,
+        receipt_style VARCHAR(20) NOT NULL DEFAULT 'classic',
         undo_window_sec INT NOT NULL DEFAULT 600,
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL,
         PRIMARY KEY (company_id)
     )");
     try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN staff_alias_json TEXT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN receipt_prefix TEXT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN receipt_slogan TEXT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN receipt_style VARCHAR(20) NOT NULL DEFAULT 'classic'"); } catch (Throwable $e) {}
     // 日志表：用于撤销
     $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_quick_txn_log (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -148,7 +154,7 @@ function tqx_parse_command(string $text): array {
         return ['ok' => true, 'cmd' => 'undo', 'data' => ['token' => $m[1]]];
     }
 
-    // +100 C011 P M b10 remark...
+    // +100 C011 P M [b10] [mega_account] [game_id] [balance] [remark...]
     if (!preg_match('/^([+-])\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/u', $text, $m)) {
         return ['ok' => false, 'err' => "格式不对。例：+100 C011 P M 备注 或 -200 C012 P M 备注"];
     }
@@ -179,6 +185,29 @@ function tqx_parse_command(string $text): array {
         }
     }
 
+    // 可选解析：mega账号 / 游戏ID / 余额（尽量简单：按空格切 3 个字段）
+    $megaAccount = '';
+    $gameId = '';
+    $balance = null;
+    $restRemark = $remark;
+    if ($remark !== '') {
+        $parts = preg_split('/\s+/', $remark) ?: [];
+        $parts = array_values(array_filter(array_map('trim', $parts), fn($x) => $x !== ''));
+        if (count($parts) >= 3) {
+            $p0 = (string)$parts[0];
+            $p1 = (string)$parts[1];
+            $p2 = (string)$parts[2];
+            // 余额必须是数字（允许逗号）
+            $balRaw = str_replace(',', '', $p2);
+            if ($p0 !== '' && $p1 !== '' && is_numeric($balRaw)) {
+                $megaAccount = $p0;
+                $gameId = $p1;
+                $balance = round((float)$balRaw, 2);
+                $restRemark = trim(implode(' ', array_slice($parts, 3)));
+            }
+        }
+    }
+
     return [
         'ok' => true,
         'cmd' => ($sign === '+') ? 'deposit' : 'withdraw',
@@ -188,7 +217,10 @@ function tqx_parse_command(string $text): array {
             'bank' => $bank,
             'product' => $product,
             'bonus_pct' => $bonusPct,
-            'remark' => $remark,
+            'mega_account' => $megaAccount,
+            'game_id' => $gameId,
+            'balance' => $balance,
+            'remark' => $restRemark,
         ],
     ];
 }
@@ -289,9 +321,14 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
         $uid0 = null;
         $stUp = $pdo->prepare("INSERT INTO telegram_quick_txn_config
-            (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec, updated_by)
-            VALUES (?, 1, ?, ?, COALESCE((SELECT bank_alias_json FROM telegram_quick_txn_config x WHERE x.company_id=? LIMIT 1), '{}'),
+            (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, updated_by)
+            VALUES (?, 1, ?, ?,
+                        COALESCE((SELECT bank_alias_json FROM telegram_quick_txn_config x WHERE x.company_id=? LIMIT 1), '{}'),
                         COALESCE((SELECT product_alias_json FROM telegram_quick_txn_config y WHERE y.company_id=? LIMIT 1), '{}'),
+                        COALESCE((SELECT staff_alias_json FROM telegram_quick_txn_config s WHERE s.company_id=? LIMIT 1), '{}'),
+                        COALESCE((SELECT receipt_prefix FROM telegram_quick_txn_config p WHERE p.company_id=? LIMIT 1), NULL),
+                        COALESCE((SELECT receipt_slogan FROM telegram_quick_txn_config q WHERE q.company_id=? LIMIT 1), NULL),
+                        COALESCE((SELECT receipt_style FROM telegram_quick_txn_config r WHERE r.company_id=? LIMIT 1), 'classic'),
                         COALESCE((SELECT undo_window_sec FROM telegram_quick_txn_config z WHERE z.company_id=? LIMIT 1), 600),
                         ?)
             ON DUPLICATE KEY UPDATE enabled=1, chat_id=VALUES(chat_id), allowed_user_ids=VALUES(allowed_user_ids), updated_by=VALUES(updated_by)");
@@ -299,6 +336,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             $pickCompanyId,
             $chatId,
             json_encode($allow, JSON_UNESCAPED_UNICODE),
+            $pickCompanyId,
+            $pickCompanyId,
+            $pickCompanyId,
+            $pickCompanyId,
             $pickCompanyId,
             $pickCompanyId,
             $pickCompanyId,
@@ -312,7 +353,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     // 从这里开始：必须已配置 chat_id 对应 company
     // 做法：用配置表里 chat_id 反查 company_id
-    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, undo_window_sec
+    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec
                              FROM telegram_quick_txn_config
                              WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
                              LIMIT 1");
@@ -334,10 +375,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         $v = trim((string)$v);
         if ($v !== '') $allow[] = $v;
     }
-    $ok = false;
-    if ($tgUserId > 0 && in_array((string)$tgUserId, $allow, true)) $ok = true;
-    if ($tgUsername !== '' && in_array($tgUsername, $allow, true)) $ok = true;
-    if (!$ok) {
+    $is_admin_sender = false;
+    if ($tgUserId > 0 && in_array((string)$tgUserId, $allow, true)) $is_admin_sender = true;
+    if ($tgUsername !== '' && in_array($tgUsername, $allow, true)) $is_admin_sender = true;
+    if (!$is_admin_sender) {
         // 未配置白名单或不在白名单：一律无效
         tqx_reply($botToken, $chatId, "Unauthorized");
         return ['ok' => true];
@@ -422,18 +463,9 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             tqx_reply($botToken, $chatId, "找不到可撤销记录。");
             return ['ok' => true];
         }
-        // 仅本人可撤销（同 user_id/username），并限制时间窗
+        // 白名单 admin 可撤销任意记录（仍限制时间窗）
         $undoWin = (int)($cfg['undo_window_sec'] ?? 600);
         $createdAt = (string)($log['created_at'] ?? '');
-        $canWho = (string)($log['tg_username'] ?? '');
-        $canUid = (string)($log['tg_user_id'] ?? '');
-        $same = false;
-        if ($tgUsername !== '' && $canWho !== '' && strcasecmp($tgUsername, $canWho) === 0) $same = true;
-        if ($tgUserId > 0 && $canUid !== '' && (string)$tgUserId === $canUid) $same = true;
-        if (!$same) {
-            tqx_reply($botToken, $chatId, "只能撤销自己提交的记录。");
-            return ['ok' => true];
-        }
         if ($createdAt !== '') {
             $ts = strtotime($createdAt);
             if ($ts && (time() - $ts) > max(30, $undoWin)) {
@@ -464,6 +496,9 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $bankIn = trim((string)($data['bank'] ?? ''));
     $prodIn = trim((string)($data['product'] ?? ''));
     $remark = trim((string)($data['remark'] ?? ''));
+    $megaAccount = trim((string)($data['mega_account'] ?? ''));
+    $gameId = trim((string)($data['game_id'] ?? ''));
+    $balance = $data['balance'] ?? null;
     $bonusPct = $data['bonus_pct'] ?? null;
 
     // alias translate
@@ -488,6 +523,33 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $status = 'approved';
     $uid0 = null;
 
+    // 回执样式
+    $receiptPrefix = trim((string)($cfg['receipt_prefix'] ?? ''));
+    if ($receiptPrefix === '') $receiptPrefix = '已记账';
+    $receiptSlogan = trim((string)($cfg['receipt_slogan'] ?? ''));
+    $receiptStyle = strtolower(trim((string)($cfg['receipt_style'] ?? 'classic')));
+    if (!in_array($receiptStyle, ['classic', 'game'], true)) $receiptStyle = 'classic';
+
+    if ($receiptStyle === 'game') {
+        $balOk = ($balance !== null && is_numeric((string)$balance));
+        if ($megaAccount === '' || $gameId === '' || !$balOk) {
+            tqx_reply($botToken, $chatId, "格式：+100 C004 P M <MEGA账号> <游戏ID> <余额> [备注]\n例：+100 C004 P M my870393261 Aaaa8888 500");
+            return ['ok' => true];
+        }
+    }
+
+    // 备注里补充游戏资料（方便后台查）
+    $extraBits = [];
+    if ($receiptStyle === 'game') {
+        if ($megaAccount !== '') $extraBits[] = "MEGA={$megaAccount}";
+        if ($gameId !== '') $extraBits[] = "GAME={$gameId}";
+        if ($balance !== null && is_numeric((string)$balance)) $extraBits[] = "BAL=" . round((float)$balance, 2);
+    }
+    if ($extraBits) {
+        $extraStr = '[TG ' . implode(' ', $extraBits) . ']';
+        $remark = $remark !== '' ? ($remark . ' ' . $extraStr) : $extraStr;
+    }
+
     // 写入 transactions
     try {
         $pdo->prepare("INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
@@ -505,10 +567,21 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         ->execute([$companyId, $chatId, $tgUserId > 0 ? $tgUserId : null, $tgUsername !== '' ? $tgUsername : null, $text, $mode, $token, $txId]);
 
-    $reply = "✅ 已记账 {$mode}\n金额：{$amount}\n代号：{$code}\n银行：{$bankIn}\n产品：{$prodIn}";
-    if ($bonus > 0) $reply .= "\nBonus：{$bonus}";
-    if ($remark !== '') $reply .= "\n备注：{$remark}";
-    $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
+    if ($receiptStyle === 'game') {
+        $reply = "✅ {$receiptPrefix} {$mode}\n({$code})";
+        if ($receiptSlogan !== '') $reply .= "\n{$receiptSlogan}";
+        $reply .= "\n🎮：{$prodIn}";
+        $reply .= "\n🆔：{$megaAccount}";
+        $reply .= "\n🔢：{$gameId}";
+        $reply .= "\n💰：" . round((float)$balance, 2);
+        // 仍保留撤销提示
+        $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
+    } else {
+        $reply = "✅ {$receiptPrefix} {$mode}\n金额：{$amount}\n代号：{$code}\n银行：{$bankIn}\n产品：{$prodIn}";
+        if ($bonus > 0) $reply .= "\nBonus：{$bonus}";
+        if ($remark !== '') $reply .= "\n备注：{$remark}";
+        $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
+    }
     tqx_reply($botToken, $chatId, $reply);
 
     return ['ok' => true];

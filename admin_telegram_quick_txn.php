@@ -26,12 +26,18 @@ try {
         bank_alias_json TEXT NULL,
         product_alias_json TEXT NULL,
         staff_alias_json TEXT NULL,
+        receipt_prefix TEXT NULL,
+        receipt_slogan TEXT NULL,
+        receipt_style VARCHAR(20) NOT NULL DEFAULT 'classic',
         undo_window_sec INT NOT NULL DEFAULT 600,
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL,
         PRIMARY KEY (company_id)
     )");
     try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN staff_alias_json TEXT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN receipt_prefix TEXT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN receipt_slogan TEXT NULL"); } catch (Throwable $e) {}
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN receipt_style VARCHAR(20) NOT NULL DEFAULT 'classic'"); } catch (Throwable $e) {}
 } catch (Throwable $e) {
     $err = $e->getMessage();
 }
@@ -90,9 +96,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
             if ($k !== '' && $v !== '') $staff_map[$k] = $v;
         }
 
+        $receipt_prefix = trim((string)($_POST['receipt_prefix'] ?? ''));
+        $receipt_slogan = trim((string)($_POST['receipt_slogan'] ?? ''));
+        $receipt_style = strtolower(trim((string)($_POST['receipt_style'] ?? 'classic')));
+        if (!in_array($receipt_style, ['classic', 'game'], true)) $receipt_style = 'classic';
+
         $uid = (int)($_SESSION['user_id'] ?? 0);
-        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, undo_window_sec, updated_by)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, updated_by)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                              ON DUPLICATE KEY UPDATE
                                enabled=VALUES(enabled),
                                chat_id=VALUES(chat_id),
@@ -100,6 +111,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
                                bank_alias_json=VALUES(bank_alias_json),
                                product_alias_json=VALUES(product_alias_json),
                                staff_alias_json=VALUES(staff_alias_json),
+                               receipt_prefix=VALUES(receipt_prefix),
+                               receipt_slogan=VALUES(receipt_slogan),
+                               receipt_style=VALUES(receipt_style),
                                undo_window_sec=VALUES(undo_window_sec),
                                updated_by=VALUES(updated_by)");
         $st->execute([
@@ -110,6 +124,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
             json_encode($bank_map, JSON_UNESCAPED_UNICODE),
             json_encode($prod_map, JSON_UNESCAPED_UNICODE),
             json_encode($staff_map, JSON_UNESCAPED_UNICODE),
+            ($receipt_prefix !== '' ? $receipt_prefix : null),
+            ($receipt_slogan !== '' ? $receipt_slogan : null),
+            $receipt_style,
             $undo_window,
             $uid > 0 ? $uid : null,
         ]);
@@ -126,6 +143,9 @@ $cur = [
     'bank_alias_json' => '{}',
     'product_alias_json' => '{}',
     'staff_alias_json' => '{}',
+    'receipt_prefix' => '',
+    'receipt_slogan' => '',
+    'receipt_style' => 'classic',
     'undo_window_sec' => 600,
 ];
 if (!$err) {
@@ -221,6 +241,20 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
                     <label style="margin-top:12px; font-weight:700;">撤销时间窗（秒）</label>
                     <input class="form-control" type="number" name="undo_window_sec" value="<?= (int)($cur['undo_window_sec'] ?? 600) ?>" min="30" max="86400">
 
+                    <label style="margin-top:12px; font-weight:700;">机器人回执文案（可自定义）</label>
+                    <input class="form-control" name="receipt_prefix" value="<?= htmlspecialchars((string)($cur['receipt_prefix'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="例如：完成记账 / 记录成功 / 你自定义的词">
+                    <p class="form-hint">会显示在回执第一行：<code>✅ &lt;文案&gt; DEPOSIT/WITHDRAW</code></p>
+
+                    <label style="margin-top:12px; font-weight:700;">回执第二行祝福语（可选）</label>
+                    <input class="form-control" name="receipt_slogan" value="<?= htmlspecialchars((string)($cur['receipt_slogan'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="例如：Semoga boss dapat rezeki 🥰">
+
+                    <label style="margin-top:12px; font-weight:700;">回执格式</label>
+                    <select class="form-control" name="receipt_style">
+                        <?php $rs = strtolower((string)($cur['receipt_style'] ?? 'classic')); ?>
+                        <option value="classic" <?= $rs === 'classic' ? 'selected' : '' ?>>经典（显示金额/银行/产品/备注）</option>
+                        <option value="game" <?= $rs === 'game' ? 'selected' : '' ?>>游戏资料（显示 🎮/🆔/🔢/💰）</option>
+                    </select>
+
                     <label style="margin-top:12px; font-weight:700;">银行缩写映射（每行：短写 = 全称）</label>
                     <textarea class="form-control" name="bank_alias" rows="5" placeholder="P = Parking&#10;HLB = HLB"><?= htmlspecialchars($bank_lines, ENT_QUOTES, 'UTF-8') ?></textarea>
 
@@ -240,6 +274,8 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
                     指令示例：<br>
                     <code>+100 C011 P M b10 remark</code><br>
                     <code>-200 C012 P M remark</code><br>
+                    游戏资料模式示例（需要 3 个字段）：<br>
+                    <code>+100 C004 P M my870393261 Aaaa8888 500 备注</code><br>
                     撤销：<code>undo &lt;token&gt;</code>
                 </div>
             </div>
