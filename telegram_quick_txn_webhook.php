@@ -46,10 +46,13 @@ function tqx_ensure_tables(PDO $pdo): void {
         action VARCHAR(40) NOT NULL,
         token VARCHAR(40) NOT NULL,
         transaction_id INT UNSIGNED NULL,
+        receipt_message_id BIGINT NULL,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         KEY idx_company_chat (company_id, chat_id),
-        KEY idx_token (token)
+        KEY idx_token (token),
+        KEY idx_receipt_msg (receipt_message_id)
     )");
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_log ADD COLUMN receipt_message_id BIGINT NULL"); } catch (Throwable $e) {}
 }
 
 function tqx_json_decode_map(?string $json): array {
@@ -63,9 +66,15 @@ function tqx_norm_key(string $s): string {
     return strtolower(trim($s));
 }
 
-function tqx_reply(string $botToken, string $chatId, string $text): void {
-    if ($botToken === '' || $chatId === '' || $text === '') return;
-    send_telegram_message($botToken, $chatId, $text);
+function tqx_reply(string $botToken, string $chatId, string $text): ?int {
+    if ($botToken === '' || $chatId === '' || $text === '') return null;
+    $out = send_telegram_message($botToken, $chatId, $text);
+    if (!is_string($out) || trim($out) === '') return null;
+    $j = json_decode(trim($out), true);
+    if (!is_array($j)) return null;
+    if (!($j['ok'] ?? false)) return null;
+    $mid = $j['result']['message_id'] ?? null;
+    return is_numeric((string)$mid) ? (int)$mid : null;
 }
 
 /**
@@ -447,11 +456,18 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         // 必须 reply 到机器人回执，才能定位 token
         $rep = $msg['reply_to_message'] ?? null;
         $repText = is_array($rep) ? trim((string)($rep['text'] ?? '')) : '';
+        $repMid = is_array($rep) ? (int)($rep['message_id'] ?? 0) : 0;
         $token = '';
         if ($repText !== '' && preg_match('/\bundo\s+([A-Za-z0-9_-]{6,40})\b/i', $repText, $mm)) {
             $token = $mm[1];
         } elseif ($repText !== '' && preg_match('/#([A-Za-z0-9_-]{6,40})\b/', $repText, $mm2)) {
             $token = $mm2[1];
+        }
+        if ($token === '' && $repMid > 0) {
+            // 新逻辑：不依赖 token，直接用回执 message_id 找日志
+            $stLog2 = $pdo->prepare("SELECT token FROM telegram_quick_txn_log WHERE receipt_message_id = ? AND company_id = ? AND chat_id = ? ORDER BY id DESC LIMIT 1");
+            $stLog2->execute([$repMid, $companyId, $chatId]);
+            $token = (string)($stLog2->fetchColumn() ?: '');
         }
         if ($token === '') {
             tqx_reply($botToken, $chatId, "请回复机器人那条回执消息再发 cancel。");
@@ -533,7 +549,6 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     // 回执样式（配置优先；但若用户在指令里带了“游戏资料三件套”，则自动切到 game）
     $receiptPrefix = trim((string)($cfg['receipt_prefix'] ?? ''));
-    if ($receiptPrefix === '') $receiptPrefix = '完成记账';
     $receiptSlogan = trim((string)($cfg['receipt_slogan'] ?? ''));
     $receiptStyle = strtolower(trim((string)($cfg['receipt_style'] ?? 'classic')));
     if (!in_array($receiptStyle, ['classic', 'game'], true)) $receiptStyle = 'classic';
@@ -571,11 +586,9 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
                 $foundAccount = false;
             }
             if ($megaAccount === '' || $gameId === '') {
-                $hint = "我找不到这个 CODE 的后台资料。\n"
-                      . "请先到后台客户资料里，为该客户添加「产品账号」（账号/密码）。\n"
-                      . "或你也可以手动发：+100 {$code} {$bankIn} {$prodIn} <MEGA账号> <游戏ID> [备注]";
-                tqx_reply($botToken, $chatId, $hint);
-                return ['ok' => true];
+                // 找不到账号时也照常回执：显示占位符
+                if ($megaAccount === '') $megaAccount = '-';
+                if ($gameId === '') $gameId = '-';
             }
         }
     }
@@ -605,27 +618,44 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     // token 用于撤销（回执里带 undo token，支持 reply + cancel）
     $token = substr(hash('sha256', $chatId . '|' . $tgUserId . '|' . microtime(true) . '|' . $txId), 0, 10);
-    $pdo->prepare("INSERT INTO telegram_quick_txn_log (company_id, chat_id, tg_user_id, tg_username, raw_text, action, token, transaction_id)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
-        ->execute([$companyId, $chatId, $tgUserId > 0 ? $tgUserId : null, $tgUsername !== '' ? $tgUsername : null, $text, $mode, $token, $txId]);
-
     if ($effectiveStyle === 'game') {
-        $reply = "✅ {$receiptPrefix} {$mode}\n({$code})";
+        $head = $receiptPrefix !== '' ? "✅ {$receiptPrefix} {$mode}" : "✅ {$mode}";
+        $reply = $head . "\n({$code})";
         if ($receiptSlogan !== '') $reply .= "\n{$receiptSlogan}";
         $reply .= "\n🎮：{$prodIn}";
         $reply .= "\n🆔：{$megaAccount}";
         $reply .= "\n🔢：{$gameId}";
         // 💰 跟随后台的 total（amount + bonus），与图2一致
         $reply .= "\n💰：" . number_format($total, 2, '.', '');
-        // 仍保留撤销提示
-        $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
     } else {
-        $reply = "✅ {$receiptPrefix} {$mode}\n金额：{$amount}\n代号：{$code}\n银行：{$bankIn}\n产品：{$prodIn}";
+        $head = $receiptPrefix !== '' ? "✅ {$receiptPrefix} {$mode}" : "✅ {$mode}";
+        $reply = $head . "\n金额：{$amount}\n代号：{$code}\n银行：{$bankIn}\n产品：{$prodIn}";
         if ($bonus > 0) $reply .= "\nBonus：{$bonus}";
         if ($remark !== '') $reply .= "\n备注：{$remark}";
-        $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
     }
-    tqx_reply($botToken, $chatId, $reply);
+    // 先记录日志（用于撤销）：保证 cancel 能稳定定位；回执 message_id 之后再回填
+    $pdo->prepare("INSERT INTO telegram_quick_txn_log (company_id, chat_id, tg_user_id, tg_username, raw_text, action, token, transaction_id, receipt_message_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)")
+        ->execute([
+            $companyId,
+            $chatId,
+            $tgUserId > 0 ? $tgUserId : null,
+            $tgUsername !== '' ? $tgUsername : null,
+            $text,
+            $mode,
+            $token,
+            $txId,
+        ]);
+
+    $receiptMid = tqx_reply($botToken, $chatId, $reply);
+    if ($receiptMid) {
+        try {
+            $pdo->prepare("UPDATE telegram_quick_txn_log SET receipt_message_id = ? WHERE company_id = ? AND chat_id = ? AND token = ? AND transaction_id = ? ORDER BY id DESC LIMIT 1")
+                ->execute([(int)$receiptMid, $companyId, $chatId, $token, $txId]);
+        } catch (Throwable $e) {
+            // ignore: undo 仍可用 token（若用户手动输入）
+        }
+    }
 
     return ['ok' => true];
 }
