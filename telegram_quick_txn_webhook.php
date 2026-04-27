@@ -561,14 +561,6 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
                                           ORDER BY created_at DESC, id DESC LIMIT 1");
                     $stA->execute([$companyId, $custId, $prodIn]);
                     $acc = $stA->fetch(PDO::FETCH_ASSOC);
-                    if (!$acc) {
-                        // 找不到同产品时，退回任意一条（避免完全没回执）
-                        $stA2 = $pdo->prepare("SELECT product_name, account, password FROM customer_product_accounts
-                                               WHERE company_id = ? AND customer_id = ?
-                                               ORDER BY created_at DESC, id DESC LIMIT 1");
-                        $stA2->execute([$companyId, $custId]);
-                        $acc = $stA2->fetch(PDO::FETCH_ASSOC);
-                    }
                     if (is_array($acc)) {
                         $megaAccount = $megaAccount !== '' ? $megaAccount : trim((string)($acc['account'] ?? ''));
                         $gameId = $gameId !== '' ? $gameId : trim((string)($acc['password'] ?? ''));
