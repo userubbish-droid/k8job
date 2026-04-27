@@ -185,7 +185,7 @@ function tqx_parse_command(string $text): array {
         }
     }
 
-    // 可选解析：mega账号 / 游戏ID / 余额（尽量简单：按空格切 3 个字段）
+    // 可选解析：mega账号 / 游戏ID /（可选）金额字段（兼容旧格式：按空格切 3 个字段）
     $megaAccount = '';
     $gameId = '';
     $balance = null;
@@ -193,17 +193,25 @@ function tqx_parse_command(string $text): array {
     if ($remark !== '') {
         $parts = preg_split('/\s+/', $remark) ?: [];
         $parts = array_values(array_filter(array_map('trim', $parts), fn($x) => $x !== ''));
-        if (count($parts) >= 3) {
+        if (count($parts) >= 2) {
             $p0 = (string)$parts[0];
             $p1 = (string)$parts[1];
-            $p2 = (string)$parts[2];
-            // 余额必须是数字（允许逗号）
-            $balRaw = str_replace(',', '', $p2);
-            if ($p0 !== '' && $p1 !== '' && is_numeric($balRaw)) {
+            if ($p0 !== '' && $p1 !== '') {
                 $megaAccount = $p0;
                 $gameId = $p1;
-                $balance = round((float)$balRaw, 2);
-                $restRemark = trim(implode(' ', array_slice($parts, 3)));
+                // 第三个字段若是数字则当作“输入金额/余额”（兼容旧格式），否则全部当备注
+                if (count($parts) >= 3) {
+                    $p2 = (string)$parts[2];
+                    $balRaw = str_replace(',', '', $p2);
+                    if (is_numeric($balRaw)) {
+                        $balance = round((float)$balRaw, 2);
+                        $restRemark = trim(implode(' ', array_slice($parts, 3)));
+                    } else {
+                        $restRemark = trim(implode(' ', array_slice($parts, 2)));
+                    }
+                } else {
+                    $restRemark = trim(implode(' ', array_slice($parts, 2)));
+                }
             }
         }
     }
@@ -538,9 +546,8 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     if ($hasGameTriplet) $effectiveStyle = 'game';
 
     if ($effectiveStyle === 'game') {
-        // 若用户没手动填：自动从后台资料补全（customer_product_accounts + 余额计算）
-        $balOk = ($balance !== null && is_numeric((string)$balance));
-        if ($megaAccount === '' || $gameId === '' || !$balOk) {
+        // 若用户没手动填：自动从后台资料补全（customer_product_accounts）
+        if ($megaAccount === '' || $gameId === '') {
             $foundAccount = false;
             try {
                 // 先找 customer_id
@@ -571,38 +578,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             } catch (Throwable $e) {
                 $foundAccount = false;
             }
-
-            // 自动余额：按后台 transactions 计算（与 Customers 页 Balance 一致）
-            if ($balance === null || !is_numeric((string)$balance)) {
-                try {
-                    $stB = $pdo->prepare("SELECT
-                        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
-                        - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)
-                        - COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS balance
-                        FROM transactions
-                        WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) = ?");
-                    $stB->execute([$companyId, $code]);
-                    $balance = round((float)$stB->fetchColumn(), 2);
-                } catch (Throwable $eBal) {
-                    try {
-                        $stB2 = $pdo->prepare("SELECT
-                            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
-                            - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
-                            FROM transactions
-                            WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) = ?");
-                        $stB2->execute([$companyId, $code]);
-                        $balance = round((float)$stB2->fetchColumn(), 2);
-                    } catch (Throwable $eBal2) {
-                        // ignore
-                    }
-                }
-            }
-
-            $balOk2 = ($balance !== null && is_numeric((string)$balance));
-            if ($megaAccount === '' || $gameId === '' || !$balOk2) {
+            if ($megaAccount === '' || $gameId === '') {
                 $hint = "我找不到这个 CODE 的后台资料。\n"
                       . "请先到后台客户资料里，为该客户添加「产品账号」（账号/密码）。\n"
-                      . "或你也可以手动发：+100 {$code} {$bankIn} {$prodIn} <MEGA账号> <游戏ID> <余额>";
+                      . "或你也可以手动发：+100 {$code} {$bankIn} {$prodIn} <MEGA账号> <游戏ID> [备注]";
                 tqx_reply($botToken, $chatId, $hint);
                 return ['ok' => true];
             }
@@ -614,7 +593,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     if ($receiptStyle === 'game') {
         if ($megaAccount !== '') $extraBits[] = "MEGA={$megaAccount}";
         if ($gameId !== '') $extraBits[] = "GAME={$gameId}";
-        if ($balance !== null && is_numeric((string)$balance)) $extraBits[] = "BAL=" . round((float)$balance, 2);
+        if ($balance !== null && is_numeric((string)$balance)) $extraBits[] = "INPUT=" . round((float)$balance, 2);
     }
     if ($extraBits) {
         $extraStr = '[TG ' . implode(' ', $extraBits) . ']';
@@ -644,7 +623,8 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         $reply .= "\n🎮：{$prodIn}";
         $reply .= "\n🆔：{$megaAccount}";
         $reply .= "\n🔢：{$gameId}";
-        $reply .= "\n💰：" . round((float)$balance, 2);
+        // 💰 跟随后台的 total（amount + bonus），与图2一致
+        $reply .= "\n💰：" . number_format($total, 2, '.', '');
         // 仍保留撤销提示
         $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
     } else {
