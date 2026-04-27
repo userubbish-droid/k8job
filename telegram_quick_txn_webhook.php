@@ -72,6 +72,18 @@ function tqx_parse_command(string $text): array {
         return ['ok' => true, 'cmd' => 'id'];
     }
 
+    // setup: bind this group chat id & set first admin
+    // - /setup
+    // - /setup 3
+    // - /setup CS1
+    if (preg_match('/^(setup|\\/setup)\\b/i', $text)) {
+        $arg = '';
+        if (preg_match('/^(?:setup|\\/setup)\\s+(.+?)\\s*$/i', $text, $m)) {
+            $arg = trim((string)$m[1]);
+        }
+        return ['ok' => true, 'cmd' => 'setup', 'data' => ['arg' => $arg]];
+    }
+
     // admin whitelist management
     // - add admin 123456
     // - remove admin 123456
@@ -170,30 +182,9 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     if ($chatId === '' || $text === '') return ['ok' => true];
 
     // 仅处理快捷记账/撤销/管理命令
-    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b)/i', $text)) {
+    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|setup\b|\/setup\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b)/i', $text)) {
         return ['ok' => true];
     }
-
-    // company_id：目前按“当前网站公司”配置，webhook 不带 session，所以要求配置里显式填 company_id 对应 chat_id
-    // 做法：用配置表里 chat_id 反查 company_id
-    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec
-                             FROM telegram_quick_txn_config
-                             WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
-                             LIMIT 1");
-    $stFind->execute([$chatId]);
-    $cfg = $stFind->fetch(PDO::FETCH_ASSOC);
-    if (!$cfg) {
-        // 未配置的群：静默
-        return ['ok' => true];
-    }
-
-    $companyId = (int)($cfg['company_id'] ?? 0);
-    if ($companyId <= 0) return ['ok' => true];
-
-    $from = $msg['from'] ?? [];
-    $tgUserId = isset($from['id']) ? (int)$from['id'] : 0;
-    $tgUsername = trim((string)($from['username'] ?? ''));
-    $who = $tgUsername !== '' ? $tgUsername : ($tgUserId > 0 ? (string)$tgUserId : 'telegram');
 
     $parsed = tqx_parse_command($text);
     if (!$parsed['ok']) {
@@ -207,6 +198,83 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         tqx_reply($botToken, $chatId, $out);
         return ['ok' => true];
     }
+
+    // setup：不需要预先配置 chat_id。绑定后才允许 + / - / cancel / undo
+    if (($parsed['cmd'] ?? '') === 'setup') {
+        $arg = trim((string)($parsed['data']['arg'] ?? ''));
+
+        // 选公司：若只有一个启用公司则自动；否则要求提供 company_id 或 company code
+        $pickCompanyId = 0;
+        try {
+            $cnt = (int)$pdo->query("SELECT COUNT(*) FROM companies WHERE is_active = 1")->fetchColumn();
+            if ($cnt === 1) {
+                $pickCompanyId = (int)$pdo->query("SELECT id FROM companies WHERE is_active = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
+            }
+        } catch (Throwable $e) {
+            // companies 表不存在时，退回 1
+        }
+        if ($pickCompanyId <= 0 && $arg !== '') {
+            // numeric id
+            if (preg_match('/^[0-9]+$/', $arg)) {
+                $pickCompanyId = (int)$arg;
+            } else {
+                // code
+                try {
+                    $st = $pdo->prepare("SELECT id FROM companies WHERE LOWER(TRIM(code)) = LOWER(TRIM(?)) LIMIT 1");
+                    $st->execute([$arg]);
+                    $pickCompanyId = (int)$st->fetchColumn();
+                } catch (Throwable $e) {}
+            }
+        }
+        if ($pickCompanyId <= 0) {
+            $hint = "无法自动选择公司。请用：/setup <company_id> 或 /setup <company_code>\n例如：/setup 3";
+            tqx_reply($botToken, $chatId, $hint);
+            return ['ok' => true];
+        }
+
+        // upsert config
+        $allow = [];
+        if ($tgUserId > 0) $allow[] = (string)$tgUserId;
+        elseif ($tgUsername !== '') $allow[] = $tgUsername;
+
+        $uid0 = null;
+        $stUp = $pdo->prepare("INSERT INTO telegram_quick_txn_config
+            (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec, updated_by)
+            VALUES (?, 1, ?, ?, COALESCE((SELECT bank_alias_json FROM telegram_quick_txn_config x WHERE x.company_id=? LIMIT 1), '{}'),
+                        COALESCE((SELECT product_alias_json FROM telegram_quick_txn_config y WHERE y.company_id=? LIMIT 1), '{}'),
+                        COALESCE((SELECT undo_window_sec FROM telegram_quick_txn_config z WHERE z.company_id=? LIMIT 1), 600),
+                        ?)
+            ON DUPLICATE KEY UPDATE enabled=1, chat_id=VALUES(chat_id), allowed_user_ids=VALUES(allowed_user_ids), updated_by=VALUES(updated_by)");
+        $stUp->execute([
+            $pickCompanyId,
+            $chatId,
+            json_encode($allow, JSON_UNESCAPED_UNICODE),
+            $pickCompanyId,
+            $pickCompanyId,
+            $pickCompanyId,
+            $uid0
+        ]);
+
+        $out = "✅ 已绑定本群\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已将你设为 admin（白名单）";
+        tqx_reply($botToken, $chatId, $out);
+        return ['ok' => true];
+    }
+
+    // 从这里开始：必须已配置 chat_id 对应 company
+    // 做法：用配置表里 chat_id 反查 company_id
+    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec
+                             FROM telegram_quick_txn_config
+                             WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
+                             LIMIT 1");
+    $stFind->execute([$chatId]);
+    $cfg = $stFind->fetch(PDO::FETCH_ASSOC);
+    if (!$cfg) {
+        // 未绑定的群：静默
+        return ['ok' => true];
+    }
+
+    $companyId = (int)($cfg['company_id'] ?? 0);
+    if ($companyId <= 0) return ['ok' => true];
 
     // 白名单（必填）：只允许指定 Telegram 用户记账/撤销
     $allowJson = (string)($cfg['allowed_user_ids'] ?? '');
