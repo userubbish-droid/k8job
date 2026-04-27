@@ -91,7 +91,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
         }
 
         $uid = (int)($_SESSION['user_id'] ?? 0);
-        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec, updated_by)
+        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, undo_window_sec, updated_by)
                              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                              ON DUPLICATE KEY UPDATE
                                enabled=VALUES(enabled),
@@ -125,6 +125,7 @@ $cur = [
     'allowed_user_ids' => '[]',
     'bank_alias_json' => '{}',
     'product_alias_json' => '{}',
+    'staff_alias_json' => '{}',
     'undo_window_sec' => 600,
 ];
 if (!$err) {
