@@ -41,7 +41,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         'pg_webhook' => 'ok',
         'notify_config_file_exists' => is_file($notifyPath),
         'token_configured' => ($token !== ''),
-        'fix_if_token_false' => '在项目根目录（与 config.php 同级）放 notify_config.php，内写：$PG_TELEGRAM_BOT_TOKEN = \'数字:字母...\'; 保存后上传覆盖线上同名文件；勿只改 notify_config.php.example。',
+        'pg_token_length_on_this_server' => strlen($token),
+        'fix_if_token_false' => '本 URL 所在服务器上的 notify_config.php 里，$PG_TELEGRAM_BOT_TOKEN 仍为空或未上传。请把本地已改好的 notify_config.php 用 FTP/主机面板上传到与 telegram_pg_webhook.php、config.php 同一目录并覆盖；改完后刷新本页应 token_configured=true。若仍 false，检查是否传错目录（子域名/子目录另一套文件）。',
         'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
     ], JSON_UNESCAPED_UNICODE);
     exit;
