@@ -480,7 +480,12 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         $token = (string)($parsed['data']['token'] ?? '');
         if ($token === '') return ['ok' => true];
 
-        $stLog = $pdo->prepare("SELECT * FROM telegram_quick_txn_log WHERE token = ? AND company_id = ? LIMIT 1");
+        $stLog = $pdo->prepare("SELECT l.*,
+                                       TIMESTAMPDIFF(SECOND, l.created_at, NOW()) AS age_sec
+                                FROM telegram_quick_txn_log l
+                                WHERE l.token = ? AND l.company_id = ?
+                                ORDER BY l.id DESC
+                                LIMIT 1");
         $stLog->execute([$token, $companyId]);
         $log = $stLog->fetch(PDO::FETCH_ASSOC);
         if (!$log) {
@@ -489,13 +494,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         }
         // 白名单 admin 可撤销任意记录（仍限制时间窗）
         $undoWin = (int)($cfg['undo_window_sec'] ?? 600);
-        $createdAt = (string)($log['created_at'] ?? '');
-        if ($createdAt !== '') {
-            $ts = strtotime($createdAt);
-            if ($ts && (time() - $ts) > max(30, $undoWin)) {
-                tqx_reply($botToken, $chatId, "已超出可撤销时间。");
-                return ['ok' => true];
-            }
+        $ageSec = isset($log['age_sec']) && is_numeric((string)$log['age_sec']) ? (int)$log['age_sec'] : null;
+        if ($ageSec !== null && $ageSec > max(30, $undoWin)) {
+            tqx_reply($botToken, $chatId, "已超出可撤销时间。");
+            return ['ok' => true];
         }
         $txId = (int)($log['transaction_id'] ?? 0);
         if ($txId <= 0) {
@@ -561,8 +563,14 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     if ($hasGameTriplet) $effectiveStyle = 'game';
 
     if ($effectiveStyle === 'game') {
+        // WITHDRAW：不需要显示游戏账号/ID（只显示代号+产品+金额）
+        if ($mode === 'WITHDRAW') {
+            $megaAccount = '';
+            $gameId = '';
+        }
+
         // 若用户没手动填：自动从后台资料补全（customer_product_accounts）
-        if ($megaAccount === '' || $gameId === '') {
+        if ($mode !== 'WITHDRAW' && ($megaAccount === '' || $gameId === '')) {
             $foundAccount = false;
             try {
                 // 先找 customer_id
@@ -619,14 +627,19 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     // token 用于撤销（回执里带 undo token，支持 reply + cancel）
     $token = substr(hash('sha256', $chatId . '|' . $tgUserId . '|' . microtime(true) . '|' . $txId), 0, 10);
     if ($effectiveStyle === 'game') {
-        $head = $receiptPrefix !== '' ? "✅ {$receiptPrefix} {$mode}" : "✅ {$mode}";
-        $reply = $head . "\n({$code})";
-        if ($receiptSlogan !== '') $reply .= "\n{$receiptSlogan}";
-        $reply .= "\n🎮：{$prodIn}";
-        $reply .= "\n🆔：{$megaAccount}";
-        $reply .= "\n🔢：{$gameId}";
-        // 💰 跟随后台的 total（amount + bonus），与图2一致
-        $reply .= "\n💰：" . number_format($total, 2, '.', '');
+        // WITHDRAW：精简显示（不显示游戏账号/ID）
+        if ($mode === 'WITHDRAW') {
+            $reply = "✅ {$mode}\n({$code})\n🎮：{$prodIn}\n💰：" . number_format($total, 2, '.', '');
+        } else {
+            $head = $receiptPrefix !== '' ? "✅ {$receiptPrefix} {$mode}" : "✅ {$mode}";
+            $reply = $head . "\n({$code})";
+            if ($receiptSlogan !== '') $reply .= "\n{$receiptSlogan}";
+            $reply .= "\n🎮：{$prodIn}";
+            $reply .= "\n🆔：{$megaAccount}";
+            $reply .= "\n🔢：{$gameId}";
+            // 💰 跟随后台的 total（amount + bonus），与图2一致
+            $reply .= "\n💰：" . number_format($total, 2, '.', '');
+        }
     } else {
         $head = $receiptPrefix !== '' ? "✅ {$receiptPrefix} {$mode}" : "✅ {$mode}";
         $reply = $head . "\n金额：{$amount}\n代号：{$code}\n银行：{$bankIn}\n产品：{$prodIn}";
