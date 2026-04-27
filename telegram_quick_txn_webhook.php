@@ -523,14 +523,21 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $status = 'approved';
     $uid0 = null;
 
-    // 回执样式
+    // 回执样式（配置优先；但若用户在指令里带了“游戏资料三件套”，则自动切到 game）
     $receiptPrefix = trim((string)($cfg['receipt_prefix'] ?? ''));
-    if ($receiptPrefix === '') $receiptPrefix = '已记账';
+    if ($receiptPrefix === '') $receiptPrefix = '完成记账';
     $receiptSlogan = trim((string)($cfg['receipt_slogan'] ?? ''));
     $receiptStyle = strtolower(trim((string)($cfg['receipt_style'] ?? 'classic')));
     if (!in_array($receiptStyle, ['classic', 'game'], true)) $receiptStyle = 'classic';
 
-    if ($receiptStyle === 'game') {
+    $hasGameTriplet = false;
+    if ($megaAccount !== '' && $gameId !== '' && $balance !== null && is_numeric((string)$balance)) {
+        $hasGameTriplet = true;
+    }
+    $effectiveStyle = $receiptStyle;
+    if ($hasGameTriplet) $effectiveStyle = 'game';
+
+    if ($effectiveStyle === 'game') {
         $balOk = ($balance !== null && is_numeric((string)$balance));
         if ($megaAccount === '' || $gameId === '' || !$balOk) {
             tqx_reply($botToken, $chatId, "格式：+100 C004 P M <MEGA账号> <游戏ID> <余额> [备注]\n例：+100 C004 P M my870393261 Aaaa8888 500");
@@ -567,7 +574,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
         ->execute([$companyId, $chatId, $tgUserId > 0 ? $tgUserId : null, $tgUsername !== '' ? $tgUsername : null, $text, $mode, $token, $txId]);
 
-    if ($receiptStyle === 'game') {
+    if ($effectiveStyle === 'game') {
         $reply = "✅ {$receiptPrefix} {$mode}\n({$code})";
         if ($receiptSlogan !== '') $reply .= "\n{$receiptSlogan}";
         $reply .= "\n🎮：{$prodIn}";
