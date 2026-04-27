@@ -7,6 +7,17 @@ $sidebar_current = 'admin_companies';
 $msg = '';
 $err = '';
 
+/** 确保 companies 有业务类型列（博彩 / 支付网关） */
+function companies_ensure_business_kind(PDO $pdo): void {
+    try {
+        $pdo->exec("ALTER TABLE companies ADD COLUMN business_kind ENUM('gaming','pg') NOT NULL DEFAULT 'gaming' AFTER currency");
+    } catch (Throwable $e) {
+        // 已存在则忽略
+    }
+}
+
+companies_ensure_business_kind($pdo);
+
 function normalize_company_code(string $raw): string {
     return strtolower(preg_replace('/\s+/', '', trim($raw)));
 }
@@ -51,9 +62,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!preg_match('/^[A-Z]{2,8}$/', $currency)) {
                 $currency = 'MYR';
             }
-            $stmt = $pdo->prepare('INSERT INTO companies (code, name, currency, is_active) VALUES (?, ?, ?, 1)');
-            $stmt->execute([$code, $name, $currency]);
-            $msg = '已新增分公司：' . $code;
+            $biz = strtolower(trim((string)($_POST['business_kind'] ?? 'gaming')));
+            if (!in_array($biz, ['gaming', 'pg'], true)) {
+                $biz = 'gaming';
+            }
+            $stmt = $pdo->prepare('INSERT INTO companies (code, name, currency, business_kind, is_active) VALUES (?, ?, ?, ?, 1)');
+            $stmt->execute([$code, $name, $currency, $biz]);
+            $msg = '已新增分公司：' . $code . '（类型：' . ($biz === 'pg' ? 'Payment Gateway (PG)' : 'Gaming') . '）';
         } elseif ($action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
             $code = normalize_company_code((string)($_POST['code'] ?? ''));
@@ -76,8 +91,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!preg_match('/^[A-Z]{2,8}$/', $currency)) {
                 $currency = 'MYR';
             }
-            $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ?, currency = ? WHERE id = ?');
-            $stmt->execute([$code, $name, $currency, $id]);
+            $biz = strtolower(trim((string)($_POST['business_kind'] ?? 'gaming')));
+            if (!in_array($biz, ['gaming', 'pg'], true)) {
+                $biz = 'gaming';
+            }
+            $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ?, currency = ?, business_kind = ? WHERE id = ?');
+            $stmt->execute([$code, $name, $currency, $biz, $id]);
             $msg = '已保存。';
         } elseif ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
@@ -126,7 +145,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $companies = [];
 try {
-    $companies = $pdo->query('SELECT id, code, name, currency, is_active, created_at FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    $companies = $pdo->query('SELECT id, code, name, currency, business_kind, is_active, created_at FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $companies = [];
 }
@@ -195,6 +214,13 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                                 <?php endforeach; ?>
                             </select>
                         </div>
+                        <div class="filter-group">
+                            <label>业务类型</label>
+                            <select class="form-control" name="business_kind" title="与另一行业数据区分标识；报表后续可按类型筛选">
+                                <option value="gaming" selected>Gaming（博彩）</option>
+                                <option value="pg">Payment Gateway（PG）</option>
+                            </select>
+                        </div>
                         <div class="filter-group" style="align-self:flex-end;">
                             <button type="submit" class="btn btn-primary">新增</button>
                         </div>
@@ -208,7 +234,7 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                             <thead>
                                 <tr>
                                     <th>ID</th>
-                                    <th>代码、名称与币种</th>
+                                    <th>代码、名称、币种与类型</th>
                                     <th>状态</th>
                                     <th>创建时间</th>
                                     <th>操作</th>
@@ -216,10 +242,16 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                             </thead>
                             <tbody>
                                 <?php foreach ($companies as $c): ?>
+                                <?php
+                                    $bk = strtolower(trim((string)($c['business_kind'] ?? 'gaming')));
+                                    if (!in_array($bk, ['gaming', 'pg'], true)) {
+                                        $bk = 'gaming';
+                                    }
+                                ?>
                                 <tr>
                                     <td><?= (int)$c['id'] ?></td>
                                     <td>
-                                        <form method="post" class="admin-users-role-form" style="flex-wrap:wrap;max-width:420px;">
+                                        <form method="post" class="admin-users-role-form" style="flex-wrap:wrap;max-width:520px;">
                                             <input type="hidden" name="action" value="update">
                                             <input type="hidden" name="id" value="<?= (int)$c['id'] ?>">
                                             <input class="form-control" name="code" value="<?= htmlspecialchars($c['code']) ?>" maxlength="32" required pattern="[a-z0-9][a-z0-9_-]*" title="小写字母数字，可含 - _" style="width:120px;">
@@ -231,6 +263,10 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                                                 ?>
                                                 <option value="<?= htmlspecialchars($cur) ?>"<?= $ccur === $cur ? ' selected' : '' ?>><?= htmlspecialchars($cur) ?></option>
                                                 <?php endforeach; ?>
+                                            </select>
+                                            <select class="form-control" name="business_kind" style="width:120px;" title="业务类型">
+                                                <option value="gaming"<?= $bk === 'gaming' ? ' selected' : '' ?>>Gaming</option>
+                                                <option value="pg"<?= $bk === 'pg' ? ' selected' : '' ?>>PG</option>
                                             </select>
                                             <button type="submit" class="btn btn-sm btn-primary">保存</button>
                                         </form>

@@ -1,0 +1,14 @@
+# 隐藏 .php：访问 /admin_companies 会内部转到 admin_companies.php
+# 需要 Apache 且已启用 mod_rewrite（Hostinger 多数 Linux 主机默认支持）。
+# 若站点是 Nginx，本文件无效，需在主机面板为该站点添加等价的 rewrite 规则。
+
+<IfModule mod_rewrite.c>
+    RewriteEngine On
+    # 已有真实文件或目录则不动
+    RewriteCond %{REQUEST_FILENAME} -f [OR]
+    RewriteCond %{REQUEST_FILENAME} -d
+    RewriteRule ^ - [L]
+    # 存在同名 .php 则补上扩展名
+    RewriteCond %{REQUEST_FILENAME}.php -f
+    RewriteRule ^(.+)$ $1.php [L,QSA]
+</IfModule>
