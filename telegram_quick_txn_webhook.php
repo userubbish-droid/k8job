@@ -1,4 +1,4 @@
-<?php
+    <?php
 /**
  * Telegram 群聊快捷记账（独立文件，可整套删除）
  *
@@ -204,6 +204,11 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $chatId = trim((string)($chat['id'] ?? ''));
     $text = trim((string)($msg['text'] ?? ''));
     if ($chatId === '' || $text === '') return ['ok' => true];
+
+    $from = $msg['from'] ?? [];
+    $tgUserId = isset($from['id']) ? (int)$from['id'] : 0;
+    $tgUsername = trim((string)($from['username'] ?? ''));
+    $who = $tgUsername !== '' ? $tgUsername : ($tgUserId > 0 ? (string)$tgUserId : 'telegram');
 
     // 仅处理快捷记账/撤销/管理命令
     if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|setup\b|\/setup\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b|\\/(addadmin|removeadmin|deladmin|listadmin)\\b)/i', $text)) {
