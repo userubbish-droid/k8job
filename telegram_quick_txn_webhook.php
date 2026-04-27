@@ -88,6 +88,30 @@ function tqx_parse_command(string $text): array {
     // - add admin 123456
     // - remove admin 123456
     // - list admin
+    // slash variants (work with bot privacy mode):
+    // - /addadmin [id]
+    // - /removeadmin [id]
+    // - /listadmin
+    if (preg_match('/^\\/(addadmin|removeadmin|deladmin|listadmin)\\b/i', $text)) {
+        $t = strtolower($text);
+        if (preg_match('/^\\/(listadmin)\\b/i', $t)) {
+            return ['ok' => true, 'cmd' => 'admin_list'];
+        }
+        if (preg_match('/^\\/(addadmin)\\s+([0-9]{4,20})\\b/i', $text, $m)) {
+            return ['ok' => true, 'cmd' => 'admin_add', 'data' => ['user_id' => (string)$m[2]]];
+        }
+        if (preg_match('/^\\/(removeadmin|deladmin)\\s+([0-9]{4,20})\\b/i', $text, $m)) {
+            return ['ok' => true, 'cmd' => 'admin_remove', 'data' => ['user_id' => (string)$m[2]]];
+        }
+        if (preg_match('/^\\/(addadmin)\\s*$/i', $text)) {
+            return ['ok' => true, 'cmd' => 'admin_add_reply'];
+        }
+        if (preg_match('/^\\/(removeadmin|deladmin)\\s*$/i', $text)) {
+            return ['ok' => true, 'cmd' => 'admin_remove_reply'];
+        }
+        return ['ok' => false, 'err' => "格式：/addadmin <id> / /removeadmin <id> / /listadmin（也可回复某人消息发 /addadmin）"];
+    }
+
     if (preg_match('/^(add\\s+admin|remove\\s+admin|del\\s+admin|list\\s+admin)\\b/i', $text)) {
         $t = strtolower($text);
         if (strpos($t, 'list admin') === 0) {
@@ -182,7 +206,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     if ($chatId === '' || $text === '') return ['ok' => true];
 
     // 仅处理快捷记账/撤销/管理命令
-    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|setup\b|\/setup\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b)/i', $text)) {
+    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|setup\b|\/setup\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b|\\/(addadmin|removeadmin|deladmin|listadmin)\\b)/i', $text)) {
         return ['ok' => true];
     }
 
