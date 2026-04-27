@@ -538,10 +538,74 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     if ($hasGameTriplet) $effectiveStyle = 'game';
 
     if ($effectiveStyle === 'game') {
+        // 若用户没手动填：自动从后台资料补全（customer_product_accounts + 余额计算）
         $balOk = ($balance !== null && is_numeric((string)$balance));
         if ($megaAccount === '' || $gameId === '' || !$balOk) {
-            tqx_reply($botToken, $chatId, "格式：+100 C004 P M <MEGA账号> <游戏ID> <余额> [备注]\n例：+100 C004 P M my870393261 Aaaa8888 500");
-            return ['ok' => true];
+            $foundAccount = false;
+            try {
+                // 先找 customer_id
+                $stC = $pdo->prepare("SELECT id FROM customers WHERE company_id = ? AND TRIM(code) = ? LIMIT 1");
+                $stC->execute([$companyId, $code]);
+                $custId = (int)$stC->fetchColumn();
+                if ($custId > 0) {
+                    // 按产品名匹配（优先），取最新一条账号
+                    $stA = $pdo->prepare("SELECT account, password FROM customer_product_accounts
+                                          WHERE company_id = ? AND customer_id = ? AND LOWER(TRIM(product_name)) = LOWER(TRIM(?))
+                                          ORDER BY created_at DESC, id DESC LIMIT 1");
+                    $stA->execute([$companyId, $custId, $prodIn]);
+                    $acc = $stA->fetch(PDO::FETCH_ASSOC);
+                    if (!$acc) {
+                        // 找不到同产品时，退回任意一条（避免完全没回执）
+                        $stA2 = $pdo->prepare("SELECT product_name, account, password FROM customer_product_accounts
+                                               WHERE company_id = ? AND customer_id = ?
+                                               ORDER BY created_at DESC, id DESC LIMIT 1");
+                        $stA2->execute([$companyId, $custId]);
+                        $acc = $stA2->fetch(PDO::FETCH_ASSOC);
+                    }
+                    if (is_array($acc)) {
+                        $megaAccount = $megaAccount !== '' ? $megaAccount : trim((string)($acc['account'] ?? ''));
+                        $gameId = $gameId !== '' ? $gameId : trim((string)($acc['password'] ?? ''));
+                        $foundAccount = ($megaAccount !== '' && $gameId !== '');
+                    }
+                }
+            } catch (Throwable $e) {
+                $foundAccount = false;
+            }
+
+            // 自动余额：按后台 transactions 计算（与 Customers 页 Balance 一致）
+            if ($balance === null || !is_numeric((string)$balance)) {
+                try {
+                    $stB = $pdo->prepare("SELECT
+                        COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
+                        - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)
+                        - COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS balance
+                        FROM transactions
+                        WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) = ?");
+                    $stB->execute([$companyId, $code]);
+                    $balance = round((float)$stB->fetchColumn(), 2);
+                } catch (Throwable $eBal) {
+                    try {
+                        $stB2 = $pdo->prepare("SELECT
+                            COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
+                            - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
+                            FROM transactions
+                            WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) = ?");
+                        $stB2->execute([$companyId, $code]);
+                        $balance = round((float)$stB2->fetchColumn(), 2);
+                    } catch (Throwable $eBal2) {
+                        // ignore
+                    }
+                }
+            }
+
+            $balOk2 = ($balance !== null && is_numeric((string)$balance));
+            if ($megaAccount === '' || $gameId === '' || !$balOk2) {
+                $hint = "我找不到这个 CODE 的后台资料。\n"
+                      . "请先到后台客户资料里，为该客户添加「产品账号」（账号/密码）。\n"
+                      . "或你也可以手动发：+100 {$code} {$bankIn} {$prodIn} <MEGA账号> <游戏ID> <余额>";
+                tqx_reply($botToken, $chatId, $hint);
+                return ['ok' => true];
+            }
         }
     }
 
