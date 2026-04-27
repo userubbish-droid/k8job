@@ -7,6 +7,8 @@ require_permission('transaction_edit_request');
 
 $sidebar_current = 'transaction_list';
 $company_id = current_company_id();
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 // 尝试确保表存在（仍建议执行 migrate_transaction_edit_requests.sql）
 try {
@@ -48,7 +50,7 @@ try {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (Throwable $e) {}
 require_once __DIR__ . '/inc/ensure_txedit_request_orig_columns.php';
-ensure_txedit_request_orig_columns($pdo);
+ensure_txedit_request_orig_columns($pdo, $pdoBiz);
 
 $id = (int)($_GET['id'] ?? 0);
 $return_to = trim((string)($_GET['return_to'] ?? 'transaction_list.php'));
@@ -61,10 +63,10 @@ if ($id > 0) {
     $sql = "SELECT id, day, time, mode, code, bank, product, amount, burn, bonus, total, remark, status
             FROM transactions WHERE id = ? AND company_id = ?";
     try {
-        $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+        $pdoBiz->query("SELECT deleted_at FROM transactions LIMIT 0");
         $sql .= " AND deleted_at IS NULL";
     } catch (Throwable $e) {}
-    $st = $pdo->prepare($sql);
+    $st = $pdoBiz->prepare($sql);
     $st->execute([$id, $company_id]);
     $row = $st->fetch(PDO::FETCH_ASSOC) ?: null;
 }
@@ -106,14 +108,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $uid = (int)($_SESSION['user_id'] ?? 0);
 
         try {
-            ensure_txedit_request_orig_columns($pdo);
+            ensure_txedit_request_orig_columns($pdo, $pdoBiz);
             $sqlSnap = "SELECT day, time, mode, code, bank, product, amount, burn, bonus, total, remark FROM transactions WHERE id = ? AND company_id = ?";
             try {
-                $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+                $pdoBiz->query('SELECT deleted_at FROM transactions LIMIT 0');
                 $sqlSnap .= ' AND deleted_at IS NULL';
             } catch (Throwable $e) {
             }
-            $stSnap = $pdo->prepare($sqlSnap);
+            $stSnap = $pdoBiz->prepare($sqlSnap);
             $stSnap->execute([$id, $company_id]);
             $snap = $stSnap->fetch(PDO::FETCH_ASSOC);
             if (!$snap) {

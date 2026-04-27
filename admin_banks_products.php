@@ -4,11 +4,13 @@ require 'auth.php';
 require_admin();
 $sidebar_current = 'admin_banks_products';
 $company_id = effective_admin_company_id($pdo);
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 $actor_role = (string)($_SESSION['user_role'] ?? '');
 $actor_is_boss_like = in_array($actor_role, ['boss', 'superadmin'], true);
 
 function _ensure_balance_adjust_table(PDO $pdo) {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS balance_adjust (
+    $pdoBiz->exec("CREATE TABLE IF NOT EXISTS balance_adjust (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         company_id INT UNSIGNED NOT NULL DEFAULT 1,
         adjust_type ENUM('bank','product','expense') NOT NULL,
@@ -20,12 +22,12 @@ function _ensure_balance_adjust_table(PDO $pdo) {
     )");
     try {
         // 兼容旧库：补 expense 枚举值
-        $pdo->exec("ALTER TABLE balance_adjust MODIFY adjust_type ENUM('bank','product','expense') NOT NULL");
+        $pdoBiz->exec("ALTER TABLE balance_adjust MODIFY adjust_type ENUM('bank','product','expense') NOT NULL");
     } catch (Throwable $e) {}
 }
 
 function _ensure_expenses_table(PDO $pdo) {
-    $pdo->exec("CREATE TABLE IF NOT EXISTS expenses (
+    $pdoBiz->exec("CREATE TABLE IF NOT EXISTS expenses (
         id INT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
         company_id INT UNSIGNED NOT NULL DEFAULT 1,
         name VARCHAR(80) NOT NULL,
@@ -54,7 +56,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException(__('abp_err_bank_name'));
             try {
-                $stmt = $pdo->prepare("INSERT INTO banks (company_id, name, sort_order) VALUES (?, ?, ?)");
+                $stmt = $pdoBiz->prepare("INSERT INTO banks (company_id, name, sort_order) VALUES (?, ?, ?)");
                 $stmt->execute([$company_id, $name, $sort]);
                 $msg = __('abp_msg_bank_added');
             } catch (Throwable $e) {
@@ -68,7 +70,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException(__('abp_err_product_name'));
             try {
-                $stmt = $pdo->prepare("INSERT INTO products (company_id, name, sort_order) VALUES (?, ?, ?)");
+                $stmt = $pdoBiz->prepare("INSERT INTO products (company_id, name, sort_order) VALUES (?, ?, ?)");
                 $stmt->execute([$company_id, $name, $sort]);
                 $msg = __('abp_msg_product_added');
             } catch (Throwable $e) {
@@ -82,8 +84,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $sort = (int)($_POST['sort_order'] ?? 0);
             if ($name === '') throw new RuntimeException(__('abp_err_expense_name'));
             try {
-                _ensure_expenses_table($pdo);
-                $stmt = $pdo->prepare("INSERT INTO expenses (company_id, name, sort_order) VALUES (?, ?, ?)");
+                _ensure_expenses_table($pdoBiz);
+                $stmt = $pdoBiz->prepare("INSERT INTO expenses (company_id, name, sort_order) VALUES (?, ?, ?)");
                 $stmt->execute([$company_id, $name, $sort]);
                 $msg = __('abp_msg_expense_added');
             } catch (Throwable $e) {
@@ -95,13 +97,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'toggle_bank') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException(__('abp_err_bad_param'));
-            $stmt = $pdo->prepare("UPDATE banks SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt = $pdoBiz->prepare("UPDATE banks SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
             $msg = __('abp_msg_status_updated');
         } elseif ($action === 'toggle_product') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException(__('abp_err_bad_param'));
-            $chk = $pdo->prepare('SELECT is_active, delete_pending_at FROM products WHERE id = ? AND company_id = ? LIMIT 1');
+            $chk = $pdoBiz->prepare('SELECT is_active, delete_pending_at FROM products WHERE id = ? AND company_id = ? LIMIT 1');
             $chk->execute([$id, $company_id]);
             $pr = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$pr) {
@@ -110,7 +112,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ((int)($pr['is_active'] ?? 0) === 0 && !empty($pr['delete_pending_at'])) {
                 throw new RuntimeException(__('abp_err_enable_before_delete_req'));
             }
-            $stmt = $pdo->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt = $pdoBiz->prepare("UPDATE products SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
             $msg = __('abp_msg_status_updated');
         } elseif ($action === 'request_product_delete') {
@@ -118,7 +120,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($id <= 0) {
                 throw new RuntimeException(__('abp_err_bad_param'));
             }
-            $chk = $pdo->prepare('SELECT is_active, delete_pending_at, name FROM products WHERE id = ? AND company_id = ? LIMIT 1');
+            $chk = $pdoBiz->prepare('SELECT is_active, delete_pending_at, name FROM products WHERE id = ? AND company_id = ? LIMIT 1');
             $chk->execute([$id, $company_id]);
             $pr = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$pr) {
@@ -131,14 +133,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException(__('abp_err_delete_already_pending'));
             }
             $uid = (int)($_SESSION['user_id'] ?? 0);
-            $pdo->prepare('UPDATE products SET delete_pending_at = NOW(), delete_pending_by = ? WHERE id = ? AND company_id = ?')->execute([$uid > 0 ? $uid : null, $id, $company_id]);
+            $pdoBiz->prepare('UPDATE products SET delete_pending_at = NOW(), delete_pending_by = ? WHERE id = ? AND company_id = ?')->execute([$uid > 0 ? $uid : null, $id, $company_id]);
             $msg = __('abp_msg_delete_requested');
         } elseif ($action === 'cancel_product_delete') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) {
                 throw new RuntimeException(__('abp_err_bad_param'));
             }
-            $st = $pdo->prepare('UPDATE products SET delete_pending_at = NULL, delete_pending_by = NULL WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL');
+            $st = $pdoBiz->prepare('UPDATE products SET delete_pending_at = NULL, delete_pending_by = NULL WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL');
             $st->execute([$id, $company_id]);
             if ($st->rowCount() === 0) {
                 throw new RuntimeException(__('abp_err_no_pending_delete'));
@@ -152,21 +154,21 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($id <= 0) {
                 throw new RuntimeException(__('abp_err_bad_param'));
             }
-            $chk = $pdo->prepare('SELECT name FROM products WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL LIMIT 1');
+            $chk = $pdoBiz->prepare('SELECT name FROM products WHERE id = ? AND company_id = ? AND delete_pending_at IS NOT NULL LIMIT 1');
             $chk->execute([$id, $company_id]);
             $pr = $chk->fetch(PDO::FETCH_ASSOC);
             if (!$pr) {
                 throw new RuntimeException(__('abp_err_no_pending_approve'));
             }
             $pname = trim((string)($pr['name'] ?? ''));
-            $pdo->beginTransaction();
+            $pdoBiz->beginTransaction();
             try {
-                $pdo->prepare('DELETE FROM balance_adjust WHERE company_id = ? AND adjust_type = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))')->execute([$company_id, 'product', $pname]);
-                $pdo->prepare('DELETE FROM products WHERE id = ? AND company_id = ?')->execute([$id, $company_id]);
-                $pdo->commit();
+                $pdoBiz->prepare('DELETE FROM balance_adjust WHERE company_id = ? AND adjust_type = ? AND LOWER(TRIM(name)) = LOWER(TRIM(?))')->execute([$company_id, 'product', $pname]);
+                $pdoBiz->prepare('DELETE FROM products WHERE id = ? AND company_id = ?')->execute([$id, $company_id]);
+                $pdoBiz->commit();
             } catch (Throwable $e) {
-                if ($pdo->inTransaction()) {
-                    $pdo->rollBack();
+                if ($pdoBiz->inTransaction()) {
+                    $pdoBiz->rollBack();
                 }
                 throw $e;
             }
@@ -174,8 +176,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         } elseif ($action === 'toggle_expense') {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException(__('abp_err_bad_param'));
-            _ensure_expenses_table($pdo);
-            $stmt = $pdo->prepare("UPDATE expenses SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            _ensure_expenses_table($pdoBiz);
+            $stmt = $pdoBiz->prepare("UPDATE expenses SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
             $msg = __('abp_msg_status_updated');
         } elseif ($action === 'do_transfer') {
@@ -197,11 +199,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $cols = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
                 $vals = "?, ?, ?, 'WITHDRAW', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
-                $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
+                $stmt = $pdoBiz->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
                 $stmt->execute([$company_id, $day, $time, $from_bank, $amount, $amount, $staff, $remark_out, $uid, $uid]);
                 $cols2 = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
                 $vals2 = "?, ?, ?, 'DEPOSIT', NULL, ?, NULL, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
-                $stmt2 = $pdo->prepare("INSERT INTO transactions ($cols2) VALUES ($vals2)");
+                $stmt2 = $pdoBiz->prepare("INSERT INTO transactions ($cols2) VALUES ($vals2)");
                 $stmt2->execute([$company_id, $day, $time, $to_bank, $amount, $amount, $staff, $remark_in, $uid, $uid]);
                 $msg = __f('abp_msg_transfer_recorded', $from_bank, number_format($amount, 2), $to_bank);
             } catch (Throwable $e) {
@@ -223,7 +225,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 $cols = "company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member";
                 $vals = "?, ?, ?, 'TOPUP', NULL, NULL, ?, ?, 0, ?, ?, ?, 'approved', ?, ?, NOW(), 1";
-                $stmt = $pdo->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
+                $stmt = $pdoBiz->prepare("INSERT INTO transactions ($cols) VALUES ($vals)");
                 $stmt->execute([$company_id, $day, $time, $product, $amount, $amount, $staff, __('abp_remark_topup'), $uid, $uid]);
                 $msg = __f('abp_msg_topup_ok', $product, number_format($amount, 2));
             } catch (Throwable $e) {
@@ -264,15 +266,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $val = str_replace(',', '', trim($_POST['balance'] ?? '0'));
             if ($name === '' || !in_array($type, ['bank', 'product', 'expense'], true) || !is_numeric($val)) throw new RuntimeException(__('abp_err_bad_param'));
             try {
-                $stmt = $pdo->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
+                $stmt = $pdoBiz->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
                     ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
                 $stmt->execute([$company_id, $type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
                 $msg = __('abp_msg_balance_saved');
             } catch (Throwable $e) {
                 if (strpos($e->getMessage(), 'balance_adjust') !== false && strpos($e->getMessage(), "doesn't exist") !== false) {
-                    _ensure_balance_adjust_table($pdo);
+                    _ensure_balance_adjust_table($pdoBiz);
                     try {
-                        $stmt = $pdo->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
+                        $stmt = $pdoBiz->prepare("INSERT INTO balance_adjust (company_id, adjust_type, name, initial_balance, updated_at, updated_by) VALUES (?, ?, ?, ?, NOW(), ?)
                             ON DUPLICATE KEY UPDATE initial_balance = VALUES(initial_balance), updated_at = NOW(), updated_by = VALUES(updated_by)");
                         $stmt->execute([$company_id, $type, $name, (float)$val, (int)($_SESSION['user_id'] ?? 0)]);
                         $msg = __('abp_msg_balance_saved');
@@ -313,7 +315,7 @@ try {
     if ($bank_status_filter === 'active') $sql .= " AND is_active = 1";
     elseif ($bank_status_filter === 'inactive') $sql .= " AND is_active = 0";
     $sql .= " ORDER BY sort_order ASC, name ASC";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute([$company_id]);
     $banks = $stmt->fetchAll();
 } catch (Throwable $e) {}
@@ -327,7 +329,7 @@ try {
         $sql .= ' AND delete_pending_at IS NOT NULL';
     }
     $sql .= ' ORDER BY sort_order ASC, name ASC';
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute([$company_id]);
     $products = $stmt->fetchAll();
 } catch (Throwable $e) {
@@ -335,7 +337,7 @@ try {
 }
 $products_full = [];
 try {
-    $stpf = $pdo->prepare('SELECT id, name, is_active, sort_order, created_at, delete_pending_at, delete_pending_by FROM products WHERE company_id = ? ORDER BY sort_order ASC, name ASC');
+    $stpf = $pdoBiz->prepare('SELECT id, name, is_active, sort_order, created_at, delete_pending_at, delete_pending_by FROM products WHERE company_id = ? ORDER BY sort_order ASC, name ASC');
     $stpf->execute([$company_id]);
     $products_full = $stpf->fetchAll();
 } catch (Throwable $e) {
@@ -344,20 +346,20 @@ $products_usable = array_values(array_filter($products_full, static function ($p
     return (int)($p['is_active'] ?? 0) === 1 && empty($p['delete_pending_at']);
 }));
 try {
-    _ensure_expenses_table($pdo);
+    _ensure_expenses_table($pdoBiz);
     $sql = "SELECT id, name, is_active, sort_order, created_at FROM expenses WHERE company_id = ?";
     if ($expense_status_filter === 'active') $sql .= " AND is_active = 1";
     elseif ($expense_status_filter === 'inactive') $sql .= " AND is_active = 0";
     $sql .= " ORDER BY sort_order ASC, name ASC";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute([$company_id]);
     $expenses = $stmt->fetchAll();
 } catch (Throwable $e) {}
 try {
-    _ensure_balance_adjust_table($pdo);
+    _ensure_balance_adjust_table($pdoBiz);
 } catch (Throwable $e) {}
 try {
-    $stmtBa = $pdo->prepare("SELECT adjust_type, name, initial_balance FROM balance_adjust WHERE company_id = ?");
+    $stmtBa = $pdoBiz->prepare("SELECT adjust_type, name, initial_balance FROM balance_adjust WHERE company_id = ?");
     $stmtBa->execute([$company_id]);
     $rows = $stmtBa->fetchAll();
     $balance_adjust_ok = true;
@@ -394,13 +396,13 @@ $total_in_expense = [];
 $total_out_expense = [];
 $abp_has_deleted_at = true;
 try {
-    $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+    $pdoBiz->query('SELECT deleted_at FROM transactions LIMIT 0');
 } catch (Throwable $e) {
     $abp_has_deleted_at = false;
 }
 $abp_del = $abp_has_deleted_at ? ' AND deleted_at IS NULL' : '';
 try {
-    $stmt = $pdo->prepare("SELECT COALESCE(product, '') AS expense_name,
+    $stmt = $pdoBiz->prepare("SELECT COALESCE(product, '') AS expense_name,
         COALESCE(SUM(CASE WHEN mode = 'EXPENSE' THEN amount ELSE 0 END), 0) AS tout
         FROM transactions
         WHERE status = 'approved' AND company_id = ?{$abp_del}
@@ -426,7 +428,7 @@ $balance_notify_cfg = balance_notify_get_config();
 // 仅当有待审核流水时显示提示
 $cnt_pending = 0;
 try {
-    $stmtP = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE status = 'pending' AND company_id = ?");
+    $stmtP = $pdoBiz->prepare("SELECT COUNT(*) FROM transactions WHERE status = 'pending' AND company_id = ?");
     $stmtP->execute([$company_id]);
     $cnt_pending = (int)$stmtP->fetchColumn();
 } catch (Throwable $e) {}

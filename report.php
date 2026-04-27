@@ -4,6 +4,11 @@ require 'auth.php';
 require_permission('statement_report');
 $sidebar_current = 'report';
 
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
+
 $err = '';
 $today = date('Y-m-d');
 $default_from = date('Y-m-01');
@@ -36,7 +41,7 @@ $legacy_applied = 0.0;
 try {
     // 历史利润结转（公司级，不影响银行/产品对账）
     try {
-        $pdo->exec("CREATE TABLE IF NOT EXISTS company_profit_adjust (
+        $pdoBiz->exec("CREATE TABLE IF NOT EXISTS company_profit_adjust (
             company_id INT UNSIGNED NOT NULL,
             legacy_profit DECIMAL(14,2) NOT NULL DEFAULT 0,
             as_of DATE NULL,
@@ -44,7 +49,7 @@ try {
             updated_by INT UNSIGNED NULL,
             PRIMARY KEY (company_id)
         )");
-        $stLP = $pdo->prepare("SELECT legacy_profit, as_of FROM company_profit_adjust WHERE company_id = ? LIMIT 1");
+        $stLP = $pdoBiz->prepare("SELECT legacy_profit, as_of FROM company_profit_adjust WHERE company_id = ? LIMIT 1");
         $stLP->execute([$company_id]);
         $lpRow = $stLP->fetch(PDO::FETCH_ASSOC) ?: null;
         if ($lpRow) {
@@ -64,7 +69,7 @@ try {
     }
 
     $contra_exclude = "(remark IS NULL OR TRIM(COALESCE(remark,'')) = '' OR (TRIM(COALESCE(remark,'')) NOT LIKE '转至 %' AND TRIM(COALESCE(remark,'')) NOT LIKE '来自 %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'to %' AND LOWER(TRIM(COALESCE(remark,''))) NOT LIKE 'from %'))";
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT'
                                AND bank IS NOT NULL AND TRIM(bank) <> ''
@@ -88,7 +93,7 @@ try {
     $profit = $total_in - $total_out - $total_expenses;
     $profit_display = $profit + $legacy_applied;
 
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT mode, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS amt
         FROM transactions
         WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND day >= ? AND day <= ?
@@ -98,7 +103,7 @@ try {
     $stmt->execute([$company_id, $day_from, $day_to]);
     $mode_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT code,
                COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
                COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
@@ -112,7 +117,7 @@ try {
     $top_customer_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Bank Contra（互转）：按备注「转至/来自」识别
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' AND (TRIM(COALESCE(remark,'')) LIKE '来自 %' OR LOWER(TRIM(COALESCE(remark,''))) LIKE 'from %') THEN amount ELSE 0 END), 0) AS contra_in,
             COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' AND (TRIM(COALESCE(remark,'')) LIKE '转至 %' OR LOWER(TRIM(COALESCE(remark,''))) LIKE 'to %') THEN amount ELSE 0 END), 0) AS contra_out
@@ -124,7 +129,7 @@ try {
     $contra_in = (float)($row['contra_in'] ?? 0);
     $contra_out = (float)($row['contra_out'] ?? 0);
 
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT day, time, bank, mode, amount, remark
         FROM transactions
         WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND day >= ? AND day <= ?
@@ -137,7 +142,7 @@ try {
     $contra_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
     // Expense（开销）
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT COALESCE(SUM(amount), 0) AS expense_total
         FROM transactions
         WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND day >= ? AND day <= ? AND mode = 'EXPENSE'
@@ -145,7 +150,7 @@ try {
     $stmt->execute([$company_id, $day_from, $day_to]);
     $expense_total = (float)$stmt->fetchColumn();
 
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT day, time, code, bank, product, amount, remark
         FROM transactions
         WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND day >= ? AND day <= ? AND mode = 'EXPENSE'
@@ -155,7 +160,7 @@ try {
     $stmt->execute([$company_id, $day_from, $day_to]);
     $expense_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-    $stmt = $pdo->prepare("
+    $stmt = $pdoBiz->prepare("
         SELECT
             COALESCE(NULLIF(TRIM(product), ''), '未填写产品') AS product_name,
             COUNT(*) AS cnt,

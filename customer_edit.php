@@ -3,12 +3,14 @@ require 'config.php';
 require 'auth.php';
 require_permission('customer_edit');
 $sidebar_current = 'customers';
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 $company_id = current_company_id();
 
 // bonus_flag 列（no bonus / scam receipt）
 try {
-    $pdo->exec("ALTER TABLE customers ADD COLUMN bonus_flag VARCHAR(32) NULL DEFAULT NULL AFTER bank_details");
+    $pdoBiz->exec("ALTER TABLE customers ADD COLUMN bonus_flag VARCHAR(32) NULL DEFAULT NULL AFTER bank_details");
 } catch (Throwable $e) {
 }
 
@@ -19,11 +21,11 @@ if ($id <= 0) {
 }
 
 try {
-    $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
+    $row = $pdoBiz->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
     $row->execute([$id, $company_id]);
     $row = $row->fetch();
 } catch (Throwable $e) {
-    $stmt = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at FROM customers WHERE id = ? AND company_id = ?");
+    $stmt = $pdoBiz->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at FROM customers WHERE id = ? AND company_id = ?");
     $stmt->execute([$id, $company_id]);
     $row = $stmt->fetch();
     if ($row) $row['recommend'] = '';
@@ -36,7 +38,7 @@ if (!$row) {
 // 产品列表（来自 product 管理）
 $products = [];
 try {
-    $stp = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
+    $stp = $pdoBiz->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
     $stp->execute([$company_id]);
     $products = $stp->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
@@ -49,7 +51,7 @@ if (!$products) {
 // 该顾客已有的产品账号
 $product_accounts = [];
 try {
-    $stmt = $pdo->prepare("SELECT id, product_name, account, password FROM customer_product_accounts WHERE customer_id = ? ORDER BY created_at DESC, id DESC");
+    $stmt = $pdoBiz->prepare("SELECT id, product_name, account, password FROM customer_product_accounts WHERE customer_id = ? ORDER BY created_at DESC, id DESC");
     $stmt->execute([$id]);
     $product_accounts = $stmt->fetchAll();
 } catch (Throwable $e) {
@@ -64,7 +66,7 @@ if (isset($_GET['del_account']) || (isset($_POST['action']) && $_POST['action'] 
     $aid = (int)($_GET['del_account'] ?? $_POST['account_id'] ?? 0);
     if ($aid > 0) {
         try {
-            $pdo->prepare("DELETE FROM customer_product_accounts WHERE id = ? AND customer_id = ? AND company_id = ?")->execute([$aid, $id, $company_id]);
+            $pdoBiz->prepare("DELETE FROM customer_product_accounts WHERE id = ? AND customer_id = ? AND company_id = ?")->execute([$aid, $id, $company_id]);
             header("Location: customer_edit.php?id=$id&deleted=1");
             exit;
         } catch (Throwable $e) {
@@ -83,7 +85,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action']) && $_POST['
         $err = '请选择产品。';
     } else {
         try {
-            $stmt = $pdo->prepare("INSERT INTO customer_product_accounts (company_id, customer_id, product_name, account, password) VALUES (?, ?, ?, ?, ?)");
+            $stmt = $pdoBiz->prepare("INSERT INTO customer_product_accounts (company_id, customer_id, product_name, account, password) VALUES (?, ?, ?, ?, ?)");
             $stmt->execute([$company_id, $id, $product_name, $account ?: null, $password]);
             $msg = '已添加产品账号。';
             header("Location: customer_edit.php?id=$id&msg=1");
@@ -124,10 +126,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !isset($_POST['action'])) {
         $err = '客户代码不能为空。';
     } else {
         try {
-            $stmt = $pdo->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, bonus_flag=?, recommend=? WHERE id=? AND company_id=?");
+            $stmt = $pdoBiz->prepare("UPDATE customers SET code=?, name=?, phone=?, remark=?, register_date=?, bank_details=?, bonus_flag=?, recommend=? WHERE id=? AND company_id=?");
             $stmt->execute([$code, $name ?: null, $phone ?: null, $remark ?: null, $register_date ?: null, $bank_details ?: null, $bonus_flag, $recommend !== '' ? $recommend : null, $id, $company_id]);
             $msg = '已保存。';
-            $row = $pdo->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
+            $row = $pdoBiz->prepare("SELECT id, code, name, phone, remark, register_date, bank_details, bonus_flag, created_at, recommend FROM customers WHERE id = ? AND company_id = ?");
             $row->execute([$id, $company_id]);
             $row = $row->fetch();
         } catch (Throwable $e) {

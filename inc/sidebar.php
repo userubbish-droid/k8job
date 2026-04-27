@@ -7,14 +7,15 @@ $sidebar_pending_pwreset = 0;
 $sidebar_pending_txedit = 0;
 if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true) && !empty($pdo) && function_exists('current_company_id')) {
     try {
+        $pdoSide = (function_exists('pdo_business')) ? pdo_business() : $pdo;
         $cid = current_company_id();
         $has_deleted_at = true;
-        try { $pdo->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
+        try { $pdoSide->query("SELECT deleted_at FROM transactions LIMIT 0"); } catch (Throwable $e) { $has_deleted_at = false; }
         $del = $has_deleted_at ? " AND deleted_at IS NULL" : "";
         if ($cid === 0 && (($_SESSION['user_role'] ?? '') === 'superadmin')) {
-            $sidebar_pending = (int) $pdo->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'{$del}")->fetchColumn();
+            $sidebar_pending = (int) $pdoSide->query("SELECT COUNT(*) FROM transactions WHERE status = 'pending'{$del}")->fetchColumn();
             try {
-                $sidebar_pending_customers = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE status = 'pending'")->fetchColumn();
+                $sidebar_pending_customers = (int) $pdoSide->query("SELECT COUNT(*) FROM customers WHERE status = 'pending'")->fetchColumn();
             } catch (Throwable $e) {
                 $sidebar_pending_customers = 0;
             }
@@ -29,11 +30,11 @@ if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], tr
                 $sidebar_pending_txedit = 0;
             }
         } elseif ($cid > 0) {
-            $st = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
+            $st = $pdoSide->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND status = 'pending'{$del}");
             $st->execute([$cid]);
             $sidebar_pending = (int) $st->fetchColumn();
             try {
-                $stc = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND status = 'pending'");
+                $stc = $pdoSide->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND status = 'pending'");
                 $stc->execute([$cid]);
                 $sidebar_pending_customers = (int) $stc->fetchColumn();
             } catch (Throwable $e) {

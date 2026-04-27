@@ -4,6 +4,8 @@ require 'auth.php';
 require_permission('agent');
 $sidebar_current = 'agents';
 $company_id = current_company_id();
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 $err = '';
 $msg = '';
@@ -176,13 +178,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
             }
             $post_day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_from'] ?? ''))) ? substr(trim((string)$_POST['day_from']), 0, 10) : $day_from;
             $post_day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', trim((string)($_POST['day_to'] ?? ''))) ? substr(trim((string)$_POST['day_to']), 0, 10) : $day_to;
-            $current_win_loss = get_agent_win_loss($pdo, $agent, $post_day_from, $post_day_to, $company_id);
+            $current_win_loss = get_agent_win_loss($pdoBiz, $agent, $post_day_from, $post_day_to, $company_id);
             if ($current_win_loss <= 0) {
                 // 仅正 Win(Loss) 可给：0 或负数一律不可标记已给
                 $is_paid = 0;
             }
-            ensure_agent_rebate_table($pdo);
-            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_pct, is_paid, paid_at, updated_by) VALUES (?, ?, ?, ?, ?, ?)
+            ensure_agent_rebate_table($pdoBiz);
+            $stmt = $pdoBiz->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_pct, is_paid, paid_at, updated_by) VALUES (?, ?, ?, ?, ?, ?)
                                    ON DUPLICATE KEY UPDATE rebate_pct = VALUES(rebate_pct), is_paid = VALUES(is_paid), paid_at = VALUES(paid_at), updated_by = VALUES(updated_by)");
             $paid_at = $is_paid ? date('Y-m-d H:i:s') : null;
             $stmt->execute([$company_id, $agent, $pct, $is_paid, $paid_at, (int)($_SESSION['user_id'] ?? 0)]);
@@ -200,13 +202,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $is_agent_user) {
             if ($is_agent_user && strcasecmp($agent, $agent_code) !== 0) {
                 throw new RuntimeException(__('agent_err_own_toggle'));
             }
-            ensure_agent_rebate_table($pdo);
-            $stmt = $pdo->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_enabled, updated_by) VALUES (?, ?, ?, ?)
+            ensure_agent_rebate_table($pdoBiz);
+            $stmt = $pdoBiz->prepare("INSERT INTO agent_rebate_settings (company_id, agent_code, rebate_enabled, updated_by) VALUES (?, ?, ?, ?)
                                    ON DUPLICATE KEY UPDATE rebate_enabled = VALUES(rebate_enabled), updated_by = VALUES(updated_by)");
             $stmt->execute([$company_id, $agent, $enabled, (int)($_SESSION['user_id'] ?? 0)]);
             if ($enabled === 0) {
                 // 暂停反水时，顺便清除已给状态，避免误会
-                $stmt2 = $pdo->prepare("UPDATE agent_rebate_settings SET is_paid = 0, paid_at = NULL WHERE company_id = ? AND agent_code = ?");
+                $stmt2 = $pdoBiz->prepare("UPDATE agent_rebate_settings SET is_paid = 0, paid_at = NULL WHERE company_id = ? AND agent_code = ?");
                 $stmt2->execute([$company_id, $agent]);
             }
             $msg = $enabled ? __('agent_msg_enabled') : __('agent_msg_paused');
@@ -236,7 +238,7 @@ try {
         $params[] = $agent_code;
     }
     $sql .= " GROUP BY TRIM(c.recommend) ORDER BY agent ASC";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute($params);
     $agents = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
@@ -277,8 +279,8 @@ try {
         $agents = [['agent' => $agent_code, 'cnt' => 0, 'win_loss' => 0]];
     }
     try {
-        ensure_agent_rebate_table($pdo);
-        $st = $pdo->prepare("SELECT agent_code, rebate_pct, rebate_enabled, is_paid, paid_at FROM agent_rebate_settings WHERE company_id = ?");
+        ensure_agent_rebate_table($pdoBiz);
+        $st = $pdoBiz->prepare("SELECT agent_code, rebate_pct, rebate_enabled, is_paid, paid_at FROM agent_rebate_settings WHERE company_id = ?");
         $st->execute([$company_id]);
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
         foreach ($rows as $r) {

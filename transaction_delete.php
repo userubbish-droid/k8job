@@ -5,8 +5,10 @@ require_permission('transaction_list');
 require_admin(); // 仅管理员可删除流水
 
 require_once __DIR__ . '/inc/transaction_soft_delete.php';
-transaction_ensure_soft_delete_columns($pdo);
-transaction_purge_soft_deleted($pdo, 100);
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
+transaction_ensure_soft_delete_columns($pdoBiz);
+transaction_purge_soft_deleted($pdoBiz, 100);
 
 $id = (int)($_REQUEST['id'] ?? 0);
 $return_to = trim($_REQUEST['return_to'] ?? '');
@@ -40,7 +42,7 @@ if (strlen($who) > 120) {
 }
 
 // 软删除：标记 deleted_at / deleted_by，满 100 天后由 purge 物理删除
-$stmt = $pdo->prepare('UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL');
+$stmt = $pdoBiz->prepare('UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL');
 $stmt->execute([$who !== '' ? $who : null, $id, current_company_id()]);
 header('Location: ' . $return_to);
 exit;

@@ -179,3 +179,8 @@ if (!defined('NOTIFY_CONFIG_LOADED')) {
 if (is_file(__DIR__ . '/notify_config.php')) {
     include __DIR__ . '/notify_config.php';
 }
+
+// 可选：PG 分库（catalog 仍为全局 $pdo，业务表用 pdo_business()）
+require_once __DIR__ . '/inc/shard_pdo.php';
+shard_register_catalog($pdo);
+shard_try_connect_pg_from_config();

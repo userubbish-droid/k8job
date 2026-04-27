@@ -18,6 +18,9 @@ if ($return_to === '' || strpos($return_to, 'http') === 0 || strpos($return_to, 
 // 总公司：全部分公司数据合计（仅 superadmin）
 if ($cid === 0) {
     $_SESSION['company_id'] = 0;
+    if (function_exists('shard_refresh_business_pdo')) {
+        shard_refresh_business_pdo();
+    }
     header('Location: ' . $return_to);
     exit;
 }
@@ -33,6 +36,9 @@ try {
     $ok = (bool)$stmt->fetchColumn();
     if ($ok) {
         $_SESSION['company_id'] = $cid;
+        if (function_exists('shard_refresh_business_pdo')) {
+            shard_refresh_business_pdo();
+        }
     }
 } catch (Throwable $e) {
 }

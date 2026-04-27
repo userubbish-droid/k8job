@@ -2,9 +2,14 @@
 require 'config.php';
 require 'auth.php';
 
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
+
 function ensure_transactions_expense_kind(PDO $pdo) {
     try {
-        $pdo->exec("ALTER TABLE transactions ADD COLUMN expense_kind ENUM('statement','kiosk') NULL DEFAULT NULL COMMENT 'EXPENSE 分类' AFTER product");
+        $pdoBiz->exec("ALTER TABLE transactions ADD COLUMN expense_kind ENUM('statement','kiosk') NULL DEFAULT NULL COMMENT 'EXPENSE 分类' AFTER product");
     } catch (Throwable $e) {
         // 列已存在等
     }
@@ -12,22 +17,22 @@ function ensure_transactions_expense_kind(PDO $pdo) {
 
 function ensure_transactions_burn(PDO $pdo) {
     try {
-        $pdo->exec("ALTER TABLE transactions ADD COLUMN burn DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Burn for WITHDRAW/FREE WITHDRAW' AFTER amount");
+        $pdoBiz->exec("ALTER TABLE transactions ADD COLUMN burn DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Burn for WITHDRAW/FREE WITHDRAW' AFTER amount");
     } catch (Throwable $e) {
         // 列已存在等
     }
 }
 
-ensure_transactions_expense_kind($pdo);
-ensure_transactions_burn($pdo);
+ensure_transactions_expense_kind($pdoBiz);
+ensure_transactions_burn($pdoBiz);
 
 function ensure_products_kiosk_columns(PDO $pdo) {
     try {
-        $pdo->exec("ALTER TABLE products ADD COLUMN kiosk_fee_pct DECIMAL(12,4) NULL DEFAULT NULL COMMENT 'Kiosk %' AFTER sort_order");
+        $pdoBiz->exec("ALTER TABLE products ADD COLUMN kiosk_fee_pct DECIMAL(12,4) NULL DEFAULT NULL COMMENT 'Kiosk %' AFTER sort_order");
     } catch (Throwable $e) {
     }
     try {
-        $pdo->exec("ALTER TABLE products ADD COLUMN kiosk_paid_amount DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Kiosk amount paid' AFTER kiosk_fee_pct");
+        $pdoBiz->exec("ALTER TABLE products ADD COLUMN kiosk_paid_amount DECIMAL(14,2) NULL DEFAULT NULL COMMENT 'Kiosk amount paid' AFTER kiosk_fee_pct");
     } catch (Throwable $e) {
     }
 }
@@ -77,7 +82,7 @@ if (isset($_GET['ajax']) && (string)$_GET['ajax'] === 'customer_product_accounts
         exit;
     }
     try {
-        $st = $pdo->prepare(
+        $st = $pdoBiz->prepare(
             "SELECT a.account, a.password
              FROM customer_product_accounts a
              INNER JOIN customers c ON c.id = a.customer_id
@@ -105,7 +110,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
         header('Location: kiosk_expense.php');
         exit;
     }
-    ensure_products_kiosk_columns($pdo);
+    ensure_products_kiosk_columns($pdoBiz);
     $df = trim((string)($_POST['redirect_expense_day_from'] ?? ''));
     $dt = trim((string)($_POST['redirect_expense_day_to'] ?? ''));
     if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $df)) {
@@ -141,7 +146,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !empty($_POST['save_kiosk_gp_meta']
                 $paidVal = round(kiosk_ceil_money2($knet * ((float)$pctVal) / 100), 2);
             }
             try {
-                $stmt = $pdo->prepare('UPDATE products SET kiosk_fee_pct = ?, kiosk_paid_amount = ? WHERE company_id = ? AND name = ? AND is_active = 1');
+                $stmt = $pdoBiz->prepare('UPDATE products SET kiosk_fee_pct = ?, kiosk_paid_amount = ? WHERE company_id = ? AND name = ? AND is_active = 1');
                 $stmt->execute([$pctVal, $paidVal, $company_id, $name]);
             } catch (Throwable $e) {
             }
@@ -255,11 +260,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             try {
                 if ($withHide) {
                     $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, burn, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
-                    $stmt = $pdo->prepare($sql);
+                    $stmt = $pdoBiz->prepare($sql);
                     $stmt->execute($insertBase);
                 } else {
                     $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, burn, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                    $stmt = $pdo->prepare($sql);
+                    $stmt = $pdoBiz->prepare($sql);
                     $stmt->execute($insertBase);
                 }
                 $saved = true;
@@ -272,11 +277,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     try {
                         if ($withHide) {
                             $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
-                            $stmt = $pdo->prepare($sql);
+                            $stmt = $pdoBiz->prepare($sql);
                             $stmt->execute($insertBaseNoBurn);
                         } else {
                             $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, expense_kind, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                            $stmt = $pdo->prepare($sql);
+                            $stmt = $pdoBiz->prepare($sql);
                             $stmt->execute($insertBaseNoBurn);
                         }
                         $saved = true;
@@ -290,11 +295,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     try {
                         if ($withHide) {
                             $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at, hide_from_member) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)";
-                            $stmt = $pdo->prepare($sql);
+                            $stmt = $pdoBiz->prepare($sql);
                             $stmt->execute($insertBaseLegacy);
                         } else {
                             $sql = "INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
-                            $stmt = $pdo->prepare($sql);
+                            $stmt = $pdoBiz->prepare($sql);
                             $stmt->execute($insertBaseLegacy);
                         }
                         $saved = true;
@@ -317,7 +322,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($status === 'pending') {
                 if (file_exists(__DIR__ . '/inc/notify.php')) {
                     require_once __DIR__ . '/inc/notify.php';
-                    send_pending_approval_notify($pdo, $company_id);
+                    send_pending_approval_notify($pdoBiz, $company_id);
                 }
             }
             $saved_mode = $mode;
@@ -334,7 +339,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $saved_customer_bank = '';
         if ($code !== '' && $product !== '') {
             try {
-                $acc = $pdo->prepare("SELECT a.account, a.password FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? ORDER BY a.created_at DESC, a.id DESC");
+                $acc = $pdoBiz->prepare("SELECT a.account, a.password FROM customer_product_accounts a INNER JOIN customers c ON c.id = a.customer_id WHERE c.company_id = ? AND c.code = ? AND a.product_name = ? ORDER BY a.created_at DESC, a.id DESC");
                 $acc->execute([$company_id, $code, $product]);
                 $saved_accounts = $acc->fetchAll();
                 if (!$saved_accounts) {
@@ -365,7 +370,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         if ($mode === 'WITHDRAW' && $code !== '') {
             try {
-                $cust = $pdo->prepare("SELECT name, bank_details FROM customers WHERE company_id = ? AND code = ? LIMIT 1");
+                $cust = $pdoBiz->prepare("SELECT name, bank_details FROM customers WHERE company_id = ? AND code = ? LIMIT 1");
                 $cust->execute([$company_id, $code]);
                 $crow = $cust->fetch();
                 $saved_customer_name = $crow ? trim($crow['name'] ?? '') : '';
@@ -375,7 +380,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($submitted_status === 'approved') {
                 require_once __DIR__ . '/inc/txn_post_save_balances.php';
                 try {
-                    $balSnap = txn_balance_now_for_labels($pdo, $company_id, $saved_bank, $saved_product);
+                    $balSnap = txn_balance_now_for_labels($pdoBiz, $company_id, $saved_bank, $saved_product);
                     $saved_modal_bank_balance = $balSnap['bank_balance'];
                     $saved_modal_product_balance = $balSnap['product_balance'];
                 } catch (Throwable $e) {
@@ -405,28 +410,28 @@ $expense_filter_products = [];
 // 客户代码下拉选项（含 name、bank_details 供 WITHDRAW 时显示）
 $customers = [];
 try {
-    $stmtCu = $pdo->prepare("SELECT code, name, bank_details FROM customers WHERE company_id = ? AND is_active = 1 ORDER BY code ASC");
+    $stmtCu = $pdoBiz->prepare("SELECT code, name, bank_details FROM customers WHERE company_id = ? AND is_active = 1 ORDER BY code ASC");
     $stmtCu->execute([$company_id]);
     $customers = $stmtCu->fetchAll();
 } catch (Throwable $e) {
     $customers = [];
 }
 try {
-    $stmtBk = $pdo->prepare("SELECT name FROM banks WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stmtBk = $pdoBiz->prepare("SELECT name FROM banks WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
     $stmtBk->execute([$company_id]);
     $banks = $stmtBk->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $banks = [];
 }
 try {
-    $stmtPr = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
+    $stmtPr = $pdoBiz->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
     $stmtPr->execute([$company_id]);
     $products = $stmtPr->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
     $products = [];
 }
 try {
-    $stmtEx = $pdo->prepare("SELECT name FROM expenses WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stmtEx = $pdoBiz->prepare("SELECT name FROM expenses WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
     $stmtEx->execute([$company_id]);
     $expenses = $stmtEx->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) {
@@ -468,16 +473,16 @@ if ($quick === 'expense') {
     try {
         $has_deleted_at = true;
         try {
-            $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+            $pdoBiz->query("SELECT deleted_at FROM transactions LIMIT 0");
         } catch (Throwable $e) {
             $has_deleted_at = false;
         }
         $delSql = $has_deleted_at ? " AND deleted_at IS NULL" : "";
-        $ekSql = " AND COALESCE(expense_kind, 'statement') = " . $pdo->quote($expense_kind_ui);
-        $stmtEfb = $pdo->prepare("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE company_id = ? AND mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC");
+        $ekSql = " AND COALESCE(expense_kind, 'statement') = " . $pdoBiz->quote($expense_kind_ui);
+        $stmtEfb = $pdoBiz->prepare("SELECT DISTINCT TRIM(COALESCE(bank, '')) AS bank_name FROM transactions WHERE company_id = ? AND mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(bank, '')) <> ''" . $ekSql . " ORDER BY bank_name ASC");
         $stmtEfb->execute([$company_id]);
         $expense_filter_banks = $stmtEfb->fetchAll(PDO::FETCH_COLUMN);
-        $stmtEfp = $pdo->prepare("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE company_id = ? AND mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC");
+        $stmtEfp = $pdoBiz->prepare("SELECT DISTINCT TRIM(COALESCE(product, '')) AS product_name FROM transactions WHERE company_id = ? AND mode = 'EXPENSE' AND status = 'approved'{$delSql} AND TRIM(COALESCE(product, '')) <> ''" . $ekSql . " ORDER BY product_name ASC");
         $stmtEfp->execute([$company_id]);
         $expense_filter_products = $stmtEfp->fetchAll(PDO::FETCH_COLUMN);
 
@@ -492,16 +497,16 @@ if ($quick === 'expense') {
             $params[] = $expense_product_filter;
         }
 
-        $stmt = $pdo->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE $where{$delSql}");
+        $stmt = $pdoBiz->prepare("SELECT COALESCE(SUM(amount), 0) FROM transactions WHERE $where{$delSql}");
         $stmt->execute($params);
         $expense_report_total = (float)$stmt->fetchColumn();
 
-        $stmt = $pdo->prepare("SELECT day, time, bank, product, expense_kind, amount, staff, remark FROM transactions WHERE $where{$delSql} ORDER BY day DESC, time DESC LIMIT 120");
+        $stmt = $pdoBiz->prepare("SELECT day, time, bank, product, expense_kind, amount, staff, remark FROM transactions WHERE $where{$delSql} ORDER BY day DESC, time DESC LIMIT 120");
         $stmt->execute($params);
         $expense_report_rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
         $expense_report_count = count($expense_report_rows);
 
-        $stmt = $pdo->prepare("SELECT COALESCE(NULLIF(TRIM(product), ''), '未填写产品') AS product_name, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total_amount
+        $stmt = $pdoBiz->prepare("SELECT COALESCE(NULLIF(TRIM(product), ''), '未填写产品') AS product_name, COUNT(*) AS cnt, COALESCE(SUM(amount), 0) AS total_amount
             FROM transactions
             WHERE $where{$delSql}
             GROUP BY COALESCE(NULLIF(TRIM(product), ''), '未填写产品')
@@ -526,9 +531,9 @@ if ($quick === 'expense' && $expense_kind_ui === 'kiosk') {
     $kiosk_gp_products = $all_products;
     $kiosk_gp_in = $range_in_product;
     $kiosk_gp_out = $range_out_product;
-    ensure_products_kiosk_columns($pdo);
+    ensure_products_kiosk_columns($pdoBiz);
     try {
-        $km = $pdo->prepare('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL)');
+        $km = $pdoBiz->prepare('SELECT name, kiosk_fee_pct, kiosk_paid_amount FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL)');
         $km->execute([$company_id]);
         foreach ($km->fetchAll(PDO::FETCH_ASSOC) as $r) {
             $k = strtolower(trim((string)$r['name']));

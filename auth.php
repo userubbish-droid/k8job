@@ -176,6 +176,9 @@ function require_login(): void
             exit;
         }
     }
+    if (function_exists('shard_refresh_business_pdo')) {
+        shard_refresh_business_pdo();
+    }
 }
 
 function require_admin(): void
@@ -422,6 +425,9 @@ function auth_commit_login_session(PDO $pdo, array $u, bool $remember, string $c
 
     if ($db_role === 'agent') {
         $_SESSION['agent_code'] = $u['username'];
+        if (function_exists('shard_refresh_business_pdo')) {
+            shard_refresh_business_pdo();
+        }
         return ['ok' => true, 'location' => 'agents.php'];
     }
 
@@ -431,6 +437,9 @@ function auth_commit_login_session(PDO $pdo, array $u, bool $remember, string $c
             unset($_SESSION[$k]);
         }
         return ['ok' => false, 'error' => __('login_err_no_perm')];
+    }
+    if (function_exists('shard_refresh_business_pdo')) {
+        shard_refresh_business_pdo();
     }
     return ['ok' => true, 'location' => $target];
 }

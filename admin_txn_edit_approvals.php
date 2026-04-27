@@ -6,6 +6,9 @@ $sidebar_current = 'admin_txn_edit_approvals';
 
 $company_id = current_company_id();
 $head_office_scope = is_superadmin_head_office_scope();
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
 
 $msg = '';
 $err = '';
@@ -14,6 +17,12 @@ $err = '';
 try { $pdo->query("SELECT 1 FROM transaction_edit_requests LIMIT 1"); } catch (Throwable $e) {}
 require_once __DIR__ . '/inc/ensure_txedit_request_orig_columns.php';
 ensure_txedit_request_orig_columns($pdo);
+if (!$head_office_scope && $company_id > 0 && function_exists('pdo_data_for_company_id')) {
+    $pdEnsure = pdo_data_for_company_id($pdo, $company_id);
+    if ($pdEnsure !== $pdo) {
+        ensure_txedit_request_orig_columns($pdo, $pdEnsure);
+    }
+}
 require_once __DIR__ . '/inc/txedit_request_diff.php';
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
@@ -21,8 +30,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $rid = (int)($_POST['id'] ?? 0);
     if ($rid > 0 && in_array($action, ['approve', 'reject'], true)) {
         try {
-            $pdo->beginTransaction();
-            $st = $pdo->prepare("SELECT * FROM transaction_edit_requests WHERE id = ? FOR UPDATE");
+            $cat = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+            $cat->beginTransaction();
+            $st = $cat->prepare("SELECT * FROM transaction_edit_requests WHERE id = ? FOR UPDATE");
             $st->execute([$rid]);
             $req = $st->fetch(PDO::FETCH_ASSOC);
             if (!$req) {
@@ -39,13 +49,34 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $now = date('Y-m-d H:i:s');
             $approver_id = (int)($_SESSION['user_id'] ?? 0);
 
+            $pdoData = function_exists('pdo_data_for_company_id') ? pdo_data_for_company_id($cat, $req_company_id) : $cat;
+            $split = ($pdoData !== $cat);
+
             if ($action === 'approve') {
-                // apply changes to original transaction
                 $txId = (int)($req['transaction_id'] ?? 0);
                 if ($txId <= 0) {
                     throw new RuntimeException(__('txedit_err_bad_txn'));
                 }
-                $upd = $pdo->prepare("UPDATE transactions
+                $beforeSnap = null;
+                if ($split) {
+                    $hasBurnCol = true;
+                    try {
+                        $pdoData->query('SELECT burn FROM transactions LIMIT 0');
+                    } catch (Throwable $e) {
+                        $hasBurnCol = false;
+                    }
+                    $selCols = $hasBurnCol
+                        ? 'day, time, mode, code, bank, product, amount, burn, bonus, total, remark'
+                        : 'day, time, mode, code, bank, product, amount, bonus, total, remark';
+                    $stCur = $pdoData->prepare("SELECT {$selCols} FROM transactions WHERE id = ? AND company_id = ? LIMIT 1");
+                    $stCur->execute([$txId, $req_company_id]);
+                    $beforeSnap = $stCur->fetch(PDO::FETCH_ASSOC);
+                    if (!$beforeSnap) {
+                        throw new RuntimeException(__('txedit_err_bad_txn'));
+                    }
+                }
+
+                $upd = $pdoData->prepare("UPDATE transactions
                     SET day = ?, time = ?, mode = ?, code = ?, bank = ?, product = ?, amount = ?, burn = ?, bonus = ?, total = ?, remark = ?
                     WHERE id = ? AND company_id = ?");
                 $upd->execute([
@@ -63,19 +94,63 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $txId,
                     $req_company_id,
                 ]);
-                $pdo->prepare("UPDATE transaction_edit_requests
+
+                $stUpdReq = $cat->prepare("UPDATE transaction_edit_requests
                     SET status='approved', approved_by=?, approved_at=?
-                    WHERE id=?")->execute([$approver_id, $now, $rid]);
+                    WHERE id=? AND status='pending'");
+                $stUpdReq->execute([$approver_id, $now, $rid]);
+                if ($stUpdReq->rowCount() < 1) {
+                    if ($split && is_array($beforeSnap)) {
+                        $hasBurnB = array_key_exists('burn', $beforeSnap);
+                        if ($hasBurnB) {
+                            $rev = $pdoData->prepare('UPDATE transactions SET day=?, time=?, mode=?, code=?, bank=?, product=?, amount=?, burn=?, bonus=?, total=?, remark=? WHERE id=? AND company_id=?');
+                            $rev->execute([
+                                (string)$beforeSnap['day'],
+                                (string)$beforeSnap['time'],
+                                (string)$beforeSnap['mode'],
+                                $beforeSnap['code'],
+                                $beforeSnap['bank'],
+                                $beforeSnap['product'],
+                                (float)$beforeSnap['amount'],
+                                $beforeSnap['burn'] !== null && $beforeSnap['burn'] !== '' ? (float)$beforeSnap['burn'] : null,
+                                (float)$beforeSnap['bonus'],
+                                (float)$beforeSnap['total'],
+                                $beforeSnap['remark'],
+                                $txId,
+                                $req_company_id,
+                            ]);
+                        } else {
+                            $rev = $pdoData->prepare('UPDATE transactions SET day=?, time=?, mode=?, code=?, bank=?, product=?, amount=?, bonus=?, total=?, remark=? WHERE id=? AND company_id=?');
+                            $rev->execute([
+                                (string)$beforeSnap['day'],
+                                (string)$beforeSnap['time'],
+                                (string)$beforeSnap['mode'],
+                                $beforeSnap['code'],
+                                $beforeSnap['bank'],
+                                $beforeSnap['product'],
+                                (float)$beforeSnap['amount'],
+                                (float)$beforeSnap['bonus'],
+                                (float)$beforeSnap['total'],
+                                $beforeSnap['remark'],
+                                $txId,
+                                $req_company_id,
+                            ]);
+                        }
+                    }
+                    throw new RuntimeException(__('txedit_err_already_processed'));
+                }
                 $msg = __('txedit_msg_approved');
             } else {
-                $pdo->prepare("UPDATE transaction_edit_requests
+                $cat->prepare("UPDATE transaction_edit_requests
                     SET status='rejected', approved_by=?, approved_at=?
                     WHERE id=?")->execute([$approver_id, $now, $rid]);
                 $msg = __('txedit_msg_rejected');
             }
-            $pdo->commit();
+            $cat->commit();
         } catch (Throwable $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
+            if ($pdo->inTransaction()) {
+                $pdo->rollBack();
+            }
             $err = $e->getMessage();
         }
     }
@@ -96,15 +171,72 @@ try {
                 ORDER BY r.created_at ASC, r.id ASC";
         $rows = $pdo->query($sql)->fetchAll(PDO::FETCH_ASSOC);
     } else {
-        $sql = "SELECT r.*, u.username AS created_by_name, {$txJoinCols}
-                FROM transaction_edit_requests r
-                LEFT JOIN users u ON u.id = r.created_by
-                LEFT JOIN transactions t ON t.id = r.transaction_id AND t.company_id = r.company_id
-                WHERE r.status = 'pending' AND r.company_id = ?
-                ORDER BY r.created_at ASC, r.id ASC";
-        $st = $pdo->prepare($sql);
-        $st->execute([$company_id]);
-        $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        $pdoDataList = function_exists('pdo_data_for_company_id') ? pdo_data_for_company_id($pdo, $company_id) : $pdo;
+        if ($pdoDataList === $pdo) {
+            $sql = "SELECT r.*, u.username AS created_by_name, {$txJoinCols}
+                    FROM transaction_edit_requests r
+                    LEFT JOIN users u ON u.id = r.created_by
+                    LEFT JOIN transactions t ON t.id = r.transaction_id AND t.company_id = r.company_id
+                    WHERE r.status = 'pending' AND r.company_id = ?
+                    ORDER BY r.created_at ASC, r.id ASC";
+            $st = $pdo->prepare($sql);
+            $st->execute([$company_id]);
+            $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+        } else {
+            $sql = "SELECT r.*, u.username AS created_by_name
+                    FROM transaction_edit_requests r
+                    LEFT JOIN users u ON u.id = r.created_by
+                    WHERE r.status = 'pending' AND r.company_id = ?
+                    ORDER BY r.created_at ASC, r.id ASC";
+            $st = $pdo->prepare($sql);
+            $st->execute([$company_id]);
+            $rows = $st->fetchAll(PDO::FETCH_ASSOC);
+            $ids = [];
+            foreach ($rows as $rw) {
+                $tid = (int)($rw['transaction_id'] ?? 0);
+                if ($tid > 0) {
+                    $ids[$tid] = true;
+                }
+            }
+            $idList = array_keys($ids);
+            $byT = [];
+            if ($idList !== []) {
+                $ph = implode(',', array_fill(0, count($idList), '?'));
+                $hasBurn = true;
+                try {
+                    $pdoDataList->query('SELECT burn FROM transactions LIMIT 0');
+                } catch (Throwable $e) {
+                    $hasBurn = false;
+                }
+                $bSel = $hasBurn ? ', burn' : '';
+                $stT = $pdoDataList->prepare("SELECT id, day, time, mode, code, bank, product, amount, bonus, total, remark{$bSel}
+                    FROM transactions WHERE company_id = ? AND id IN ($ph)");
+                $stT->execute(array_merge([$company_id], $idList));
+                while ($t = $stT->fetch(PDO::FETCH_ASSOC)) {
+                    $byT[(int)$t['id']] = $t;
+                }
+            }
+            foreach ($rows as &$r) {
+                $tid = (int)($r['transaction_id'] ?? 0);
+                $t = $byT[$tid] ?? null;
+                if (!$t) {
+                    continue;
+                }
+                $pairs = [
+                    ['orig_day', 'day'], ['orig_time', 'time'], ['orig_mode', 'mode'], ['orig_code', 'code'],
+                    ['orig_bank', 'bank'], ['orig_product', 'product'], ['orig_amount', 'amount'],
+                    ['orig_burn', 'burn'], ['orig_bonus', 'bonus'], ['orig_total', 'total'], ['orig_remark', 'remark'],
+                ];
+                foreach ($pairs as [$ok, $tk]) {
+                    $ov = $r[$ok] ?? null;
+                    if ($ov !== null && (string)$ov !== '') {
+                        continue;
+                    }
+                    $r[$ok] = $t[$tk] ?? null;
+                }
+            }
+            unset($r);
+        }
     }
 } catch (Throwable $e) {
     $err = $err ?: $e->getMessage();

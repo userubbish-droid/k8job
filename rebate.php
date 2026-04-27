@@ -5,6 +5,8 @@ require_permission('rebate');
 $sidebar_current = 'rebate';
 
 $company_id = current_company_id();
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $msg = '';
 $err = '';
@@ -38,13 +40,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $uid = (int)($_SESSION['user_id'] ?? 0);
                 if (!empty($given)) {
                     $placeholders = implode(',', array_fill(0, count($given), '?'));
-                    $stmt_bal = $pdo->prepare("SELECT TRIM(code) AS code, COALESCE(SUM($rebate_case_dep), 0) - COALESCE(SUM($rebate_case_wd), 0) AS balance FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY TRIM(code)");
+                    $stmt_bal = $pdoBiz->prepare("SELECT TRIM(code) AS code, COALESCE(SUM($rebate_case_dep), 0) - COALESCE(SUM($rebate_case_wd), 0) AS balance FROM transactions WHERE company_id = ? AND day >= ? AND day <= ? AND status = 'approved' AND deleted_at IS NULL AND code IN ($placeholders) GROUP BY TRIM(code)");
                     $stmt_bal->execute(array_merge([$company_id, $post_day_from, $post_day_to], $given));
                     $balances = [];
                     while ($row = $stmt_bal->fetch(PDO::FETCH_ASSOC)) {
                         $balances[$row['code']] = (float)$row['balance'];
                     }
-                    $stmt = $pdo->prepare("INSERT INTO rebate_given (company_id, day, code, given_at, given_by, rebate_pct, rebate_amount) VALUES (?, ?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by), rebate_pct = VALUES(rebate_pct), rebate_amount = VALUES(rebate_amount)");
+                    $stmt = $pdoBiz->prepare("INSERT INTO rebate_given (company_id, day, code, given_at, given_by, rebate_pct, rebate_amount) VALUES (?, ?, ?, NOW(), ?, ?, ?) ON DUPLICATE KEY UPDATE given_at = NOW(), given_by = VALUES(given_by), rebate_pct = VALUES(rebate_pct), rebate_amount = VALUES(rebate_amount)");
                     foreach ($given as $code) {
                         if ($code === '') continue;
                         $balance = $balances[$code] ?? 0;
@@ -60,7 +62,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             } elseif ($action === 'cancel' && $is_admin) {
                 $code = trim($_POST['code'] ?? '');
                 if ($code !== '') {
-                    $stmt = $pdo->prepare("DELETE FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? AND code = ?");
+                    $stmt = $pdoBiz->prepare("DELETE FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? AND code = ?");
                     $stmt->execute([$company_id, $post_day_from, $post_day_to, $code]);
                     $msg = __('rebate_msg_cancel_given');
                 }
@@ -90,7 +92,7 @@ unset($_SESSION['rebate_msg'], $_SESSION['rebate_err']);
 $given_codes = [];
 $given_info = [];
 try {
-    $stmt = $pdo->prepare("SELECT code, rebate_pct, rebate_amount, day FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? ORDER BY day DESC");
+    $stmt = $pdoBiz->prepare("SELECT code, rebate_pct, rebate_amount, day FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ? ORDER BY day DESC");
     $stmt->execute([$company_id, $day_from, $day_to]);
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
         $c = $row['code'];
@@ -99,14 +101,14 @@ try {
     }
 } catch (Throwable $e) {
     try {
-        $stmt = $pdo->prepare("SELECT DISTINCT code FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ?");
+        $stmt = $pdoBiz->prepare("SELECT DISTINCT code FROM rebate_given WHERE company_id = ? AND day >= ? AND day <= ?");
         $stmt->execute([$company_id, $day_from, $day_to]);
         $given_codes = $stmt->fetchAll(PDO::FETCH_COLUMN);
     } catch (Throwable $e2) {}
 }
 
 // 区间内按客户汇总：进、出、Win/Lose（与上方 $rebate_case_* 一致）。只统计已批准流水
-$stmt = $pdo->prepare("
+$stmt = $pdoBiz->prepare("
     SELECT TRIM(code) AS code,
            COALESCE(SUM($rebate_case_dep), 0) AS total_in,
            COALESCE(SUM($rebate_case_wd), 0) AS total_out

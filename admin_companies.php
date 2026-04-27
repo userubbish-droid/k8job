@@ -43,6 +43,19 @@ function company_delete_blockers(PDO $pdo, int $company_id): array
             // 表或列不存在则跳过
         }
     }
+    // PG 分库中的业务数据（users 仅在主库，此处不重复计 users）
+    if (function_exists('shard_pg') && shard_pg() && $company_id > 0) {
+        $pg = shard_pg();
+        $pgTables = ['customers', 'transactions', 'banks', 'products', 'expenses',
+            'customer_product_accounts', 'balance_adjust', 'user_permissions',
+            'rebate_given', 'agent_rebate_settings'];
+        foreach ($pgTables as $t) {
+            $n2 = function_exists('shard_table_company_count') ? shard_table_company_count($pg, $t, $company_id) : 0;
+            if ($n2 > 0) {
+                $blockers[] = $t . '(PG) ×' . $n2;
+            }
+        }
+    }
     return $blockers;
 }
 
@@ -68,6 +81,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $stmt = $pdo->prepare('INSERT INTO companies (code, name, currency, business_kind, is_active) VALUES (?, ?, ?, ?, 1)');
             $stmt->execute([$code, $name, $currency, $biz]);
+            $newId = (int)$pdo->lastInsertId();
+            if ($newId > 0 && function_exists('companies_shard_upsert_from_catalog')) {
+                companies_shard_upsert_from_catalog($pdo, $newId);
+            }
             $msg = '已新增分公司：' . $code . '（类型：' . ($biz === 'pg' ? 'Payment Gateway (PG)' : 'Gaming') . '）';
         } elseif ($action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
@@ -97,6 +114,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ?, currency = ?, business_kind = ? WHERE id = ?');
             $stmt->execute([$code, $name, $currency, $biz, $id]);
+            if (function_exists('companies_shard_upsert_from_catalog')) {
+                companies_shard_upsert_from_catalog($pdo, $id);
+            }
             $msg = '已保存。';
         } elseif ($action === 'toggle_active') {
             $id = (int)($_POST['id'] ?? 0);
@@ -111,6 +131,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('至少保留一家「启用」的分公司，否则无法登录。');
             }
             $pdo->prepare('UPDATE companies SET is_active = IF(is_active=1,0,1) WHERE id = ?')->execute([$id]);
+            if (function_exists('companies_shard_upsert_from_catalog')) {
+                companies_shard_upsert_from_catalog($pdo, $id);
+            }
             $msg = '已更新启用状态。';
         } elseif ($action === 'delete') {
             $id = (int)($_POST['id'] ?? 0);
@@ -129,6 +152,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 throw new RuntimeException('该公司仍有数据，无法删除：' . implode('，', $blockers) . '。请先清空或迁移后再删。');
             }
             $pdo->prepare('DELETE FROM companies WHERE id = ? LIMIT 1')->execute([$id]);
+            if (function_exists('companies_shard_delete_row')) {
+                companies_shard_delete_row($id);
+            }
             $msg = '已删除该分公司。';
         } else {
             throw new RuntimeException('未知操作。');

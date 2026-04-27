@@ -2,9 +2,13 @@
 /**
  * 流水修改申請：寫入時凍結「改前」欄位，批准後仍可對照。
  * 冪等：可重複執行。
+ *
+ * @param PDO      $pdoRequests     存放 transaction_edit_requests 的庫（通常為 catalog）
+ * @param PDO|null $pdoTransactions 存放 transactions 的庫；默認與 $pdoRequests 相同（單庫）
  */
-function ensure_txedit_request_orig_columns(PDO $pdo): void
+function ensure_txedit_request_orig_columns(PDO $pdoRequests, ?PDO $pdoTransactions = null): void
 {
+    $pdoTxn = $pdoTransactions ?? $pdoRequests;
     $cols = [
         'orig_day' => 'DATE NULL DEFAULT NULL',
         'orig_time' => 'TIME NULL DEFAULT NULL',
@@ -20,7 +24,7 @@ function ensure_txedit_request_orig_columns(PDO $pdo): void
     ];
     foreach ($cols as $name => $def) {
         try {
-            $pdo->exec("ALTER TABLE transaction_edit_requests ADD COLUMN {$name} {$def}");
+            $pdoRequests->exec("ALTER TABLE transaction_edit_requests ADD COLUMN {$name} {$def}");
         } catch (Throwable $e) {
             // 欄位已存在
         }
@@ -28,19 +32,74 @@ function ensure_txedit_request_orig_columns(PDO $pdo): void
     // 待審申請：補齊尚未凍結的快照（與當前流水一致，便於之後批准時保留「改前」）
     $has_deleted_at = true;
     try {
-        $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+        $pdoTxn->query('SELECT deleted_at FROM transactions LIMIT 0');
     } catch (Throwable $e) {
         $has_deleted_at = false;
     }
     $delJoin = $has_deleted_at ? ' AND t.deleted_at IS NULL' : '';
     try {
-        $sql = "UPDATE transaction_edit_requests r
-            INNER JOIN transactions t ON t.id = r.transaction_id AND t.company_id = r.company_id{$delJoin}
-            SET r.orig_day = t.day, r.orig_time = t.time, r.orig_mode = t.mode, r.orig_code = t.code,
-                r.orig_bank = t.bank, r.orig_product = t.product, r.orig_amount = t.amount,
-                r.orig_burn = t.burn, r.orig_bonus = t.bonus, r.orig_total = t.total, r.orig_remark = t.remark
-            WHERE r.status = 'pending' AND r.orig_day IS NULL";
-        $pdo->exec($sql);
+        if ($pdoTxn === $pdoRequests) {
+            $sql = "UPDATE transaction_edit_requests r
+                INNER JOIN transactions t ON t.id = r.transaction_id AND t.company_id = r.company_id{$delJoin}
+                SET r.orig_day = t.day, r.orig_time = t.time, r.orig_mode = t.mode, r.orig_code = t.code,
+                    r.orig_bank = t.bank, r.orig_product = t.product, r.orig_amount = t.amount,
+                    r.orig_burn = t.burn, r.orig_bonus = t.bonus, r.orig_total = t.total, r.orig_remark = t.remark
+                WHERE r.status = 'pending' AND r.orig_day IS NULL";
+            $pdoRequests->exec($sql);
+        } else {
+            $stR = $pdoRequests->prepare('SELECT id, company_id, transaction_id FROM transaction_edit_requests WHERE status = \'pending\' AND orig_day IS NULL');
+            $stR->execute();
+            $pending = $stR->fetchAll(PDO::FETCH_ASSOC);
+            $has_burn = true;
+            try {
+                $pdoTxn->query('SELECT burn FROM transactions LIMIT 0');
+            } catch (Throwable $e) {
+                $has_burn = false;
+            }
+            $selBurn = $has_burn ? ', burn' : '';
+            $sqlT = "SELECT day, time, mode, code, bank, product, amount, bonus, total, remark{$selBurn}
+                FROM transactions WHERE id = ? AND company_id = ?" . ($has_deleted_at ? ' AND deleted_at IS NULL' : '');
+            $stT = $pdoTxn->prepare($sqlT);
+            $upd = $pdoRequests->prepare('UPDATE transaction_edit_requests SET
+                orig_day = ?, orig_time = ?, orig_mode = ?, orig_code = ?, orig_bank = ?, orig_product = ?,
+                orig_amount = ?, orig_burn = ?, orig_bonus = ?, orig_total = ?, orig_remark = ?
+                WHERE id = ? AND status = \'pending\' AND orig_day IS NULL');
+            foreach ($pending as $pr) {
+                $rid = (int)($pr['id'] ?? 0);
+                $cid = (int)($pr['company_id'] ?? 0);
+                $tid = (int)($pr['transaction_id'] ?? 0);
+                if ($rid <= 0 || $cid <= 0 || $tid <= 0) {
+                    continue;
+                }
+                try {
+                    $stT->execute([$tid, $cid]);
+                    $t = $stT->fetch(PDO::FETCH_ASSOC);
+                    if (!$t) {
+                        continue;
+                    }
+                    $burn = null;
+                    if ($has_burn && array_key_exists('burn', $t)) {
+                        $burn = $t['burn'] !== null && $t['burn'] !== '' ? (float) $t['burn'] : null;
+                    }
+                    $upd->execute([
+                        (string) $t['day'],
+                        (string) $t['time'],
+                        (string) $t['mode'],
+                        $t['code'],
+                        $t['bank'],
+                        $t['product'],
+                        (float) $t['amount'],
+                        $burn,
+                        (float) $t['bonus'],
+                        (float) $t['total'],
+                        $t['remark'],
+                        $rid,
+                    ]);
+                } catch (Throwable $e) {
+                    // 單筆略過
+                }
+            }
+        }
     } catch (Throwable $e) {
         // burn 等欄位缺失時略過
     }

@@ -9,17 +9,19 @@ $err = '';
 $need_confirm = false;
 $confirm_message = '';
 $company_id = current_company_id();
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 // bonus_flag 列（no bonus / scam receipt）
 try {
-    $pdo->exec("ALTER TABLE customers ADD COLUMN bonus_flag VARCHAR(32) NULL DEFAULT NULL AFTER bank_details");
+    $pdoBiz->exec("ALTER TABLE customers ADD COLUMN bonus_flag VARCHAR(32) NULL DEFAULT NULL AFTER bank_details");
 } catch (Throwable $e) {
 }
 
 // 建议下一个客户代码：按现有 C001、C009 等递增，下一个为 C010
 $suggested_code = 'C001';
 try {
-    $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ?");
+    $stmt = $pdoBiz->prepare("SELECT code FROM customers WHERE company_id = ?");
     $stmt->execute([$company_id]);
     $max_num = 0;
     while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
@@ -76,7 +78,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $input_prefixes7 = $extract_bank_prefixes7($bank_details);
         if ($phone !== '') {
             try {
-                $stmt = $pdo->prepare("SELECT code FROM customers WHERE company_id = ? AND phone = ?");
+                $stmt = $pdoBiz->prepare("SELECT code FROM customers WHERE company_id = ? AND phone = ?");
                 $stmt->execute([$company_id, $phone]);
                 while ($row = $stmt->fetch(PDO::FETCH_ASSOC)) {
                     $c = trim((string)($row['code'] ?? ''));
@@ -96,7 +98,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             // 规则：只要任意数字串的前 7 位相同，即视为“银行号重复”（不区分银行名）
             if (!empty($input_prefixes7)) {
                 try {
-                    $stb = $pdo->prepare("SELECT code, bank_details FROM customers WHERE company_id = ? AND bank_details IS NOT NULL AND bank_details <> ''");
+                    $stb = $pdoBiz->prepare("SELECT code, bank_details FROM customers WHERE company_id = ? AND bank_details IS NOT NULL AND bank_details <> ''");
                     $stb->execute([$company_id]);
                     while ($rr = $stb->fetch(PDO::FETCH_ASSOC)) {
                         $ecode = trim((string)($rr['code'] ?? ''));
@@ -130,7 +132,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 $status = ($is_member_actor && !empty($conflicts)) ? 'pending' : 'approved';
                 $approved_by = $status === 'approved' ? (int)($_SESSION['user_id'] ?? 0) : null;
                 $approved_at = $status === 'approved' ? date('Y-m-d H:i:s') : null;
-                $stmt = $pdo->prepare("INSERT INTO customers (company_id, code, name, phone, remark, created_by, register_date, bank_details, bonus_flag, recommend, status, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
+                $stmt = $pdoBiz->prepare("INSERT INTO customers (company_id, code, name, phone, remark, created_by, register_date, bank_details, bonus_flag, recommend, status, approved_by, approved_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)");
                 $stmt->execute([
                     $company_id,
                     $code,
@@ -146,13 +148,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     $approved_by,
                     $approved_at
                 ]);
-                $new_id = (int) $pdo->lastInsertId();
+                $new_id = (int) $pdoBiz->lastInsertId();
                 if ($is_member_actor && $has_phone_duplicate && file_exists(__DIR__ . '/inc/notify.php')) {
                     require_once __DIR__ . '/inc/notify.php';
                     if (function_exists('send_member_duplicate_phone_customer_notify')) {
                         $member_uname = trim((string)($_SESSION['username'] ?? $_SESSION['user_name'] ?? ''));
                         send_member_duplicate_phone_customer_notify(
-                            $pdo,
+                            $pdoBiz,
                             $company_id,
                             $member_uname,
                             $code,
@@ -167,7 +169,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (function_exists('send_member_duplicate_bank_customer_notify')) {
                         $member_uname = trim((string)($_SESSION['username'] ?? $_SESSION['user_name'] ?? ''));
                         send_member_duplicate_bank_customer_notify(
-                            $pdo,
+                            $pdoBiz,
                             $company_id,
                             $member_uname,
                             $code,
@@ -182,7 +184,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                     if (file_exists(__DIR__ . '/inc/notify.php')) {
                         require_once __DIR__ . '/inc/notify.php';
                         if (function_exists('send_pending_customer_notify')) {
-                            send_pending_customer_notify($pdo, $company_id);
+                            send_pending_customer_notify($pdoBiz, $company_id);
                         }
                     }
                     header('Location: customers.php?pending_customer=1');

@@ -6,6 +6,10 @@ $sidebar_current = 'admin_approvals';
 
 $company_id = current_company_id();
 $head_office_scope = is_superadmin_head_office_scope();
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 $msg = '';
 $err = '';
@@ -17,19 +21,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         try {
             if ($action === 'approve') {
                 if ($head_office_scope) {
-                    $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
+                    $stmt = $pdoBiz->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
                     $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
+                    $stmt = $pdoBiz->prepare("UPDATE transactions SET status='approved', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
                     $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
                 }
                 $msg = '已批准。';
             } elseif ($action === 'reject') {
                 if ($head_office_scope) {
-                    $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
+                    $stmt = $pdoBiz->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND status='pending'");
                     $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id]);
                 } else {
-                    $stmt = $pdo->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
+                    $stmt = $pdoBiz->prepare("UPDATE transactions SET status='rejected', approved_by=?, approved_at=? WHERE id=? AND company_id=? AND status='pending'");
                     $stmt->execute([(int)($_SESSION['user_id'] ?? 0), date('Y-m-d H:i:s'), $id, $company_id]);
                 }
                 $msg = '已拒绝。';
@@ -50,17 +54,38 @@ try {
                 LEFT JOIN companies c ON c.id = t.company_id
                 WHERE t.status = 'pending'
                 ORDER BY t.created_at ASC";
-        $rows = $pdo->query($sql)->fetchAll();
+        $rows = $pdoBiz->query($sql)->fetchAll();
     } else {
         $sql = "SELECT t.id, t.day, t.time, t.mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.staff, t.remark,
-                       t.created_at, u.username AS created_by_name
+                       t.created_at, t.created_by
                 FROM transactions t
-                LEFT JOIN users u ON u.id = t.created_by
                 WHERE t.status = 'pending' AND t.company_id = ?
                 ORDER BY t.created_at ASC";
-        $st = $pdo->prepare($sql);
+        $st = $pdoBiz->prepare($sql);
         $st->execute([$company_id]);
         $rows = $st->fetchAll();
+        $userIds = [];
+        foreach ($rows as $rw) {
+            $uid = (int)($rw['created_by'] ?? 0);
+            if ($uid > 0) {
+                $userIds[$uid] = true;
+            }
+        }
+        $idList = array_keys($userIds);
+        $namesById = [];
+        if ($idList !== []) {
+            $ph = implode(',', array_fill(0, count($idList), '?'));
+            $stu = $pdo->prepare("SELECT id, username FROM users WHERE id IN ($ph)");
+            $stu->execute($idList);
+            while ($u = $stu->fetch(PDO::FETCH_ASSOC)) {
+                $namesById[(int)$u['id']] = (string)($u['username'] ?? '');
+            }
+        }
+        foreach ($rows as &$rw) {
+            $cb = (int)($rw['created_by'] ?? 0);
+            $rw['created_by_name'] = $namesById[$cb] ?? '';
+        }
+        unset($rw);
     }
 } catch (Throwable $e) {
     $err = $err ?: $e->getMessage();

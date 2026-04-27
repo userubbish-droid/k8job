@@ -10,6 +10,15 @@ require_once __DIR__ . '/inc/txedit_request_diff.php';
 $sidebar_current = 'admin_txn_edit_audit';
 $company_id = current_company_id();
 $head_office_scope = is_superadmin_head_office_scope();
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
+if (!$head_office_scope && $company_id > 0 && function_exists('pdo_data_for_company_id')) {
+    $pdEnsure = pdo_data_for_company_id($pdo, $company_id);
+    if ($pdEnsure !== $pdo) {
+        ensure_txedit_request_orig_columns($pdo, $pdEnsure);
+    }
+}
 
 $status_filter = trim((string)($_GET['status'] ?? 'processed'));
 if (!in_array($status_filter, ['all', 'pending', 'processed', 'approved', 'rejected'], true)) {

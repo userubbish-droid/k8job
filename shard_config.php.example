@@ -1,0 +1,15 @@
+<?php
+/**
+ * Payment Gateway（PG）分库：复制本文件为 shard_config.php（已在 .gitignore），填写第二库连接。
+ * dbname 留空或删除 shard_config.php 则不分库，全部数据仍在主库。
+ *
+ * 分库需自行导入与主库相同的表结构，并把 PG 类型分公司的业务数据放在该库；
+ * companies 行由「分公司管理」在保存/新增 PG 时同步到分库（id 与主库一致）。
+ */
+return [
+    'host' => 'localhost',
+    'dbname' => '',       // 例如 u870568714_your_pg_db
+    'user' => '',
+    'pass' => '',
+    'charset' => 'utf8mb4',
+];

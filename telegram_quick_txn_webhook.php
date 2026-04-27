@@ -2,6 +2,9 @@
 /**
  * Telegram 群聊快捷记账（独立文件，可整套删除）
  *
+ * 仅服务 gaming 分公司：配置与流水、撤销日志均在 catalog（主库）。
+ * PG 分公司请使用将来单独部署的 PG 专用 Bot/Webhook，勿与此 Bot 混用。
+ *
  * 支持：
  * - +100 C011 P M [remark...]
  * - -200 C012 P M [remark...]
@@ -246,7 +249,9 @@ function tqx_parse_command(string $text): array {
  * 主处理入口：由 telegram_password_reset_webhook.php 分发调用
  */
 function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botToken): array {
-    tqx_ensure_tables($pdo);
+    // 本入口仅 gaming：一律使用 catalog，不按 PG 分库路由（PG 另做独立 Bot）
+    $pdoCat = $pdo;
+    tqx_ensure_tables($pdoCat);
 
     $msg = $update['message'] ?? null;
     if (!is_array($msg)) return ['ok' => true];
@@ -289,9 +294,9 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         // 选公司：若只有一个启用公司则自动；否则要求提供 company_id 或 company code
         $pickCompanyId = 0;
         try {
-            $cnt = (int)$pdo->query("SELECT COUNT(*) FROM companies WHERE is_active = 1")->fetchColumn();
+            $cnt = (int)$pdoCat->query("SELECT COUNT(*) FROM companies WHERE is_active = 1")->fetchColumn();
             if ($cnt === 1) {
-                $pickCompanyId = (int)$pdo->query("SELECT id FROM companies WHERE is_active = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
+                $pickCompanyId = (int)$pdoCat->query("SELECT id FROM companies WHERE is_active = 1 ORDER BY id ASC LIMIT 1")->fetchColumn();
             }
         } catch (Throwable $e) {
             // companies 表不存在时，退回 1
@@ -303,7 +308,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             } else {
                 // code
                 try {
-                    $st = $pdo->prepare("SELECT id FROM companies WHERE LOWER(TRIM(code)) = LOWER(TRIM(?)) LIMIT 1");
+                    $st = $pdoCat->prepare("SELECT id FROM companies WHERE LOWER(TRIM(code)) = LOWER(TRIM(?)) LIMIT 1");
                     $st->execute([$arg]);
                     $pickCompanyId = (int)$st->fetchColumn();
                 } catch (Throwable $e) {}
@@ -318,7 +323,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         // upsert config（合并白名单：不覆盖已有 admin）
         $allow = [];
         try {
-            $stCur = $pdo->prepare("SELECT allowed_user_ids FROM telegram_quick_txn_config WHERE company_id = ? LIMIT 1");
+            $stCur = $pdoCat->prepare("SELECT allowed_user_ids FROM telegram_quick_txn_config WHERE company_id = ? LIMIT 1");
             $stCur->execute([$pickCompanyId]);
             $curJson = (string)($stCur->fetchColumn() ?: '');
             $curArr = tqx_json_decode_map($curJson);
@@ -337,7 +342,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         }
 
         $uid0 = null;
-        $stUp = $pdo->prepare("INSERT INTO telegram_quick_txn_config
+        $stUp = $pdoCat->prepare("INSERT INTO telegram_quick_txn_config
             (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, updated_by)
             VALUES (?, 1, ?, ?,
                         COALESCE((SELECT bank_alias_json FROM telegram_quick_txn_config x WHERE x.company_id=? LIMIT 1), '{}'),
@@ -370,7 +375,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     // 从这里开始：必须已配置 chat_id 对应 company
     // 做法：用配置表里 chat_id 反查 company_id
-    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec
+    $stFind = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec
                              FROM telegram_quick_txn_config
                              WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
                              LIMIT 1");
@@ -383,6 +388,24 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     $companyId = (int)($cfg['company_id'] ?? 0);
     if ($companyId <= 0) return ['ok' => true];
+
+    try {
+        $stBk = $pdoCat->prepare("SELECT LOWER(TRIM(business_kind)) FROM companies WHERE id = ? LIMIT 1");
+        $stBk->execute([$companyId]);
+        $bk = strtolower(trim((string)$stBk->fetchColumn()));
+        if ($bk === 'pg') {
+            tqx_reply(
+                $botToken,
+                $chatId,
+                "本机器人仅用于 gaming 分公司快捷记账。\nPG 分公司请使用专用 Bot（另行配置），勿与此 Bot 混绑。"
+            );
+            return ['ok' => true];
+        }
+    } catch (Throwable $e) {
+        // 无 business_kind 列时继续按 gaming 处理
+    }
+
+    $pdoData = $pdoCat;
 
     // 白名单（必填）：只允许指定 Telegram 用户记账/撤销
     $allowJson = (string)($cfg['allowed_user_ids'] ?? '');
@@ -446,7 +469,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             }
             $new = array_values(array_filter($new, fn($x) => (string)$x !== $targetId));
         }
-        $pdo->prepare("UPDATE telegram_quick_txn_config SET allowed_user_ids = ? WHERE company_id = ? LIMIT 1")
+        $pdoCat->prepare("UPDATE telegram_quick_txn_config SET allowed_user_ids = ? WHERE company_id = ? LIMIT 1")
             ->execute([json_encode($new, JSON_UNESCAPED_UNICODE), $companyId]);
         tqx_reply($botToken, $chatId, "✅ 已更新 admin 列表。可用：list admin");
         return ['ok' => true];
@@ -465,7 +488,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         }
         if ($token === '' && $repMid > 0) {
             // 新逻辑：不依赖 token，直接用回执 message_id 找日志
-            $stLog2 = $pdo->prepare("SELECT token FROM telegram_quick_txn_log WHERE receipt_message_id = ? AND company_id = ? AND chat_id = ? ORDER BY id DESC LIMIT 1");
+            $stLog2 = $pdoData->prepare("SELECT token FROM telegram_quick_txn_log WHERE receipt_message_id = ? AND company_id = ? AND chat_id = ? ORDER BY id DESC LIMIT 1");
             $stLog2->execute([$repMid, $companyId, $chatId]);
             $token = (string)($stLog2->fetchColumn() ?: '');
         }
@@ -480,7 +503,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         $token = (string)($parsed['data']['token'] ?? '');
         if ($token === '') return ['ok' => true];
 
-        $stLog = $pdo->prepare("SELECT l.*,
+        $stLog = $pdoData->prepare("SELECT l.*,
                                        TIMESTAMPDIFF(SECOND, l.created_at, NOW()) AS age_sec
                                 FROM telegram_quick_txn_log l
                                 WHERE l.token = ? AND l.company_id = ?
@@ -508,7 +531,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         // 先取回单据内容（即使已删除也尽量显示）
         $tx = null;
         try {
-            $stTx = $pdo->prepare("SELECT day, time, mode, code, bank, product, amount, bonus, total, remark, deleted_at
+            $stTx = $pdoData->prepare("SELECT day, time, mode, code, bank, product, amount, bonus, total, remark, deleted_at
                                    FROM transactions
                                    WHERE id = ? AND company_id = ?
                                    LIMIT 1");
@@ -518,8 +541,8 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             $tx = null;
         }
 
-        transaction_ensure_soft_delete_columns($pdo);
-        $stmt = $pdo->prepare("UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL");
+        transaction_ensure_soft_delete_columns($pdoData);
+        $stmt = $pdoData->prepare("UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL");
         $stmt->execute([$who, $txId, $companyId]);
         if ($stmt->rowCount() > 0) {
             $msg = "✅ 已撤销 #{$token}";
@@ -616,12 +639,12 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
             $foundAccount = false;
             try {
                 // 先找 customer_id
-                $stC = $pdo->prepare("SELECT id FROM customers WHERE company_id = ? AND TRIM(code) = ? LIMIT 1");
+                $stC = $pdoData->prepare("SELECT id FROM customers WHERE company_id = ? AND TRIM(code) = ? LIMIT 1");
                 $stC->execute([$companyId, $code]);
                 $custId = (int)$stC->fetchColumn();
                 if ($custId > 0) {
                     // 按产品名匹配（优先），取最新一条账号
-                    $stA = $pdo->prepare("SELECT account, password FROM customer_product_accounts
+                    $stA = $pdoData->prepare("SELECT account, password FROM customer_product_accounts
                                           WHERE company_id = ? AND customer_id = ? AND LOWER(TRIM(product_name)) = LOWER(TRIM(?))
                                           ORDER BY created_at DESC, id DESC LIMIT 1");
                     $stA->execute([$companyId, $custId, $prodIn]);
@@ -657,10 +680,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     // 写入 transactions
     try {
-        $pdo->prepare("INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
+        $pdoData->prepare("INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")
             ->execute([$companyId, $day, $time, $mode, $code, $bankIn, $prodIn, $amount, $bonus, $total, $who, ($remark !== '' ? $remark : null), $status, $uid0, $uid0]);
-        $txId = (int)$pdo->lastInsertId();
+        $txId = (int)$pdoData->lastInsertId();
     } catch (Throwable $e) {
         tqx_reply($botToken, $chatId, "写入失败：" . $e->getMessage());
         return ['ok' => true];
@@ -689,7 +712,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
         if ($remark !== '') $reply .= "\n备注：{$remark}";
     }
     // 先记录日志（用于撤销）：保证 cancel 能稳定定位；回执 message_id 之后再回填
-    $pdo->prepare("INSERT INTO telegram_quick_txn_log (company_id, chat_id, tg_user_id, tg_username, raw_text, action, token, transaction_id, receipt_message_id)
+    $pdoData->prepare("INSERT INTO telegram_quick_txn_log (company_id, chat_id, tg_user_id, tg_username, raw_text, action, token, transaction_id, receipt_message_id)
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)")
         ->execute([
             $companyId,
@@ -705,7 +728,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $receiptMid = tqx_reply($botToken, $chatId, $reply);
     if ($receiptMid) {
         try {
-            $pdo->prepare("UPDATE telegram_quick_txn_log SET receipt_message_id = ? WHERE company_id = ? AND chat_id = ? AND token = ? AND transaction_id = ? ORDER BY id DESC LIMIT 1")
+            $pdoData->prepare("UPDATE telegram_quick_txn_log SET receipt_message_id = ? WHERE company_id = ? AND chat_id = ? AND token = ? AND transaction_id = ? ORDER BY id DESC LIMIT 1")
                 ->execute([(int)$receiptMid, $companyId, $chatId, $token, $txId]);
         } catch (Throwable $e) {
             // ignore: undo 仍可用 token（若用户手动输入）

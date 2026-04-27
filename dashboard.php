@@ -8,6 +8,11 @@ if (($_SESSION['user_role'] ?? '') === 'agent') {
 }
 require_permission('home_dashboard');
 
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
+
 $show_dashboard_month = (($_SESSION['user_role'] ?? '') !== 'admin') || has_permission(PERM_DASHBOARD_MONTH_DATA);
 
 $today = date('Y-m-d');
@@ -34,7 +39,7 @@ $day_new_customer_orders = 0;
 try {
     $has_register_date = false;
     try {
-        $stmt_col = $pdo->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers' AND COLUMN_NAME = 'register_date'");
+        $stmt_col = $pdoBiz->query("SELECT COUNT(*) FROM information_schema.COLUMNS WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'customers' AND COLUMN_NAME = 'register_date'");
         $has_register_date = ((int)$stmt_col->fetchColumn() > 0);
     } catch (Throwable $e) {
         $has_register_date = false;
@@ -54,7 +59,7 @@ try {
                                   COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus";
 
     // 今日统计（只统计已批准）；入账/出账仅统计银行渠道且排除银行互转（remark 转至/来自）
-    $stmt = $pdo->prepare("SELECT {$sum_line} FROM transactions WHERE {$tx_day_where}");
+    $stmt = $pdoBiz->prepare("SELECT {$sum_line} FROM transactions WHERE {$tx_day_where}");
     $stmt->execute($dashboard_all_companies ? [$today] : [$company_id, $today]);
     $day = $stmt->fetch();
     $day_in   = (float)($day['total_in'] ?? 0);
@@ -74,7 +79,7 @@ try {
                                       COALESCE(SUM(CASE WHEN mode = 'FREE WITHDRAW' THEN amount ELSE 0 END), 0) AS free_withdraw,
                                       COALESCE(SUM(CASE WHEN mode = 'REBATE' THEN amount ELSE 0 END), 0) AS rebate,
                                       COALESCE(SUM(COALESCE(bonus, 0)), 0) AS bonus";
-        $stmt = $pdo->prepare("SELECT {$sum_line_month} FROM transactions WHERE {$tx_month_where}");
+        $stmt = $pdoBiz->prepare("SELECT {$sum_line_month} FROM transactions WHERE {$tx_month_where}");
         $stmt->execute($dashboard_all_companies ? [$month_start, $month_end] : [$company_id, $month_start, $month_end]);
         $month = $stmt->fetch();
         $month_in       = (float)($month['total_in'] ?? 0);
@@ -89,40 +94,40 @@ try {
 
     // 今日上线客户数（分公司内不重复 code；总公司视图按 company_id+code 区分不同分公司同名客户）
     if ($dashboard_all_companies) {
-        $stmt = $pdo->prepare("SELECT COUNT(DISTINCT CONCAT(company_id, ':', TRIM(code))) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(DISTINCT CONCAT(company_id, ':', TRIM(code))) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''");
         $stmt->execute([$today]);
     } else {
-        $stmt = $pdo->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND code != ''");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(DISTINCT code) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND code != ''");
         $stmt->execute([$company_id, $today]);
     }
     $day_customers_count = (int) $stmt->fetchColumn();
 
     // 今日单数（今日已批准流水条数）
     if ($dashboard_all_companies) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM transactions WHERE day = ? AND status = 'approved' AND deleted_at IS NULL");
         $stmt->execute([$today]);
     } else {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM transactions WHERE company_id = ? AND day = ? AND status = 'approved' AND deleted_at IS NULL");
         $stmt->execute([$company_id, $today]);
     }
     $day_orders_count = (int) $stmt->fetchColumn();
 
     // 几个新顾客（今日新增的顾客数）
     if ($dashboard_all_companies) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE {$customer_day_filter}");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM customers WHERE {$customer_day_filter}");
         $stmt->execute([$today]);
     } else {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND {$customer_day_filter}");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND {$customer_day_filter}");
         $stmt->execute([$company_id, $today]);
     }
     $day_new_customers = (int) $stmt->fetchColumn();
 
     // 新客户进多少单（今日已批准流水中，顾客与本公司「今日注册」顾客一致；占位符顺序与 JOIN/WHERE 一致）
     if ($dashboard_all_companies) {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND c.company_id = t.company_id AND {$customer_day_filter_alias} WHERE t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND c.company_id = t.company_id AND {$customer_day_filter_alias} WHERE t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
         $stmt->execute([$today, $today]);
     } else {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND c.company_id = t.company_id AND {$customer_day_filter_alias} WHERE t.company_id = ? AND c.company_id = ? AND t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM transactions t INNER JOIN customers c ON c.code = t.code AND c.company_id = t.company_id AND {$customer_day_filter_alias} WHERE t.company_id = ? AND c.company_id = ? AND t.day = ? AND t.status = 'approved' AND t.deleted_at IS NULL");
         $stmt->execute([$today, $company_id, $company_id, $today]);
     }
     $day_new_customer_orders = (int) $stmt->fetchColumn();

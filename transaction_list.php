@@ -4,15 +4,20 @@ require 'auth.php';
 require_permission('transaction_list');
 $sidebar_current = 'transaction_list';
 
+if (function_exists('shard_refresh_business_pdo')) {
+    shard_refresh_business_pdo();
+}
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
+
 $company_id = current_company_id();
 
 require_once __DIR__ . '/inc/transaction_soft_delete.php';
-transaction_ensure_soft_delete_columns($pdo);
-transaction_purge_soft_deleted($pdo, 100);
+transaction_ensure_soft_delete_columns($pdoBiz);
+transaction_purge_soft_deleted($pdoBiz, 100);
 
 $has_deleted_at = false;
 try {
-    $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+    $pdoBiz->query('SELECT deleted_at FROM transactions LIMIT 0');
     $has_deleted_at = true;
 } catch (Throwable $e) {
     if (strpos($e->getMessage(), 'deleted_at') === false) {
@@ -111,7 +116,7 @@ $params_before_internal = $params;
 if (!$can_view_internal_txn) {
     // 1) 优先使用 hide_from_member 标记（如存在）
     try {
-        $pdo->query("SELECT hide_from_member FROM transactions LIMIT 0");
+        $pdoBiz->query("SELECT hide_from_member FROM transactions LIMIT 0");
         $where[] = "COALESCE(hide_from_member, 0) = 0";
     } catch (Throwable $e) {
         if (strpos($e->getMessage(), 'hide_from_member') === false) {
@@ -135,7 +140,7 @@ if (!$can_view_internal_txn) {
     // 兼容旧数据：mode/product 可能有大小写、尾随空格或不可见字符（NBSP/换行/Tab）
     // 优先：若新库有 expense_kind，则只隐藏「Expense Statement 录入」的开销（expense_kind=statement）
     try {
-        $pdo->query("SELECT expense_kind FROM transactions LIMIT 0");
+        $pdoBiz->query("SELECT expense_kind FROM transactions LIMIT 0");
         $where[] = "(
             UPPER(TRIM(REPLACE(REPLACE(REPLACE(REPLACE(COALESCE(mode,''), '\r', ''), '\n', ''), '\t', ''), CHAR(160), ''))) <> 'EXPENSE'
             OR
@@ -214,7 +219,7 @@ if ($export) {
     $export_extra = $has_deleted_at ? ', deleted_at, deleted_by' : '';
     $export_sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark{$export_extra}
                    FROM transactions WHERE $sql_where_active ORDER BY day DESC, time DESC, id DESC";
-    $export_stmt = $pdo->prepare($export_sql);
+    $export_stmt = $pdoBiz->prepare($export_sql);
     $export_stmt->execute($params);
     $export_rows = $export_stmt->fetchAll();
     $filename = 'transactions_' . date('Ymd_His') . '.csv';
@@ -242,14 +247,14 @@ if ($export) {
 
 // 总数（分页用）：管理员含已删行
 $count_sql = "SELECT COUNT(*) FROM transactions WHERE $sql_where_list";
-$count_stmt = $pdo->prepare($count_sql);
+$count_stmt = $pdoBiz->prepare($count_sql);
 $count_stmt->execute($params);
 $total_rows = (int) $count_stmt->fetchColumn();
 $hidden_internal_rows = 0;
 if (!$can_view_internal_txn) {
     try {
         $count_all_sql = "SELECT COUNT(*) FROM transactions WHERE " . implode(' AND ', $where_before_internal);
-        $count_all_stmt = $pdo->prepare($count_all_sql);
+        $count_all_stmt = $pdoBiz->prepare($count_all_sql);
         $count_all_stmt->execute($params_before_internal);
         $all_rows = (int) $count_all_stmt->fetchColumn();
         $hidden_internal_rows = max(0, $all_rows - $total_rows);
@@ -293,17 +298,17 @@ if ($can_request_edit) {
         WHERE $sql_where_list_t
         ORDER BY t.day DESC, t.time DESC, t.id DESC
         LIMIT " . (int)$per_page . " OFFSET " . (int)$offset;
-        $stmt = $pdo->prepare($sql);
+        $stmt = $pdoBiz->prepare($sql);
         $params2 = array_merge([(int)$company_id, (int)($_SESSION['user_id'] ?? 0)], $params);
         $stmt->execute($params2);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
-        $stmt = $pdo->prepare($sql);
+        $stmt = $pdoBiz->prepare($sql);
         $stmt->execute($params);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 } else {
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 }
@@ -311,18 +316,18 @@ if ($can_request_edit) {
 // 用于下拉筛选（从已有流水中取 distinct，简单可靠）
 $distinct_base = "FROM transactions WHERE ";
 try {
-    $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+    $pdoBiz->query("SELECT deleted_at FROM transactions LIMIT 0");
     $distinct_base .= "deleted_at IS NULL AND ";
 } catch (Throwable $e) {
     if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
 }
-$stB = $pdo->prepare("SELECT DISTINCT bank $distinct_base company_id = ? AND bank IS NOT NULL AND bank <> '' ORDER BY bank ASC");
+$stB = $pdoBiz->prepare("SELECT DISTINCT bank $distinct_base company_id = ? AND bank IS NOT NULL AND bank <> '' ORDER BY bank ASC");
 $stB->execute([$company_id]);
 $banks = $stB->fetchAll(PDO::FETCH_COLUMN);
-$stP = $pdo->prepare("SELECT DISTINCT product $distinct_base company_id = ? AND product IS NOT NULL AND product <> '' ORDER BY product ASC");
+$stP = $pdoBiz->prepare("SELECT DISTINCT product $distinct_base company_id = ? AND product IS NOT NULL AND product <> '' ORDER BY product ASC");
 $stP->execute([$company_id]);
 $products = $stP->fetchAll(PDO::FETCH_COLUMN);
-$stC = $pdo->prepare("SELECT DISTINCT code $distinct_base company_id = ? AND code IS NOT NULL AND code <> '' ORDER BY code ASC");
+$stC = $pdoBiz->prepare("SELECT DISTINCT code $distinct_base company_id = ? AND code IS NOT NULL AND code <> '' ORDER BY code ASC");
 $stC->execute([$company_id]);
 $codes = $stC->fetchAll(PDO::FETCH_COLUMN);
 
@@ -331,7 +336,7 @@ $sum_sql = "SELECT
     COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS total_in,
     COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS total_out
 FROM transactions WHERE $sql_where_active";
-$sum_stmt = $pdo->prepare($sum_sql);
+$sum_stmt = $pdoBiz->prepare($sum_sql);
 $sum_stmt->execute($params);
 $sum = $sum_stmt->fetch();
 $total_in  = $sum['total_in'];

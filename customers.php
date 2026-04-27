@@ -14,6 +14,8 @@ if ($filter_recommend !== '') {
     require_permission('customers');
 }
 $sidebar_current = 'customers';
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true);
 $can_view_contact_full = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_MEMBER_CONTACT));
@@ -23,7 +25,7 @@ $customers_list_colspan = 15 + ($can_view_total_dp_wd ? 2 : 0) + ($is_admin ? 2 
 $company_id = current_company_id();
 $has_customer_status = false;
 try {
-    $stmt = $pdo->query("SHOW COLUMNS FROM customers LIKE 'status'");
+    $stmt = $pdoBiz->query("SHOW COLUMNS FROM customers LIKE 'status'");
     $has_customer_status = (bool)$stmt->fetch(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {}
 
@@ -61,7 +63,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$agent_view) {
         if ($action === 'toggle' && $is_admin) {
             $id = (int)($_POST['id'] ?? 0);
             if ($id <= 0) throw new RuntimeException(__('cust_err_param'));
-            $stmt = $pdo->prepare("UPDATE customers SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
+            $stmt = $pdoBiz->prepare("UPDATE customers SET is_active = IF(is_active=1,0,1) WHERE id = ? AND company_id = ?");
             $stmt->execute([$id, $company_id]);
             $msg = __('cust_msg_status_ok');
         }
@@ -148,15 +150,15 @@ try {
     }
     $where_sql = $where ? ' WHERE ' . implode(' AND ', $where) : '';
     if ($filter_recommend !== '') {
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND " . ($has_customer_status ? "status='approved' AND " : "") . "TRIM(recommend) = ?");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND " . ($has_customer_status ? "status='approved' AND " : "") . "TRIM(recommend) = ?");
         $stmt->execute([$company_id, $filter_recommend]);
         $summary['total'] = (int) $stmt->fetchColumn();
-        $stmt = $pdo->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND is_active = 1 AND " . ($has_customer_status ? "status='approved' AND " : "") . "TRIM(recommend) = ?");
+        $stmt = $pdoBiz->prepare("SELECT COUNT(*) FROM customers WHERE company_id = ? AND is_active = 1 AND " . ($has_customer_status ? "status='approved' AND " : "") . "TRIM(recommend) = ?");
         $stmt->execute([$company_id, $filter_recommend]);
         $summary['active'] = (int) $stmt->fetchColumn();
     } else {
-        $summary['total'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
-        $summary['active'] = (int) $pdo->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . " AND is_active = 1" . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
+        $summary['total'] = (int) $pdoBiz->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
+        $summary['active'] = (int) $pdoBiz->query("SELECT COUNT(*) FROM customers WHERE company_id = " . (int)$company_id . " AND is_active = 1" . ($has_customer_status ? " AND status='approved'" : ""))->fetchColumn();
     }
     $sql = "SELECT c.id, c.code, c.name, c.phone, c.remark, c.is_active, c.created_at,
                    c.register_date, c.bank_details, c.bonus_flag, c.regular_customer, c.recommend, c.created_by,
@@ -165,12 +167,12 @@ try {
             LEFT JOIN users u ON c.created_by = u.id
             $where_sql
             ORDER BY c.is_active DESC, c.code ASC";
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute($params);
     $rows = $stmt->fetchAll();
     // Balance：DEPOSIT − WITHDRAW − BURN（Burn 不计入 Withdraw 列，独立扣减）
     try {
-        $stmt = $pdo->prepare("SELECT code,
+        $stmt = $pdoBiz->prepare("SELECT code,
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0)
             - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0)
             - COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS balance
@@ -181,7 +183,7 @@ try {
             $balance_by_code[$r['code']] = (float) $r['balance'];
         }
     } catch (Throwable $eBal) {
-        $stmt = $pdo->prepare("SELECT code,
+        $stmt = $pdoBiz->prepare("SELECT code,
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) - COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS balance
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
             GROUP BY code");
@@ -195,7 +197,7 @@ try {
     $month_deposit_by_code = [];
     $month_withdraw_by_code = [];
     // All-time DP/WD（Withdraw 不含 burn）
-    $stmt = $pdo->prepare("SELECT code,
+    $stmt = $pdoBiz->prepare("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
         FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
@@ -206,7 +208,7 @@ try {
     }
     // All-time Burn：WITHDRAW + FREE WITHDRAW 的 burn（独立列）
     try {
-        $stmt = $pdo->prepare("SELECT code,
+        $stmt = $pdoBiz->prepare("SELECT code,
             COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS bb
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY code");
         $stmt->execute([$company_id]);
@@ -216,23 +218,23 @@ try {
     } catch (Throwable $eBurnAll) {
         $all_burn_by_code = [];
     }
-    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
+    $stmt = $pdoBiz->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'REBATE' GROUP BY code");
     $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_rebate_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE' GROUP BY code");
+    $stmt = $pdoBiz->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE' GROUP BY code");
     $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_free_by_code[$r['code']] = (float)$r['total'];
     }
     // FREE WITHDRAW：不含 burn（burn 另算到 Burn 列）
-    $stmt = $pdo->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
+    $stmt = $pdoBiz->prepare("SELECT code, COALESCE(SUM(amount), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND mode = 'FREE WITHDRAW' GROUP BY code");
     $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_free_withdraw_by_code[$r['code']] = (float)$r['total'];
     }
-    $stmt = $pdo->prepare("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
+    $stmt = $pdoBiz->prepare("SELECT TRIM(code) AS code, COALESCE(SUM(COALESCE(bonus, 0)), 0) AS total FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' GROUP BY TRIM(code)");
     $stmt->execute([$company_id]);
     foreach ($stmt->fetchAll() as $r) {
         $all_bonus_by_code[$r['code']] = (float)$r['total'];
@@ -240,7 +242,7 @@ try {
     $month_start = date('Y-m-01');
     $month_end = date('Y-m-t');
     // Month DP/WD（Withdraw 不含 burn）
-    $stmt = $pdo->prepare("SELECT code,
+    $stmt = $pdoBiz->prepare("SELECT code,
         COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS md,
         COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS mw
         FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
@@ -251,7 +253,7 @@ try {
     }
     // Month Burn（独立列）
     try {
-        $stmt = $pdo->prepare("SELECT code,
+        $stmt = $pdoBiz->prepare("SELECT code,
             COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS mb
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != '' AND day >= ? AND day <= ? GROUP BY code");
         $stmt->execute([$company_id, $month_start, $month_end]);
@@ -263,7 +265,7 @@ try {
     }
     if ($agent_pnl_by_range) {
         // 与 agents.php Win/Loss 同源：按 TRIM(code) 汇总区间内 DEPOSIT−WITHDRAW
-        $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
+        $stmt = $pdoBiz->prepare("SELECT TRIM(code) AS code,
             COALESCE(SUM(CASE WHEN mode = 'DEPOSIT' THEN amount ELSE 0 END), 0) AS ad,
             COALESCE(SUM(CASE WHEN mode = 'WITHDRAW' THEN amount ELSE 0 END), 0) AS aw
             FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
@@ -279,7 +281,7 @@ try {
             $agent_range_wd[$ck] = (float)$r['aw'];
         }
         try {
-            $stmt = $pdo->prepare("SELECT TRIM(code) AS code,
+            $stmt = $pdoBiz->prepare("SELECT TRIM(code) AS code,
                 COALESCE(SUM(CASE WHEN mode IN ('WITHDRAW','FREE WITHDRAW') THEN COALESCE(burn, 0) ELSE 0 END), 0) AS bb
                 FROM transactions WHERE company_id = ? AND status = 'approved' AND deleted_at IS NULL AND code IS NOT NULL AND TRIM(code) != ''
                 AND day >= ? AND day <= ?
@@ -318,7 +320,7 @@ if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
         echo __('cust_export_err_boss_only');
         exit;
     }
-    customer_export_log_try($pdo);
+    customer_export_log_try($pdoBiz);
     $filename = 'customers_' . date('Ymd_His') . '.csv';
     if ($agent_view) {
         $safe_rec = preg_replace('/[^\w\-.@]+/', '_', $filter_recommend);

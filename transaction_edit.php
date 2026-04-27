@@ -6,6 +6,8 @@ require_admin(); // 仅管理员可编辑流水
 $sidebar_current = 'transaction_list';
 
 $company_id = current_company_id();
+if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
+$pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 $id = (int)($_GET['id'] ?? 0);
 $return_to = trim($_GET['return_to'] ?? 'transaction_list.php');
@@ -19,12 +21,12 @@ $row = null;
 if ($id > 0) {
     $sql = "SELECT id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by FROM transactions WHERE id = ? AND company_id = ?";
     try {
-        $pdo->query("SELECT deleted_at FROM transactions LIMIT 0");
+        $pdoBiz->query("SELECT deleted_at FROM transactions LIMIT 0");
         $sql .= " AND deleted_at IS NULL";
     } catch (Throwable $e) {
         if (strpos($e->getMessage(), 'deleted_at') === false) throw $e;
     }
-    $stmt = $pdo->prepare($sql);
+    $stmt = $pdoBiz->prepare($sql);
     $stmt->execute([$id, $company_id]);
     $row = $stmt->fetch();
 }
@@ -77,7 +79,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $bonus  = (float) $bonus;
         $total  = $amount + $bonus;
         // 不允许在编辑时改 staff（由账号自动记录）
-        $stmt = $pdo->prepare("UPDATE transactions SET day=?, time=?, mode=?, code=?, bank=?, product=?, amount=?, bonus=?, total=?, remark=? WHERE id=? AND company_id=?");
+        $stmt = $pdoBiz->prepare("UPDATE transactions SET day=?, time=?, mode=?, code=?, bank=?, product=?, amount=?, bonus=?, total=?, remark=? WHERE id=? AND company_id=?");
         $stmt->execute([$day, $time, $mode, $code ?: null, $bank ?: null, $product ?: null, $amount, $bonus, $total, $remark ?: null, $id, $company_id]);
         $saved = true;
         header('Location: ' . $return_to);
@@ -91,19 +93,19 @@ $products = [];
 // 客户代码选项
 $customers = [];
 try {
-    $stc = $pdo->prepare("SELECT code, name FROM customers WHERE company_id = ? AND is_active = 1 ORDER BY code ASC");
+    $stc = $pdoBiz->prepare("SELECT code, name FROM customers WHERE company_id = ? AND is_active = 1 ORDER BY code ASC");
     $stc->execute([$company_id]);
     $customers = $stc->fetchAll();
 } catch (Throwable $e) {
     $customers = [];
 }
 try {
-    $stb = $pdo->prepare("SELECT name FROM banks WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
+    $stb = $pdoBiz->prepare("SELECT name FROM banks WHERE company_id = ? AND is_active = 1 ORDER BY sort_order ASC, name ASC");
     $stb->execute([$company_id]);
     $banks = $stb->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $banks = []; }
 try {
-    $stp = $pdo->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
+    $stp = $pdoBiz->prepare("SELECT name FROM products WHERE company_id = ? AND is_active = 1 AND (delete_pending_at IS NULL) ORDER BY sort_order ASC, name ASC");
     $stp->execute([$company_id]);
     $products = $stp->fetchAll(PDO::FETCH_COLUMN);
 } catch (Throwable $e) { $products = []; }

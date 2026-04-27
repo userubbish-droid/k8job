@@ -153,6 +153,7 @@ function balance_notify_try_run_on_dashboard(PDO $pdo): void
     if (!function_exists('balance_notify_ledger_snapshot')) {
         require_once __DIR__ . '/balance_notify_ledger_snapshot.php';
     }
-    $snap = balance_notify_ledger_snapshot($pdo, $cid);
+    $pdoLedger = (function_exists('pdo_business')) ? pdo_business() : $pdo;
+    $snap = balance_notify_ledger_snapshot($pdoLedger, $cid);
     check_balance_notify($snap['bank_balances_for_notify'], $snap['product_balances_for_notify']);
 }

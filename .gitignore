@@ -1,4 +1,5 @@
 # 含密钥，勿提交
 notify_config.php
+shard_config.php
 # 余额通知阈值与发送记录（可选）
 data/
