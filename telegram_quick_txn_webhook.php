@@ -22,11 +22,13 @@ function tqx_ensure_tables(PDO $pdo): void {
         allowed_user_ids TEXT NULL,
         bank_alias_json TEXT NULL,
         product_alias_json TEXT NULL,
+        staff_alias_json TEXT NULL,
         undo_window_sec INT NOT NULL DEFAULT 600,
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL,
         PRIMARY KEY (company_id)
     )");
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN staff_alias_json TEXT NULL"); } catch (Throwable $e) {}
     // 日志表：用于撤销
     $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_quick_txn_log (
         id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
@@ -208,7 +210,10 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $from = $msg['from'] ?? [];
     $tgUserId = isset($from['id']) ? (int)$from['id'] : 0;
     $tgUsername = trim((string)($from['username'] ?? ''));
-    $who = $tgUsername !== '' ? $tgUsername : ($tgUserId > 0 ? (string)$tgUserId : 'telegram');
+    $tgFirst = trim((string)($from['first_name'] ?? ''));
+    $tgLast = trim((string)($from['last_name'] ?? ''));
+    $tgFull = trim($tgFirst . ' ' . $tgLast);
+    $who = $tgUsername !== '' ? $tgUsername : ($tgFull !== '' ? $tgFull : ($tgUserId > 0 ? (string)$tgUserId : 'telegram'));
 
     // 仅处理快捷记账/撤销/管理命令
     if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|setup\b|\/setup\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b|\\/(addadmin|removeadmin|deladmin|listadmin)\\b)/i', $text)) {
@@ -307,7 +312,7 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     // 从这里开始：必须已配置 chat_id 对应 company
     // 做法：用配置表里 chat_id 反查 company_id
-    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec
+    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, undo_window_sec
                              FROM telegram_quick_txn_config
                              WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
                              LIMIT 1");
@@ -340,6 +345,13 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
 
     $bankAlias = tqx_json_decode_map((string)($cfg['bank_alias_json'] ?? ''));
     $prodAlias = tqx_json_decode_map((string)($cfg['product_alias_json'] ?? ''));
+    $staffAlias = tqx_json_decode_map((string)($cfg['staff_alias_json'] ?? ''));
+    if ($tgUserId > 0) {
+        $k = (string)$tgUserId;
+        if (isset($staffAlias[$k]) && trim((string)$staffAlias[$k]) !== '') {
+            $who = trim((string)$staffAlias[$k]);
+        }
+    }
 
     // admin 白名单管理（仅现有 admin 可操作）
     if (in_array(($parsed['cmd'] ?? ''), ['admin_list', 'admin_add', 'admin_remove', 'admin_add_reply', 'admin_remove_reply'], true)) {

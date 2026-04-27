@@ -25,11 +25,13 @@ try {
         allowed_user_ids TEXT NULL,
         bank_alias_json TEXT NULL,
         product_alias_json TEXT NULL,
+        staff_alias_json TEXT NULL,
         undo_window_sec INT NOT NULL DEFAULT 600,
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         updated_by INT UNSIGNED NULL,
         PRIMARY KEY (company_id)
     )");
+    try { $pdo->exec("ALTER TABLE telegram_quick_txn_config ADD COLUMN staff_alias_json TEXT NULL"); } catch (Throwable $e) {}
 } catch (Throwable $e) {
     $err = $e->getMessage();
 }
@@ -78,15 +80,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
             if ($k !== '' && $v !== '') $prod_map[strtolower($k)] = $v;
         }
 
+        $staff_alias = trim((string)($_POST['staff_alias'] ?? ''));
+        $staff_map = [];
+        foreach (preg_split('/\r?\n/', $staff_alias) ?: [] as $line) {
+            $line = trim($line);
+            if ($line === '' || strpos($line, '#') === 0) continue;
+            if (!str_contains($line, '=')) continue;
+            [$k,$v] = array_map('trim', explode('=', $line, 2));
+            if ($k !== '' && $v !== '') $staff_map[$k] = $v;
+        }
+
         $uid = (int)($_SESSION['user_id'] ?? 0);
         $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec, updated_by)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
                              ON DUPLICATE KEY UPDATE
                                enabled=VALUES(enabled),
                                chat_id=VALUES(chat_id),
                                allowed_user_ids=VALUES(allowed_user_ids),
                                bank_alias_json=VALUES(bank_alias_json),
                                product_alias_json=VALUES(product_alias_json),
+                               staff_alias_json=VALUES(staff_alias_json),
                                undo_window_sec=VALUES(undo_window_sec),
                                updated_by=VALUES(updated_by)");
         $st->execute([
@@ -96,6 +109,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
             $allow_json,
             json_encode($bank_map, JSON_UNESCAPED_UNICODE),
             json_encode($prod_map, JSON_UNESCAPED_UNICODE),
+            json_encode($staff_map, JSON_UNESCAPED_UNICODE),
             $undo_window,
             $uid > 0 ? $uid : null,
         ]);
@@ -144,6 +158,7 @@ if (is_array($allow_arr)) {
 }
 $bank_lines = _map_to_lines((string)($cur['bank_alias_json'] ?? '{}'));
 $prod_lines = _map_to_lines((string)($cur['product_alias_json'] ?? '{}'));
+$staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -210,6 +225,9 @@ $prod_lines = _map_to_lines((string)($cur['product_alias_json'] ?? '{}'));
 
                     <label style="margin-top:12px; font-weight:700;">产品缩写映射（每行：短写 = 全称）</label>
                     <textarea class="form-control" name="product_alias" rows="5" placeholder="M = MEGA"><?= htmlspecialchars($prod_lines, ENT_QUOTES, 'UTF-8') ?></textarea>
+
+                    <label style="margin-top:12px; font-weight:700;">员工别名映射（每行：Telegram user_id = 显示名）</label>
+                    <textarea class="form-control" name="staff_alias" rows="4" placeholder="7390307542 = CS1"><?= htmlspecialchars($staff_lines, ENT_QUOTES, 'UTF-8') ?></textarea>
 
                     <div style="margin-top:14px;">
                         <button class="btn btn-primary" type="submit"><?= htmlspecialchars(__('btn_save'), ENT_QUOTES, 'UTF-8') ?></button>
