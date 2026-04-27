@@ -1,0 +1,312 @@
+<?php
+/**
+ * Telegram 群聊快捷记账（独立文件，可整套删除）
+ *
+ * 支持：
+ * - +100 C011 P M [remark...]
+ * - -200 C012 P M [remark...]
+ * - undo <token>
+ *
+ * 缩写映射与权限在 admin_telegram_quick_txn.php 配置。
+ */
+require_once __DIR__ . '/config.php';
+require_once __DIR__ . '/inc/notify.php';
+require_once __DIR__ . '/inc/transaction_soft_delete.php';
+
+function tqx_ensure_tables(PDO $pdo): void {
+    // 配置表：按公司配置允许群/允许用户/别名映射等
+    $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_quick_txn_config (
+        company_id INT UNSIGNED NOT NULL,
+        enabled TINYINT(1) NOT NULL DEFAULT 0,
+        chat_id VARCHAR(40) NULL,
+        allowed_user_ids TEXT NULL,
+        bank_alias_json TEXT NULL,
+        product_alias_json TEXT NULL,
+        undo_window_sec INT NOT NULL DEFAULT 600,
+        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        updated_by INT UNSIGNED NULL,
+        PRIMARY KEY (company_id)
+    )");
+    // 日志表：用于撤销
+    $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_quick_txn_log (
+        id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+        company_id INT UNSIGNED NOT NULL,
+        chat_id VARCHAR(40) NOT NULL,
+        tg_user_id BIGINT NULL,
+        tg_username VARCHAR(120) NULL,
+        raw_text TEXT NULL,
+        action VARCHAR(40) NOT NULL,
+        token VARCHAR(40) NOT NULL,
+        transaction_id INT UNSIGNED NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        KEY idx_company_chat (company_id, chat_id),
+        KEY idx_token (token)
+    )");
+}
+
+function tqx_json_decode_map(?string $json): array {
+    $json = trim((string)$json);
+    if ($json === '') return [];
+    $v = json_decode($json, true);
+    return is_array($v) ? $v : [];
+}
+
+function tqx_norm_key(string $s): string {
+    return strtolower(trim($s));
+}
+
+function tqx_reply(string $botToken, string $chatId, string $text): void {
+    if ($botToken === '' || $chatId === '' || $text === '') return;
+    send_telegram_message($botToken, $chatId, $text);
+}
+
+/**
+ * @return array{ok:bool,err?:string,cmd?:string,data?:array}
+ */
+function tqx_parse_command(string $text): array {
+    $text = trim($text);
+    if ($text === '') return ['ok' => false, 'err' => 'Empty'];
+
+    // cancel (reply-to bot receipt preferred)
+    if (preg_match('/^(cancel|撤销|取消)\b/i', $text)) {
+        // optional token: cancel XXXXX
+        if (preg_match('/^(?:cancel|撤销|取消)\s+([A-Za-z0-9_-]{6,40})$/i', $text, $m2)) {
+            return ['ok' => true, 'cmd' => 'undo', 'data' => ['token' => $m2[1]]];
+        }
+        return ['ok' => true, 'cmd' => 'cancel'];
+    }
+
+    // undo TOKEN
+    if (preg_match('/^undo\s+([A-Za-z0-9_-]{6,40})$/i', $text, $m)) {
+        return ['ok' => true, 'cmd' => 'undo', 'data' => ['token' => $m[1]]];
+    }
+
+    // +100 C011 P M b10 remark...
+    if (!preg_match('/^([+-])\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+(\S+)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/u', $text, $m)) {
+        return ['ok' => false, 'err' => "格式不对。例：+100 C011 P M 备注 或 -200 C012 P M 备注"];
+    }
+    $sign = $m[1];
+    $amtRaw = str_replace(',', '', $m[2]);
+    $code = $m[3];
+    $bank = $m[4];
+    $product = $m[5];
+    $tail = isset($m[6]) ? trim((string)$m[6]) : '';
+
+    if (!is_numeric($amtRaw)) return ['ok' => false, 'err' => '金额不是数字'];
+    $amount = round((float)$amtRaw, 2);
+    if ($amount <= 0) return ['ok' => false, 'err' => '金额需大于 0'];
+
+    $bonusPct = null;
+    $remark = $tail;
+    if ($tail !== '') {
+        // b10 或 b10%
+        if (preg_match('/^(b\s*([0-9]{1,2}(?:\.[0-9]+)?)%?)\s*(.*)$/i', $tail, $mm)) {
+            $pctRaw = $mm[2];
+            if (is_numeric($pctRaw)) {
+                $p = (float)$pctRaw;
+                if ($p >= 0 && $p <= 100) {
+                    $bonusPct = $p;
+                    $remark = trim((string)($mm[3] ?? ''));
+                }
+            }
+        }
+    }
+
+    return [
+        'ok' => true,
+        'cmd' => ($sign === '+') ? 'deposit' : 'withdraw',
+        'data' => [
+            'amount' => $amount,
+            'code' => $code,
+            'bank' => $bank,
+            'product' => $product,
+            'bonus_pct' => $bonusPct,
+            'remark' => $remark,
+        ],
+    ];
+}
+
+/**
+ * 主处理入口：由 telegram_password_reset_webhook.php 分发调用
+ */
+function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botToken): array {
+    tqx_ensure_tables($pdo);
+
+    $msg = $update['message'] ?? null;
+    if (!is_array($msg)) return ['ok' => true];
+
+    $chat = $msg['chat'] ?? [];
+    $chatId = trim((string)($chat['id'] ?? ''));
+    $text = trim((string)($msg['text'] ?? ''));
+    if ($chatId === '' || $text === '') return ['ok' => true];
+
+    // 仅处理 + / - / undo
+    if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消)/i', $text)) return ['ok' => true];
+
+    // company_id：目前按“当前网站公司”配置，webhook 不带 session，所以要求配置里显式填 company_id 对应 chat_id
+    // 做法：用配置表里 chat_id 反查 company_id
+    $stFind = $pdo->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, undo_window_sec
+                             FROM telegram_quick_txn_config
+                             WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
+                             LIMIT 1");
+    $stFind->execute([$chatId]);
+    $cfg = $stFind->fetch(PDO::FETCH_ASSOC);
+    if (!$cfg) {
+        // 未配置的群：静默
+        return ['ok' => true];
+    }
+
+    $companyId = (int)($cfg['company_id'] ?? 0);
+    if ($companyId <= 0) return ['ok' => true];
+
+    $from = $msg['from'] ?? [];
+    $tgUserId = isset($from['id']) ? (int)$from['id'] : 0;
+    $tgUsername = trim((string)($from['username'] ?? ''));
+    $who = $tgUsername !== '' ? $tgUsername : ($tgUserId > 0 ? (string)$tgUserId : 'telegram');
+
+    // 白名单（必填）：只允许指定 Telegram 用户记账/撤销
+    $allowJson = (string)($cfg['allowed_user_ids'] ?? '');
+    $allowArr = tqx_json_decode_map($allowJson);
+    $allow = [];
+    foreach ($allowArr as $v) {
+        $v = trim((string)$v);
+        if ($v !== '') $allow[] = $v;
+    }
+    $ok = false;
+    if ($tgUserId > 0 && in_array((string)$tgUserId, $allow, true)) $ok = true;
+    if ($tgUsername !== '' && in_array($tgUsername, $allow, true)) $ok = true;
+    if (!$ok) {
+        // 未配置白名单或不在白名单：一律无效
+        tqx_reply($botToken, $chatId, "Unauthorized");
+        return ['ok' => true];
+    }
+
+    $parsed = tqx_parse_command($text);
+    if (!$parsed['ok']) {
+        tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
+        return ['ok' => true];
+    }
+
+    $bankAlias = tqx_json_decode_map((string)($cfg['bank_alias_json'] ?? ''));
+    $prodAlias = tqx_json_decode_map((string)($cfg['product_alias_json'] ?? ''));
+
+    if (($parsed['cmd'] ?? '') === 'cancel') {
+        // 必须 reply 到机器人回执，才能定位 token
+        $rep = $msg['reply_to_message'] ?? null;
+        $repText = is_array($rep) ? trim((string)($rep['text'] ?? '')) : '';
+        $token = '';
+        if ($repText !== '' && preg_match('/\bundo\s+([A-Za-z0-9_-]{6,40})\b/i', $repText, $mm)) {
+            $token = $mm[1];
+        } elseif ($repText !== '' && preg_match('/#([A-Za-z0-9_-]{6,40})\b/', $repText, $mm2)) {
+            $token = $mm2[1];
+        }
+        if ($token === '') {
+            tqx_reply($botToken, $chatId, "请回复机器人那条回执消息再发 cancel。");
+            return ['ok' => true];
+        }
+        $parsed = ['cmd' => 'undo', 'data' => ['token' => $token], 'ok' => true];
+    }
+
+    if (($parsed['cmd'] ?? '') === 'undo') {
+        $token = (string)($parsed['data']['token'] ?? '');
+        if ($token === '') return ['ok' => true];
+
+        $stLog = $pdo->prepare("SELECT * FROM telegram_quick_txn_log WHERE token = ? AND company_id = ? LIMIT 1");
+        $stLog->execute([$token, $companyId]);
+        $log = $stLog->fetch(PDO::FETCH_ASSOC);
+        if (!$log) {
+            tqx_reply($botToken, $chatId, "找不到可撤销记录。");
+            return ['ok' => true];
+        }
+        // 仅本人可撤销（同 user_id/username），并限制时间窗
+        $undoWin = (int)($cfg['undo_window_sec'] ?? 600);
+        $createdAt = (string)($log['created_at'] ?? '');
+        $canWho = (string)($log['tg_username'] ?? '');
+        $canUid = (string)($log['tg_user_id'] ?? '');
+        $same = false;
+        if ($tgUsername !== '' && $canWho !== '' && strcasecmp($tgUsername, $canWho) === 0) $same = true;
+        if ($tgUserId > 0 && $canUid !== '' && (string)$tgUserId === $canUid) $same = true;
+        if (!$same) {
+            tqx_reply($botToken, $chatId, "只能撤销自己提交的记录。");
+            return ['ok' => true];
+        }
+        if ($createdAt !== '') {
+            $ts = strtotime($createdAt);
+            if ($ts && (time() - $ts) > max(30, $undoWin)) {
+                tqx_reply($botToken, $chatId, "已超出可撤销时间。");
+                return ['ok' => true];
+            }
+        }
+        $txId = (int)($log['transaction_id'] ?? 0);
+        if ($txId <= 0) {
+            tqx_reply($botToken, $chatId, "该记录不可撤销。");
+            return ['ok' => true];
+        }
+
+        transaction_ensure_soft_delete_columns($pdo);
+        $stmt = $pdo->prepare("UPDATE transactions SET deleted_at = NOW(), deleted_by = ? WHERE id = ? AND company_id = ? AND deleted_at IS NULL");
+        $stmt->execute([$who, $txId, $companyId]);
+        if ($stmt->rowCount() > 0) {
+            tqx_reply($botToken, $chatId, "✅ 已撤销 #{$token}");
+        } else {
+            tqx_reply($botToken, $chatId, "撤销失败（可能已删除/不存在）。");
+        }
+        return ['ok' => true];
+    }
+
+    $data = $parsed['data'] ?? [];
+    $amount = (float)($data['amount'] ?? 0);
+    $code = trim((string)($data['code'] ?? ''));
+    $bankIn = trim((string)($data['bank'] ?? ''));
+    $prodIn = trim((string)($data['product'] ?? ''));
+    $remark = trim((string)($data['remark'] ?? ''));
+    $bonusPct = $data['bonus_pct'] ?? null;
+
+    // alias translate
+    $bankKey = tqx_norm_key($bankIn);
+    if ($bankKey !== '' && isset($bankAlias[$bankKey])) $bankIn = (string)$bankAlias[$bankKey];
+    $prodKey = tqx_norm_key($prodIn);
+    if ($prodKey !== '' && isset($prodAlias[$prodKey])) $prodIn = (string)$prodAlias[$prodKey];
+
+    if ($code === '' || $bankIn === '' || $prodIn === '') {
+        tqx_reply($botToken, $chatId, "缺少字段。例：+100 C011 P M 备注");
+        return ['ok' => true];
+    }
+
+    $mode = (($parsed['cmd'] ?? '') === 'deposit') ? 'DEPOSIT' : 'WITHDRAW';
+    $bonus = 0.0;
+    if ($bonusPct !== null && is_numeric((string)$bonusPct)) {
+        $bonus = round($amount * ((float)$bonusPct) / 100, 2);
+    }
+    $total = round($amount + $bonus, 2);
+    $day = date('Y-m-d');
+    $time = date('H:i:s');
+    $status = 'approved';
+    $uid0 = null;
+
+    // 写入 transactions
+    try {
+        $pdo->prepare("INSERT INTO transactions (company_id, day, time, mode, code, bank, product, amount, bonus, total, staff, remark, status, created_by, approved_by, approved_at)
+                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW())")
+            ->execute([$companyId, $day, $time, $mode, $code, $bankIn, $prodIn, $amount, $bonus, $total, $who, ($remark !== '' ? $remark : null), $status, $uid0, $uid0]);
+        $txId = (int)$pdo->lastInsertId();
+    } catch (Throwable $e) {
+        tqx_reply($botToken, $chatId, "写入失败：" . $e->getMessage());
+        return ['ok' => true];
+    }
+
+    // token 用于撤销（回执里带 undo token，支持 reply + cancel）
+    $token = substr(hash('sha256', $chatId . '|' . $tgUserId . '|' . microtime(true) . '|' . $txId), 0, 10);
+    $pdo->prepare("INSERT INTO telegram_quick_txn_log (company_id, chat_id, tg_user_id, tg_username, raw_text, action, token, transaction_id)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)")
+        ->execute([$companyId, $chatId, $tgUserId > 0 ? $tgUserId : null, $tgUsername !== '' ? $tgUsername : null, $text, $mode, $token, $txId]);
+
+    $reply = "✅ 已记账 {$mode}\n金额：{$amount}\n代号：{$code}\n银行：{$bankIn}\n产品：{$prodIn}";
+    if ($bonus > 0) $reply .= "\nBonus：{$bonus}";
+    if ($remark !== '') $reply .= "\n备注：{$remark}";
+    $reply .= "\n撤销：回复此消息发送 cancel（或直接发：undo {$token}）";
+    tqx_reply($botToken, $chatId, $reply);
+
+    return ['ok' => true];
+}
+

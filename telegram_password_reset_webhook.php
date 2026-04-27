@@ -12,7 +12,28 @@ if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {
 
 $input = file_get_contents('php://input');
 $update = json_decode((string)$input, true);
-if (!is_array($update) || !isset($update['callback_query'])) {
+if (!is_array($update)) {
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+// 分发：群聊快捷记账（+ / - / undo）
+if (isset($update['message'])) {
+    try {
+        if (file_exists(__DIR__ . '/telegram_quick_txn_webhook.php')) {
+            require_once __DIR__ . '/telegram_quick_txn_webhook.php';
+            if (function_exists('telegram_quick_txn_handle_update')) {
+                telegram_quick_txn_handle_update($pdo, $update, (string)$NOTIFY_TELEGRAM_BOT_TOKEN);
+            }
+        }
+    } catch (Throwable $e) {
+        // 不影响原有 callback_query 审批逻辑
+    }
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+if (!isset($update['callback_query'])) {
     echo json_encode(['ok' => true]);
     exit;
 }
