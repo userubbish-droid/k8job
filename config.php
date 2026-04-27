@@ -173,6 +173,8 @@ try {
 $NOTIFY_TELEGRAM_BOT_TOKEN = '';
 $NOTIFY_TELEGRAM_CHAT_ID  = '';
 $NOTIFY_BASE_URL = '';
+// PG 专用快捷记账 Bot（与上方 NOTIFY 机器人分开；由 telegram_pg_webhook.php 使用）
+$PG_TELEGRAM_BOT_TOKEN = '';
 if (!defined('NOTIFY_CONFIG_LOADED')) {
     define('NOTIFY_CONFIG_LOADED', true);
 }

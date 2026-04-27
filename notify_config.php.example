@@ -12,3 +12,6 @@ $NOTIFY_TELEGRAM_BOT_TOKEN = ''; // 必填
 $NOTIFY_TELEGRAM_CHAT_ID  = '';  // 必填，多为数字字符串
 $NOTIFY_BASE_URL = '';           // 选填：待审核消息里审核链接前缀，如 https://你的域名.com
 
+// === PG 专用 Bot（与 gaming 快捷记账分开；在 BotFather 再建一个 bot，填 token，Webhook 指向 telegram_pg_webhook.php）===
+$PG_TELEGRAM_BOT_TOKEN = '';     // 必填：PG bot 的 token；勿与 $NOTIFY_TELEGRAM_BOT_TOKEN 混用
+
