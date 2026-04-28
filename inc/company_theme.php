@@ -105,8 +105,8 @@ body{
             <?= htmlspecialchars($__lin2, ENT_QUOTES, 'UTF-8') ?> 28%,
             <?= htmlspecialchars($__lin3, ENT_QUOTES, 'UTF-8') ?> 52%,
             <?= htmlspecialchars($__lin4, ENT_QUOTES, 'UTF-8') ?> 100%
-        );
-    background-attachment: fixed;
+        ) !important;
+    background-attachment: fixed !important;
 }
 </style>
 

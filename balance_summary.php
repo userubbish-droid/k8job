@@ -256,6 +256,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                             <th class="num">In</th>
                                             <?php if ($biz_kind === 'pg'): ?>
                                                 <th class="num">Cash out</th>
+                                                <th class="num">Out</th>
                                             <?php else: ?>
                                                 <th class="num">Topup</th>
                                                 <th class="num">Out</th>
@@ -283,12 +284,13 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                         <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num stmt-in"><?= $in != 0 ? number_format($in, 2) : '—' ?></td>
                                         <td class="num stmt-out"><?= $cashout != 0 ? number_format($cashout, 2) : '—' ?></td>
+                                        <td class="num stmt-out"><?= $out_total != 0 ? number_format($out_total, 2) : '—' ?></td>
                                         <?php endif; ?>
                                         <td class="num <?= $balance < 0 ? 'stmt-negative' : 'profit' ?>"><?= number_format($balance, 2) ?></td>
                                     </tr>
                                     <?php endforeach; ?>
                                     <?php if (empty($pg_all_customers ?? [])): ?>
-                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
+                                    <tr><td colspan="<?= $is_admin ? 6 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
                                     <?php else: ?>
                                     <?php foreach ($all_products as $name):
