@@ -59,6 +59,12 @@ function tqx_pg_ensure_tables(PDO $pdo): void
         $pdo->exec("ALTER TABLE telegram_quick_txn_log_pg ADD COLUMN receipt_message_id BIGINT NULL");
     } catch (Throwable $e) {
     }
+    foreach (['pg_simple_member_code', 'pg_simple_bank', 'pg_simple_product'] as $col) {
+        try {
+            $pdo->exec("ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN {$col} VARCHAR(64) NULL DEFAULT NULL");
+        } catch (Throwable $e) {
+        }
+    }
 }
 
 function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $botToken): void
@@ -66,9 +72,18 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     $pdoCat = function_exists('shard_catalog') ? shard_catalog() : $pdo;
     tqx_pg_ensure_tables($pdoCat);
 
+    $GLOBALS['__tqx_message_thread_id'] = null;
+    $GLOBALS['__tqx_reply_markup'] = null;
     $msg = $update['message'] ?? null;
     if (!is_array($msg)) {
         return;
+    }
+
+    if (isset($msg['message_thread_id']) && is_numeric($msg['message_thread_id'])) {
+        $tid = (int)$msg['message_thread_id'];
+        if ($tid > 0) {
+            $GLOBALS['__tqx_message_thread_id'] = $tid;
+        }
     }
 
     $chat = $msg['chat'] ?? [];
@@ -91,18 +106,25 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     }
 
     $parsed = tqx_parse_command($text);
+    $pgShort = null;
     if (!$parsed['ok']) {
-        tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
-        return;
+        if (preg_match('/^\+[\s]*([0-9][0-9,]*(?:\.[0-9]+)?)\s*$/u', $text, $wm)) {
+            $pgShort = ['sign' => '+', 'amt' => str_replace(',', '', (string)$wm[1])];
+        } elseif (preg_match('/^-[\s]*([0-9][0-9,]*(?:\.[0-9]+)?)\s*$/u', $text, $wm2)) {
+            $pgShort = ['sign' => '-', 'amt' => str_replace(',', '', (string)$wm2[1])];
+        } else {
+            tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
+            return;
+        }
     }
 
-    if (($parsed['cmd'] ?? '') === 'id') {
+    if ($pgShort === null && ($parsed['cmd'] ?? '') === 'id') {
         $out = "chat_id={$chatId}\nuser_id=" . ($tgUserId > 0 ? (string)$tgUserId : '-') . "\nusername=" . ($tgUsername !== '' ? $tgUsername : '-');
         tqx_reply($botToken, $chatId, $out);
         return;
     }
 
-    if (($parsed['cmd'] ?? '') === 'setup') {
+    if ($pgShort === null && ($parsed['cmd'] ?? '') === 'setup') {
         $arg = trim((string)($parsed['data']['arg'] ?? ''));
         $pickCompanyId = 0;
         try {
@@ -195,7 +217,8 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         return;
     }
 
-    $stFind = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec
+    $stFind = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
+        pg_simple_member_code, pg_simple_bank, pg_simple_product
         FROM telegram_quick_txn_config_pg
         WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
         LIMIT 1");
@@ -222,6 +245,28 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     }
 
     $pdoData = function_exists('pdo_data_for_company_id') ? pdo_data_for_company_id($pdoCat, $companyId) : $pdoCat;
+
+    if ($pgShort !== null) {
+        $amt0 = (float)($pgShort['amt'] ?? 0);
+        if ($amt0 <= 0 || !is_finite($amt0)) {
+            tqx_reply($botToken, $chatId, '金额须大于 0。');
+            return;
+        }
+        $sc = trim((string)($cfg['pg_simple_member_code'] ?? ''));
+        $sb = trim((string)($cfg['pg_simple_bank'] ?? ''));
+        $sp = trim((string)($cfg['pg_simple_product'] ?? ''));
+        if ($sc === '' || $sb === '' || $sp === '') {
+            tqx_reply($botToken, $chatId, "极简指令：只发 +金额 或 -金额。\n请在后台「PG Telegram」填写：简易代号、简易渠道、简易产品（三项必填），\n或使用完整格式：+100 C001 CHANNEL1 PG 备注");
+            return;
+        }
+        $sign = ($pgShort['sign'] ?? '+') === '-' ? '-' : '+';
+        $expanded = $sign . $pgShort['amt'] . ' ' . $sc . ' ' . $sb . ' ' . $sp;
+        $parsed = tqx_parse_command($expanded);
+        if (!$parsed['ok']) {
+            tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
+            return;
+        }
+    }
 
     $allowJson = (string)($cfg['allowed_user_ids'] ?? '');
     $allowArr = tqx_json_decode_map($allowJson);
@@ -424,16 +469,55 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         return;
     }
 
-    $receiptPrefix = trim((string)($cfg['receipt_prefix'] ?? ''));
-    $modeLabel = $flow === 'in' ? 'PG 入款' : 'PG 出款';
-    $head = $receiptPrefix !== '' ? "✅ {$receiptPrefix} {$modeLabel}" : "✅ {$modeLabel}";
-    $reply = $head . "\n金额：" . number_format($total, 2, '.', '') . "\n代号：{$code}\n渠道：{$channel}";
-    if ($lineRemark !== '') {
-        $reply .= "\n备注：{$lineRemark}";
+    $todayIn = 0.0;
+    $todayOut = 0.0;
+    try {
+        $stSum = $pdoData->prepare("SELECT COALESCE(SUM(CASE WHEN flow = 'in' THEN amount ELSE 0 END), 0), COALESCE(SUM(CASE WHEN flow = 'out' THEN amount ELSE 0 END), 0) FROM pg_transactions WHERE company_id = ? AND txn_day = ? AND status = 'approved'");
+        $stSum->execute([$companyId, $day]);
+        $rowSum = $stSum->fetch(PDO::FETCH_NUM);
+        if (is_array($rowSum)) {
+            $todayIn = (float)($rowSum[0] ?? 0);
+            $todayOut = (float)($rowSum[1] ?? 0);
+        }
+    } catch (Throwable $e) {
     }
 
     $token = substr(hash('sha256', $chatId . '|' . $tgUserId . '|' . microtime(true) . '|' . $txId), 0, 10);
+    $timeHm = date('H:i');
+    if ($flow === 'in') {
+        $reply = "✅ 已入账（本笔）\n";
+        $reply .= "{$timeHm} 入 +" . number_format($amount, 2, '.', '') . ' → 记账 ' . number_format($total, 2, '.', '') . "\n";
+        $reply .= "代号 {$code}｜{$channel}\n";
+        if ($lineRemark !== '') {
+            $reply .= '备注 ' . $lineRemark . "\n";
+        }
+        $reply .= "\n─── 今日汇总 ───\n";
+        $reply .= '今日入款合计：' . number_format($todayIn, 2, '.', '') . "\n";
+        $reply .= '今日出款合计：' . number_format($todayOut, 2, '.', '') . "\n";
+        $reply .= '本笔入款：' . number_format($total, 2, '.', '') . "\n";
+    } else {
+        $reply = "✅ 已出款（本笔）\n";
+        $reply .= "{$timeHm} 出 -" . number_format($amount, 2, '.', '') . ' → 记账 ' . number_format($total, 2, '.', '') . "\n";
+        $reply .= "代号 {$code}｜{$channel}\n";
+        if ($lineRemark !== '') {
+            $reply .= '备注 ' . $lineRemark . "\n";
+        }
+        $reply .= "\n─── 今日汇总 ───\n";
+        $reply .= '今日入款合计：' . number_format($todayIn, 2, '.', '') . "\n";
+        $reply .= '今日出款合计：' . number_format($todayOut, 2, '.', '') . "\n";
+        $reply .= '本笔出款：' . number_format($total, 2, '.', '') . "\n";
+    }
     $reply .= "\n撤销：undo {$token}";
+
+    global $NOTIFY_BASE_URL;
+    if (!empty($NOTIFY_BASE_URL)) {
+        $GLOBALS['__tqx_reply_markup'] = [
+            'inline_keyboard' => [[[
+                'text' => '账单明细',
+                'url' => rtrim((string)$NOTIFY_BASE_URL, '/') . '/admin_telegram_pg.php?company_id=' . $companyId,
+            ]]],
+        ];
+    }
 
     $pdoCat->prepare('INSERT INTO telegram_quick_txn_log_pg (company_id, chat_id, tg_user_id, tg_username, raw_text, action, token, transaction_id, receipt_message_id)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL)')
@@ -449,6 +533,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         ]);
 
     $receiptMid = tqx_reply($botToken, $chatId, $reply);
+    $GLOBALS['__tqx_reply_markup'] = null;
     if ($receiptMid) {
         try {
             $pdoCat->prepare('UPDATE telegram_quick_txn_log_pg SET receipt_message_id = ? WHERE company_id = ? AND chat_id = ? AND token = ? AND transaction_id = ? ORDER BY id DESC LIMIT 1')

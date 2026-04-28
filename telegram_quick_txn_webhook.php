@@ -4,6 +4,7 @@
  *
  * 仅服务 gaming 分公司：配置与流水、撤销日志均在 catalog（主库）。
  * PG 分公司请使用将来单独部署的 PG 专用 Bot/Webhook，勿与此 Bot 混用。
+ * 论坛群「话题」：回复会带上用户消息的 message_thread_id，与发在哪个话题一致（无需在 Telegram 里额外设置）。
  *
  * 支持：
  * - +100 C011 P M [remark...]
@@ -71,7 +72,15 @@ function tqx_norm_key(string $s): string {
 
 function tqx_reply(string $botToken, string $chatId, string $text): ?int {
     if ($botToken === '' || $chatId === '' || $text === '') return null;
-    $out = send_telegram_message($botToken, $chatId, $text);
+    $tid = null;
+    if (isset($GLOBALS['__tqx_message_thread_id']) && is_int($GLOBALS['__tqx_message_thread_id']) && $GLOBALS['__tqx_message_thread_id'] > 0) {
+        $tid = $GLOBALS['__tqx_message_thread_id'];
+    }
+    $mk = null;
+    if (!empty($GLOBALS['__tqx_reply_markup']) && is_array($GLOBALS['__tqx_reply_markup'])) {
+        $mk = $GLOBALS['__tqx_reply_markup'];
+    }
+    $out = send_telegram_message($botToken, $chatId, $text, $tid, $mk);
     if (!is_string($out) || trim($out) === '') return null;
     $j = json_decode(trim($out), true);
     if (!is_array($j)) return null;
@@ -253,8 +262,16 @@ function telegram_quick_txn_handle_update(PDO $pdo, array $update, string $botTo
     $pdoCat = $pdo;
     tqx_ensure_tables($pdoCat);
 
+    $GLOBALS['__tqx_message_thread_id'] = null;
     $msg = $update['message'] ?? null;
     if (!is_array($msg)) return ['ok' => true];
+
+    if (isset($msg['message_thread_id']) && is_numeric($msg['message_thread_id'])) {
+        $tid = (int)$msg['message_thread_id'];
+        if ($tid > 0) {
+            $GLOBALS['__tqx_message_thread_id'] = $tid;
+        }
+    }
 
     $chat = $msg['chat'] ?? [];
     $chatId = trim((string)($chat['id'] ?? ''));

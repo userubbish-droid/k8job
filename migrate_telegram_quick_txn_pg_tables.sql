@@ -37,3 +37,8 @@ CREATE TABLE IF NOT EXISTS telegram_quick_txn_log_pg (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- 若 PG 业务需要与 gaming 不同的栏位，请仅对 *_pg 表执行 ALTER，勿改 gaming 原表。
+
+-- 极简「+金额 / -金额」：后台填三项后自动展开为完整记账行（亦可由 webhook 首次访问时自动 ALTER）
+-- ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN pg_simple_member_code VARCHAR(64) NULL;
+-- ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN pg_simple_bank VARCHAR(64) NULL;
+-- ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN pg_simple_product VARCHAR(64) NULL;

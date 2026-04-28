@@ -38,6 +38,9 @@ try {
     try { $pdo->exec("ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN receipt_prefix TEXT NULL"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN receipt_slogan TEXT NULL"); } catch (Throwable $e) {}
     try { $pdo->exec("ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN receipt_style VARCHAR(20) NOT NULL DEFAULT 'classic'"); } catch (Throwable $e) {}
+    foreach (['pg_simple_member_code', 'pg_simple_bank', 'pg_simple_product'] as $__pgc) {
+        try { $pdo->exec("ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN {$__pgc} VARCHAR(64) NULL DEFAULT NULL"); } catch (Throwable $e) {}
+    }
 } catch (Throwable $e) {
     $err = $e->getMessage();
 }
@@ -112,9 +115,13 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
         $receipt_style = strtolower(trim((string)($_POST['receipt_style'] ?? 'classic')));
         if (!in_array($receipt_style, ['classic', 'game'], true)) $receipt_style = 'classic';
 
+        $pg_simple_member_code = trim((string)($_POST['pg_simple_member_code'] ?? ''));
+        $pg_simple_bank = trim((string)($_POST['pg_simple_bank'] ?? ''));
+        $pg_simple_product = trim((string)($_POST['pg_simple_product'] ?? ''));
+
         $uid = (int)($_SESSION['user_id'] ?? 0);
-        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config_pg (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, updated_by)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config_pg (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, pg_simple_member_code, pg_simple_bank, pg_simple_product, updated_by)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                              ON DUPLICATE KEY UPDATE
                                enabled=VALUES(enabled),
                                chat_id=VALUES(chat_id),
@@ -126,6 +133,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
                                receipt_slogan=VALUES(receipt_slogan),
                                receipt_style=VALUES(receipt_style),
                                undo_window_sec=VALUES(undo_window_sec),
+                               pg_simple_member_code=VALUES(pg_simple_member_code),
+                               pg_simple_bank=VALUES(pg_simple_bank),
+                               pg_simple_product=VALUES(pg_simple_product),
                                updated_by=VALUES(updated_by)");
         $st->execute([
             $company_pick,
@@ -139,6 +149,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
             ($receipt_slogan !== '' ? $receipt_slogan : null),
             $receipt_style,
             $undo_window,
+            ($pg_simple_member_code !== '' ? $pg_simple_member_code : null),
+            ($pg_simple_bank !== '' ? $pg_simple_bank : null),
+            ($pg_simple_product !== '' ? $pg_simple_product : null),
             $uid > 0 ? $uid : null,
         ]);
         $msg = '已保存。';
@@ -158,6 +171,9 @@ $cur = [
     'receipt_slogan' => '',
     'receipt_style' => 'classic',
     'undo_window_sec' => 600,
+    'pg_simple_member_code' => '',
+    'pg_simple_bank' => '',
+    'pg_simple_product' => '',
 ];
 if (!$err) {
     try {
@@ -255,6 +271,14 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
                     <input class="form-control" name="chat_id" value="<?= htmlspecialchars((string)($cur['chat_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="-100xxxxxxxxxx">
                     <p class="form-hint">填写 <strong>PG 专用 Bot</strong> 所在群的 chat.id。获取方式：把 PG Bot 拉进群后发一条消息，用 PG 的 token 打开 <code>https://api.telegram.org/bot&lt;PG_TOKEN&gt;/getUpdates</code> 查看 chat.id。</p>
 
+                    <label style="margin-top:12px; font-weight:700;">极简指令（群内只发 +金额 / -金额）</label>
+                    <p class="form-hint">三项都填后，群内可只发 <code>+100</code> 或 <code>-50</code>，系统会自动展开为完整记账行（代号｜渠道｜产品）。与下方「完整格式」二选一或并存均可。</p>
+                    <div style="display:grid; grid-template-columns:1fr; gap:8px;">
+                        <input class="form-control" name="pg_simple_member_code" value="<?= htmlspecialchars((string)($cur['pg_simple_member_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易代号（对应完整格式里第 1 段，如 Ez99 或 C001）">
+                        <input class="form-control" name="pg_simple_bank" value="<?= htmlspecialchars((string)($cur['pg_simple_bank'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易渠道（第 2 段，如 DEP 或 CHANNEL1）">
+                        <input class="form-control" name="pg_simple_product" value="<?= htmlspecialchars((string)($cur['pg_simple_product'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易产品（第 3 段，如 PG 或 EZ）">
+                    </div>
+
                     <label style="margin-top:12px; font-weight:700;">允许记账的用户（必填，仅管理员）</label>
                     <textarea class="form-control" name="allowed_user_ids" rows="4" placeholder="填 Telegram user_id 或 username，每行一个（必填）"><?= htmlspecialchars($allow_lines, ENT_QUOTES, 'UTF-8') ?></textarea>
                     <p class="form-hint">安全要求：白名单为空时，机器人对所有人都不记账（无效）。</p>
@@ -292,11 +316,10 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
 
                 <hr style="border:none; border-top:1px solid var(--border); margin:18px 0;">
                 <div class="form-hint">
-                    指令示例：<br>
-                    <code>+100 C011 P M b10 remark</code><br>
-                    <code>-200 C012 P M remark</code><br>
-                    游戏资料模式示例（需要 3 个字段）：<br>
-                    <code>+100 C004 P M my870393261 Aaaa8888 500 备注</code><br>
+                    <strong>极简（填上面三项后）：</strong><br>
+                    <code>+100</code> 或 <code>-50</code><br><br>
+                    <strong>完整格式：</strong><br>
+                    <code>+100 C011 P M b10 remark</code> / <code>-200 C012 P M remark</code><br>
                     撤销：<code>undo &lt;token&gt;</code>
                 </div>
             </div>
