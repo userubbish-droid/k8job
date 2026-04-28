@@ -70,7 +70,7 @@ function tqx_norm_key(string $s): string {
     return strtolower(trim($s));
 }
 
-function tqx_reply(string $botToken, string $chatId, string $text): ?int {
+function tqx_reply(string $botToken, string $chatId, string $text, ?string $parseMode = null): ?int {
     if ($botToken === '' || $chatId === '' || $text === '') return null;
     $tid = null;
     if (isset($GLOBALS['__tqx_message_thread_id']) && is_int($GLOBALS['__tqx_message_thread_id']) && $GLOBALS['__tqx_message_thread_id'] > 0) {
@@ -80,7 +80,7 @@ function tqx_reply(string $botToken, string $chatId, string $text): ?int {
     if (!empty($GLOBALS['__tqx_reply_markup']) && is_array($GLOBALS['__tqx_reply_markup'])) {
         $mk = $GLOBALS['__tqx_reply_markup'];
     }
-    $out = send_telegram_message($botToken, $chatId, $text, $tid, $mk);
+    $out = send_telegram_message($botToken, $chatId, $text, $tid, $mk, $parseMode);
     if (!is_string($out) || trim($out) === '') return null;
     $j = json_decode(trim($out), true);
     if (!is_array($j)) return null;

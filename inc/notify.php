@@ -8,13 +8,16 @@
  * @param int|null $message_thread_id 论坛群话题 ID；非话题群勿传。与触发更新的 message.message_thread_id 一致时，回复会出现在同一话题。
  * @param array|null $reply_markup Telegram inline_keyboard 等，见 Bot API sendMessage
  */
-function send_telegram_message($bot_token, $chat_id, $text, ?int $message_thread_id = null, ?array $reply_markup = null) {
+function send_telegram_message($bot_token, $chat_id, $text, ?int $message_thread_id = null, ?array $reply_markup = null, ?string $parse_mode = null) {
     $url = 'https://api.telegram.org/bot' . $bot_token . '/sendMessage';
     $payload = [
         'chat_id' => $chat_id,
         'text'    => $text,
         'disable_web_page_preview' => true,
     ];
+    if ($parse_mode !== null && $parse_mode !== '') {
+        $payload['parse_mode'] = $parse_mode;
+    }
     if ($message_thread_id !== null && $message_thread_id > 0) {
         $payload['message_thread_id'] = $message_thread_id;
     }

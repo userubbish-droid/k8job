@@ -49,6 +49,7 @@ try {
         member_code VARCHAR(64) NOT NULL DEFAULT '',
         default_bank VARCHAR(64) NOT NULL DEFAULT '',
         default_product VARCHAR(64) NOT NULL DEFAULT '',
+        default_currency VARCHAR(8) NOT NULL DEFAULT '',
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (chat_id, topic_key),
         KEY idx_company (company_id)
@@ -120,10 +121,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
 
         $pg_simple_member_code = trim((string)($_POST['pg_simple_member_code'] ?? ''));
         $pg_simple_bank = trim((string)($_POST['pg_simple_bank'] ?? ''));
+        $pg_simple_currency_raw = strtoupper(preg_replace('/\s+/', '', trim((string)($_POST['pg_simple_currency'] ?? ''))));
+        $pg_simple_currency = (preg_match('/^[A-Z]{2,8}$/', $pg_simple_currency_raw) ? $pg_simple_currency_raw : null);
+
+        $receipt_fx_rate = (float)str_replace(',', '', trim((string)($_POST['receipt_fx_rate'] ?? '1')));
+        if ($receipt_fx_rate <= 0 || !is_finite($receipt_fx_rate)) {
+            $receipt_fx_rate = 1.0;
+        }
 
         $uid = (int)($_SESSION['user_id'] ?? 0);
-        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config_pg (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, pg_simple_member_code, pg_simple_bank, pg_simple_product, updated_by)
-                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        $st = $pdo->prepare("INSERT INTO telegram_quick_txn_config_pg (company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec, receipt_fx_rate, pg_simple_member_code, pg_simple_bank, pg_simple_product, pg_simple_currency, updated_by)
+                             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                              ON DUPLICATE KEY UPDATE
                                enabled=VALUES(enabled),
                                chat_id=VALUES(chat_id),
@@ -135,9 +143,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
                                receipt_slogan=VALUES(receipt_slogan),
                                receipt_style=VALUES(receipt_style),
                                undo_window_sec=VALUES(undo_window_sec),
+                               receipt_fx_rate=VALUES(receipt_fx_rate),
                                pg_simple_member_code=VALUES(pg_simple_member_code),
                                pg_simple_bank=VALUES(pg_simple_bank),
                                pg_simple_product=VALUES(pg_simple_product),
+                               pg_simple_currency=VALUES(pg_simple_currency),
                                updated_by=VALUES(updated_by)");
         $st->execute([
             $company_pick,
@@ -151,9 +161,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
             ($receipt_slogan !== '' ? $receipt_slogan : null),
             $receipt_style,
             $undo_window,
+            $receipt_fx_rate,
             ($pg_simple_member_code !== '' ? $pg_simple_member_code : null),
             ($pg_simple_bank !== '' ? $pg_simple_bank : null),
             null,
+            $pg_simple_currency,
             $uid > 0 ? $uid : null,
         ]);
         $msg = '已保存。';
@@ -168,6 +180,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pg_chat_customer
         $tkeys = $_POST['bind_topic_key'] ?? [];
         $codes = $_POST['bind_member_code'] ?? [];
         $banks = $_POST['bind_default_bank'] ?? [];
+        $curs = $_POST['bind_default_currency'] ?? [];
         if (!is_array($ids) || !is_array($codes)) {
             throw new RuntimeException('表单无效。');
         }
@@ -182,6 +195,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pg_chat_customer
             }
             $mem = trim((string)($codes[$i] ?? ''));
             $bks = trim((string)($banks[$i] ?? ''));
+            $curRaw = strtoupper(preg_replace('/\s+/', '', trim((string)($curs[$i] ?? ''))));
+            $curIns = (preg_match('/^[A-Z]{2,8}$/', $curRaw) ? $curRaw : '');
             if (strlen($mem) > 64 || strlen($bks) > 64) {
                 throw new RuntimeException('字段过长（最多 64 字符）：' . $chid);
             }
@@ -191,11 +206,11 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pg_chat_customer
             if ($exCid > 0 && $exCid !== (int)$company_pick) {
                 continue;
             }
-            $pdo->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, ?, ?, ?, ?, ?)
-                ON DUPLICATE KEY UPDATE member_code = VALUES(member_code), default_bank = VALUES(default_bank), default_product = VALUES(default_product), company_id = VALUES(company_id)')
-                ->execute([$chid, $tk, (int)$company_pick, $mem, $bks, '']);
+            $pdo->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency) VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON DUPLICATE KEY UPDATE member_code = VALUES(member_code), default_bank = VALUES(default_bank), default_product = VALUES(default_product), default_currency = VALUES(default_currency), company_id = VALUES(company_id)')
+                ->execute([$chid, $tk, (int)$company_pick, $mem, $bks, '', $curIns]);
         }
-        $msg = ($msg !== '' ? $msg . ' ' : '') . '已保存各群/话题默认（客户、银行）。';
+        $msg = ($msg !== '' ? $msg . ' ' : '') . '已保存各群/话题默认（客户、银行、币种）。';
     } catch (Throwable $e) {
         $err = $e->getMessage();
     }
@@ -214,6 +229,8 @@ $cur = [
     'undo_window_sec' => 600,
     'pg_simple_member_code' => '',
     'pg_simple_bank' => '',
+    'pg_simple_currency' => '',
+    'receipt_fx_rate' => 1,
 ];
 if (!$err) {
     try {
@@ -250,7 +267,7 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
 $pg_chat_bindings = [];
 if (!$err) {
     try {
-        $stBindList = $pdo->prepare('SELECT chat_id, topic_key, member_code, default_bank, updated_at FROM telegram_pg_chat_customer_pg WHERE company_id = ? ORDER BY chat_id ASC, topic_key ASC');
+        $stBindList = $pdo->prepare('SELECT chat_id, topic_key, member_code, default_bank, default_currency, updated_at FROM telegram_pg_chat_customer_pg WHERE company_id = ? ORDER BY chat_id ASC, topic_key ASC');
         $stBindList->execute([(int)$company_pick]);
         $pg_chat_bindings = $stBindList->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Throwable $e) {
@@ -322,10 +339,11 @@ if (!$err) {
                     <p class="form-hint">多群场景：每个群在群内发 <code>/setup</code> 绑定同一 PG 公司后，再发 <code>/customer 代号</code> 指定该群默认客户。此处 Chat ID 仍可作为参考或单群部署时填写。获取 chat.id：把 PG Bot 拉进群后发消息，用 PG token 调 <code>getUpdates</code>。</p>
 
                     <label style="margin-top:12px; font-weight:700;">极简指令（群内只发 +金额 / -金额）</label>
-                    <p class="form-hint">群内可设 <code>/customer</code> <code>/bank</code>（按论坛话题分别设置）；未设时回退下方两项。齐备后极简 <code>+100</code>。完整格式：<code>+100 C001 HLB 备注</code>（无产品段）。</p>
+                    <p class="form-hint">群内可设 <code>/customer</code> <code>/bank</code> <code>/currency</code>（按论坛话题分别设置）；未设时回退下方与分公司币种。齐备后极简 <code>+100</code>。完整格式：<code>+100 C001 HLB 备注</code>（无产品段）。</p>
                     <div style="display:grid; grid-template-columns:1fr; gap:8px;">
                         <input class="form-control" name="pg_simple_member_code" value="<?= htmlspecialchars((string)($cur['pg_simple_member_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易代号（如 C001）">
                         <input class="form-control" name="pg_simple_bank" value="<?= htmlspecialchars((string)($cur['pg_simple_bank'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易银行/渠道（如 HLB）">
+                        <input class="form-control" name="pg_simple_currency" value="<?= htmlspecialchars((string)($cur['pg_simple_currency'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易币种（如 MYR、USD，2～8 位大写）" maxlength="8">
                     </div>
 
                     <label style="margin-top:12px; font-weight:700;">允许记账的用户（必填，仅管理员）</label>
@@ -334,6 +352,10 @@ if (!$err) {
 
                     <label style="margin-top:12px; font-weight:700;">撤销时间窗（秒）</label>
                     <input class="form-control" type="number" name="undo_window_sec" value="<?= (int)($cur['undo_window_sec'] ?? 600) ?>" min="30" max="86400">
+
+                    <label style="margin-top:12px; font-weight:700;">回执固定汇率（应下发 = 今日入款合计 × 汇率）</label>
+                    <input class="form-control" type="number" name="receipt_fx_rate" value="<?= htmlspecialchars((string)($cur['receipt_fx_rate'] ?? '1'), ENT_QUOTES, 'UTF-8') ?>" min="0.000001" max="999999" step="any">
+                    <p class="form-hint">Telegram 回执底部「应下发」用此系数；默认 1 与截图一致。币种见 /currency 与分公司设置。</p>
 
                     <label style="margin-top:12px; font-weight:700;">机器人回执文案（可自定义）</label>
                     <input class="form-control" name="receipt_prefix" value="<?= htmlspecialchars((string)($cur['receipt_prefix'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="例如：完成记账 / 记录成功 / 你自定义的词">
@@ -361,30 +383,32 @@ if (!$err) {
                 </form>
 
                 <hr style="border:none; border-top:1px solid var(--border); margin:18px 0;">
-                <h3 style="font-size:1rem; margin-bottom:10px;">各群 / 论坛话题 默认（客户、银行）</h3>
-                <p class="form-hint" style="margin-bottom:10px;">群内：<code>/customer</code> <code>/bank</code>；<code>topic_key=0</code> 为整群，数字为论坛话题 ID（发 <code>/id</code> 可见）。极简 <code>+100</code> 用此处；完整格式以消息中的银行为准。</p>
+                <h3 style="font-size:1rem; margin-bottom:10px;">各群 / 论坛话题 默认（客户、银行、币种）</h3>
+                <p class="form-hint" style="margin-bottom:10px;">群内：<code>/customer</code> <code>/bank</code> <code>/currency</code>；<code>topic_key=0</code> 为整群，数字为论坛话题 ID（发 <code>/id</code> 可见）。极简 <code>+100</code> 用此处；入账写入 <code>pg_transactions.currency</code>。</p>
                 <?php if ($company_pick_pg_kind): ?>
                 <form method="post">
                     <?php if ($actor_is_superadmin): ?><input type="hidden" name="company_id" value="<?= (int)$company_pick ?>"><?php endif; ?>
                     <input type="hidden" name="save_pg_chat_customers" value="1">
                     <div class="table-scroll">
                         <table class="data-table">
-                            <thead><tr><th>chat_id</th><th>topic_key</th><th>客户代号</th><th>默认银行</th></tr></thead>
+                            <thead><tr><th>chat_id</th><th>topic_key</th><th>客户代号</th><th>默认银行</th><th>默认币种</th></tr></thead>
                             <tbody>
                             <?php if (empty($pg_chat_bindings)): ?>
-                                <tr><td colspan="4" class="form-hint">尚无记录。请在目标群用 PG Bot 发 <code>/setup</code> 后再试，或下方手动添加一行。</td></tr>
+                                <tr><td colspan="5" class="form-hint">尚无记录。请在目标群用 PG Bot 发 <code>/setup</code> 后再试，或下方手动添加一行。</td></tr>
                             <?php else: ?>
                                 <?php foreach ($pg_chat_bindings as $br):
                                     $bcid = htmlspecialchars((string)($br['chat_id'] ?? ''), ENT_QUOTES, 'UTF-8');
                                     $btk = htmlspecialchars((string)($br['topic_key'] ?? '0'), ENT_QUOTES, 'UTF-8');
                                     $bmem = htmlspecialchars((string)($br['member_code'] ?? ''), ENT_QUOTES, 'UTF-8');
                                     $bbnk = htmlspecialchars((string)($br['default_bank'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                    $bcur = htmlspecialchars((string)($br['default_currency'] ?? ''), ENT_QUOTES, 'UTF-8');
                                 ?>
                                 <tr>
                                     <td><input type="hidden" name="bind_chat_id[]" value="<?= $bcid ?>"><code><?= $bcid ?></code></td>
                                     <td><input type="hidden" name="bind_topic_key[]" value="<?= $btk ?>"><code><?= $btk ?></code></td>
                                     <td><input class="form-control" name="bind_member_code[]" value="<?= $bmem ?>" placeholder="C001"></td>
                                     <td><input class="form-control" name="bind_default_bank[]" value="<?= $bbnk ?>" placeholder="HLB"></td>
+                                    <td><input class="form-control" name="bind_default_currency[]" value="<?= $bcur ?>" placeholder="MYR" maxlength="8"></td>
                                 </tr>
                                 <?php endforeach; ?>
                             <?php endif; ?>
@@ -393,6 +417,7 @@ if (!$err) {
                                     <td><input class="form-control" name="bind_topic_key[]" value="" placeholder="0 或话题ID"></td>
                                     <td><input class="form-control" name="bind_member_code[]" value="" placeholder="代号"></td>
                                     <td><input class="form-control" name="bind_default_bank[]" value="" placeholder="银行"></td>
+                                    <td><input class="form-control" name="bind_default_currency[]" value="" placeholder="MYR"></td>
                                 </tr>
                             </tbody>
                         </table>
@@ -405,8 +430,8 @@ if (!$err) {
                 <div class="form-hint">
                     <strong>极简（代号 + 银行 + 群或后台默认）：</strong><br>
                     <code>+100</code> 或 <code>-50</code><br><br>
-                    <strong>完整格式（无产品段）：</strong><br>
-                    <code>+100 C011 HLB b10 remark</code> / <code>-200 C012 HLB remark</code>（本话题已 <code>/customer</code> 时代号以群设置为准；银行以本消息为准）<br>
+                    <strong>记账格式：</strong><br>
+                    <code>+金额 姓名 [銀行] [備注]</code>；机器人回执为「已入账 / 已下发」列表 + 总入款额、固定汇率、应下发/已下发/未下发（与 Telegram HTML 样式一致）。<br>
                     撤销：<code>undo &lt;token&gt;</code>
                 </div>
             </div>

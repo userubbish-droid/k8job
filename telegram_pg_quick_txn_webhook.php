@@ -65,6 +65,14 @@ function tqx_pg_ensure_tables(PDO $pdo): void
         } catch (Throwable $e) {
         }
     }
+    try {
+        $pdo->exec('ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN pg_simple_currency VARCHAR(8) NULL DEFAULT NULL');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN receipt_fx_rate DECIMAL(14,6) NOT NULL DEFAULT 1.000000');
+    } catch (Throwable $e) {
+    }
     $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_pg_chat_customer_pg (
         chat_id VARCHAR(40) NOT NULL,
         topic_key VARCHAR(32) NOT NULL DEFAULT '0',
@@ -72,6 +80,7 @@ function tqx_pg_ensure_tables(PDO $pdo): void
         member_code VARCHAR(64) NOT NULL DEFAULT '',
         default_bank VARCHAR(64) NOT NULL DEFAULT '',
         default_product VARCHAR(64) NOT NULL DEFAULT '',
+        default_currency VARCHAR(8) NOT NULL DEFAULT '',
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
         PRIMARY KEY (chat_id, topic_key),
         KEY idx_company (company_id)
@@ -79,11 +88,23 @@ function tqx_pg_ensure_tables(PDO $pdo): void
     tqx_pg_ensure_chat_customer_schema($pdo);
 }
 
+/** ISO 风格币种代码，空或非法则返回空串 */
+function tqx_pg_normalize_currency(string $s): string
+{
+    $s = strtoupper(preg_replace('/\s+/', '', trim($s)));
+    if ($s === '' || !preg_match('/^[A-Z]{2,8}$/', $s)) {
+        return '';
+    }
+
+    return $s;
+}
+
 function tqx_pg_ensure_chat_customer_schema(PDO $pdo): void
 {
-    foreach (['default_bank', 'default_product'] as $col) {
+    foreach (['default_bank', 'default_product', 'default_currency'] as $col) {
+        $len = $col === 'default_currency' ? 8 : 64;
         try {
-            $pdo->exec("ALTER TABLE telegram_pg_chat_customer_pg ADD COLUMN {$col} VARCHAR(64) NOT NULL DEFAULT ''");
+            $pdo->exec("ALTER TABLE telegram_pg_chat_customer_pg ADD COLUMN {$col} VARCHAR({$len}) NOT NULL DEFAULT ''");
         } catch (Throwable $e) {
         }
     }
@@ -147,7 +168,7 @@ function tqx_pg_merge_bind_topic_over_global(?array $rowGlobal, ?array $rowTopic
     if (!is_array($rowTopic)) {
         return $out;
     }
-    foreach (['member_code', 'default_bank'] as $f) {
+    foreach (['member_code', 'default_bank', 'default_currency'] as $f) {
         $tv = trim((string)($rowTopic[$f] ?? ''));
         if ($tv !== '') {
             $out[$f] = $tv;
@@ -162,7 +183,7 @@ function tqx_pg_merge_bind_topic_over_global(?array $rowGlobal, ?array $rowTopic
 
 function tqx_pg_bind_row_upsert_fields(PDO $pdo, string $chatId, string $topicKey, int $companyId, array $fields): void
 {
-    $allowed = ['member_code', 'default_bank'];
+    $allowed = ['member_code', 'default_bank', 'default_currency'];
     $patch = [];
     foreach ($allowed as $k) {
         if (!array_key_exists($k, $fields)) {
@@ -173,20 +194,23 @@ function tqx_pg_bind_row_upsert_fields(PDO $pdo, string $chatId, string $topicKe
     if ($patch === []) {
         return;
     }
-    $st = $pdo->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+    $st = $pdo->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
     $st->execute([$chatId, $topicKey]);
     $row = $st->fetch(PDO::FETCH_ASSOC);
     if (is_array($row)) {
         $member = array_key_exists('member_code', $patch) ? $patch['member_code'] : (string)($row['member_code'] ?? '');
         $db = array_key_exists('default_bank', $patch) ? $patch['default_bank'] : (string)($row['default_bank'] ?? '');
-        $pdo->prepare('UPDATE telegram_pg_chat_customer_pg SET member_code = ?, default_bank = ?, default_product = ? WHERE chat_id = ? AND topic_key = ? LIMIT 1')
-            ->execute([$member, $db, '', $chatId, $topicKey]);
+        $dcRaw = array_key_exists('default_currency', $patch) ? $patch['default_currency'] : (string)($row['default_currency'] ?? '');
+        $dc = tqx_pg_normalize_currency($dcRaw);
+        $pdo->prepare('UPDATE telegram_pg_chat_customer_pg SET member_code = ?, default_bank = ?, default_product = ?, default_currency = ? WHERE chat_id = ? AND topic_key = ? LIMIT 1')
+            ->execute([$member, $db, '', $dc, $chatId, $topicKey]);
         return;
     }
     $member = array_key_exists('member_code', $patch) ? $patch['member_code'] : '';
     $db = array_key_exists('default_bank', $patch) ? $patch['default_bank'] : '';
-    $pdo->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, ?, ?, ?, ?, ?)')
-        ->execute([$chatId, $topicKey, $companyId, $member, $db, '']);
+    $dcIns = array_key_exists('default_currency', $patch) ? tqx_pg_normalize_currency($patch['default_currency']) : '';
+    $pdo->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency) VALUES (?, ?, ?, ?, ?, ?, ?)')
+        ->execute([$chatId, $topicKey, $companyId, $member, $db, '', $dcIns]);
 }
 
 /**
@@ -201,13 +225,13 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
         $topicKey = '0';
     }
 
-    $st0 = $pdoCat->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+    $st0 = $pdoCat->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
     $st0->execute([$chatId, '0']);
     $row0 = $st0->fetch(PDO::FETCH_ASSOC) ?: null;
 
     $rowT = null;
     if ($topicKey !== '0') {
-        $stT = $pdoCat->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+        $stT = $pdoCat->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
         $stT->execute([$chatId, $topicKey]);
         $rowT = $stT->fetch(PDO::FETCH_ASSOC) ?: null;
     }
@@ -216,7 +240,7 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
     if (is_array($bindMerged) && (int)($bindMerged['company_id'] ?? 0) > 0) {
         $companyId = (int)$bindMerged['company_id'];
         $stCfg = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
-            pg_simple_member_code, pg_simple_bank, pg_simple_product
+            pg_simple_member_code, pg_simple_bank, pg_simple_product, pg_simple_currency, receipt_fx_rate
             FROM telegram_quick_txn_config_pg WHERE company_id = ? LIMIT 1");
         $stCfg->execute([$companyId]);
         $cfg = $stCfg->fetch(PDO::FETCH_ASSOC);
@@ -225,13 +249,16 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
         }
         $cfg['chat_default_member_code'] = trim((string)($bindMerged['member_code'] ?? ''));
         $cfg['chat_default_bank'] = trim((string)($bindMerged['default_bank'] ?? ''));
+        $cfg['chat_default_currency'] = tqx_pg_normalize_currency((string)($bindMerged['default_currency'] ?? ''));
         $cfg['chat_default_product'] = '';
         tqx_pg_fill_chat_defaults_from_any_topic($pdoCat, $chatId, $cfg);
+        tqx_pg_cfg_resolve_currency($pdoCat, $cfg);
+
         return $cfg;
     }
 
     $stFind = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
-        pg_simple_member_code, pg_simple_bank, pg_simple_product
+        pg_simple_member_code, pg_simple_bank, pg_simple_product, pg_simple_currency, receipt_fx_rate
         FROM telegram_quick_txn_config_pg
         WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
         LIMIT 1");
@@ -248,26 +275,28 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
         $chk = $pdoCat->prepare("SELECT 1 FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = '0' LIMIT 1");
         $chk->execute([$chatId]);
         if (!$chk->fetchColumn()) {
-            $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, '0', ?, '', '', '')")
+            $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency) VALUES (?, '0', ?, '', '', '', '')")
                 ->execute([$chatId, $cid]);
         }
     } catch (Throwable $e) {
     }
     $mem = '';
     $db = '';
+    $dcc = '';
     try {
-        $stM = $pdoCat->prepare("SELECT member_code, default_bank FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = '0' LIMIT 1");
+        $stM = $pdoCat->prepare("SELECT member_code, default_bank, default_currency FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = '0' LIMIT 1");
         $stM->execute([$chatId]);
         $rM = $stM->fetch(PDO::FETCH_ASSOC);
         if (is_array($rM)) {
             $mem = trim((string)($rM['member_code'] ?? ''));
             $db = trim((string)($rM['default_bank'] ?? ''));
+            $dcc = tqx_pg_normalize_currency((string)($rM['default_currency'] ?? ''));
         }
     } catch (Throwable $e) {
     }
     if ($topicKey !== '0') {
         try {
-            $stT2 = $pdoCat->prepare("SELECT member_code, default_bank FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1");
+            $stT2 = $pdoCat->prepare("SELECT member_code, default_bank, default_currency FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1");
             $stT2->execute([$chatId, $topicKey]);
             $rT2 = $stT2->fetch(PDO::FETCH_ASSOC);
             if (is_array($rT2)) {
@@ -278,15 +307,49 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
                     }
                 }
                 unset($ref);
+                $tv2 = tqx_pg_normalize_currency((string)($rT2['default_currency'] ?? ''));
+                if ($tv2 !== '') {
+                    $dcc = $tv2;
+                }
             }
         } catch (Throwable $e) {
         }
     }
     $cfg['chat_default_member_code'] = $mem;
     $cfg['chat_default_bank'] = $db;
+    $cfg['chat_default_currency'] = $dcc;
     $cfg['chat_default_product'] = '';
     tqx_pg_fill_chat_defaults_from_any_topic($pdoCat, $chatId, $cfg);
+    tqx_pg_cfg_resolve_currency($pdoCat, $cfg);
+
     return $cfg;
+}
+
+/** 解析本笔记账币种：话题 /currency > 后台 pg_simple_currency > 分公司 companies.currency > MYR */
+function tqx_pg_cfg_resolve_currency(PDO $pdoCat, array &$cfg): void
+{
+    $cid = (int)($cfg['company_id'] ?? 0);
+    $comp = '';
+    if ($cid > 0) {
+        try {
+            $st = $pdoCat->prepare('SELECT UPPER(TRIM(currency)) FROM companies WHERE id = ? LIMIT 1');
+            $st->execute([$cid]);
+            $comp = tqx_pg_normalize_currency((string)$st->fetchColumn());
+        } catch (Throwable $e) {
+        }
+    }
+    $cfg['company_currency'] = $comp !== '' ? $comp : 'MYR';
+    $chat = tqx_pg_normalize_currency(trim((string)($cfg['chat_default_currency'] ?? '')));
+    $simple = tqx_pg_normalize_currency(trim((string)($cfg['pg_simple_currency'] ?? '')));
+    if ($chat !== '') {
+        $cfg['txn_currency'] = $chat;
+    } elseif ($simple !== '') {
+        $cfg['txn_currency'] = $simple;
+    } elseif ($comp !== '') {
+        $cfg['txn_currency'] = $comp;
+    } else {
+        $cfg['txn_currency'] = 'MYR';
+    }
 }
 
 /** 当前话题未设客户/银行时，用本群任意话题里最近填过的值（解决 /customer 与 /bank 分在不同论坛话题） */
@@ -310,6 +373,17 @@ function tqx_pg_fill_chat_defaults_from_any_topic(PDO $pdoCat, string $chatId, a
             $v = trim((string)$st->fetchColumn());
             if ($v !== '') {
                 $cfg['chat_default_bank'] = $v;
+            }
+        } catch (Throwable $e) {
+        }
+    }
+    if (tqx_pg_normalize_currency(trim((string)($cfg['chat_default_currency'] ?? ''))) === '') {
+        try {
+            $st = $pdoCat->prepare("SELECT default_currency FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND TRIM(COALESCE(default_currency,'')) <> '' ORDER BY updated_at IS NULL, updated_at DESC LIMIT 1");
+            $st->execute([$chatId]);
+            $v = tqx_pg_normalize_currency((string)$st->fetchColumn());
+            if ($v !== '') {
+                $cfg['chat_default_currency'] = $v;
             }
         } catch (Throwable $e) {
         }
@@ -553,6 +627,142 @@ function tqx_pg_parse_money_line(string $text): array
     ];
 }
 
+function tqx_pg_h(string $s): string
+{
+    return htmlspecialchars($s, ENT_QUOTES | ENT_SUBSTITUTE, 'UTF-8');
+}
+
+function tqx_pg_fmt_receipt_amount(float $v): string
+{
+    $v = round($v, 2);
+    if (abs($v - round($v, 0)) < 0.00001) {
+        return (string)(int)round($v);
+    }
+
+    return rtrim(rtrim(number_format($v, 2, '.', ''), '0'), '.');
+}
+
+function tqx_pg_receipt_row_label(?string $extRef, string $memberCode, ?string $remark, int $maxChars = 26): string
+{
+    $parts = [];
+    $e = trim((string)$extRef);
+    if ($e !== '') {
+        $parts[] = $e;
+    }
+    $c = trim($memberCode);
+    if ($c !== '') {
+        $parts[] = $c;
+    }
+    $r = trim((string)$remark);
+    if ($r !== '') {
+        $parts[] = preg_replace('/\s+/u', ' ', $r);
+    }
+    $s = implode(' ', $parts);
+    if ($s === '') {
+        return '';
+    }
+    if (function_exists('mb_strlen') && function_exists('mb_substr')) {
+        if (mb_strlen($s, 'UTF-8') > $maxChars) {
+            return mb_substr($s, 0, $maxChars, 'UTF-8') . '..';
+        }
+    } elseif (strlen($s) > $maxChars) {
+        return substr($s, 0, $maxChars) . '..';
+    }
+
+    return $s;
+}
+
+/**
+ * @param list<array<string,mixed>> $rowsIn
+ * @param list<array<string,mixed>> $rowsOut
+ */
+function tqx_pg_build_receipt_body_html(
+    int $nIn,
+    int $nOut,
+    array $rowsIn,
+    array $rowsOut,
+    string $flow,
+    int $txId,
+    float $principal,
+    float $booked,
+    float $todayIn,
+    float $todayOut,
+    float $fx,
+    string $txnCur,
+    string $token
+): string {
+    $b = [];
+    $b[] = '<b>已入账 (' . (string)(int)$nIn . '笔)</b>';
+    if ($rowsIn === []) {
+        $b[] = '<i>（无）</i>';
+    } else {
+        foreach ($rowsIn as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $idR = (int)($r['id'] ?? 0);
+            $t = (string)($r['txn_time'] ?? '');
+            $t5 = strlen($t) >= 5 ? substr($t, 0, 5) : $t;
+            $am = round((float)($r['amount'] ?? 0), 2);
+            $isCurrent = ($idR === $txId && $flow === 'in');
+            $L = $isCurrent ? $principal : $am;
+            $R = $isCurrent ? $booked : $am;
+            $lbl = tqx_pg_receipt_row_label(
+                isset($r['external_ref']) ? (string)$r['external_ref'] : null,
+                (string)($r['member_code'] ?? ''),
+                isset($r['remark']) ? (string)$r['remark'] : null
+            );
+            $line = tqx_pg_h($t5) . ' ' . tqx_pg_fmt_receipt_amount($L) . ' = ' . tqx_pg_fmt_receipt_amount($R);
+            if ($lbl !== '') {
+                $line .= ' ' . tqx_pg_h($lbl);
+            }
+            $b[] = $line;
+        }
+    }
+    $b[] = '';
+    $b[] = '<b>已下发 (' . (string)(int)$nOut . '笔)</b>';
+    if ($rowsOut === []) {
+        $b[] = '<i>（无）</i>';
+    } else {
+        foreach ($rowsOut as $r) {
+            if (!is_array($r)) {
+                continue;
+            }
+            $idR = (int)($r['id'] ?? 0);
+            $t = (string)($r['txn_time'] ?? '');
+            $t5 = strlen($t) >= 5 ? substr($t, 0, 5) : $t;
+            $am = round((float)($r['amount'] ?? 0), 2);
+            $isCurrent = ($idR === $txId && $flow === 'out');
+            $L = $isCurrent ? $principal : $am;
+            $R = $isCurrent ? $booked : $am;
+            $lbl = tqx_pg_receipt_row_label(
+                isset($r['external_ref']) ? (string)$r['external_ref'] : null,
+                (string)($r['member_code'] ?? ''),
+                isset($r['remark']) ? (string)$r['remark'] : null
+            );
+            $line = tqx_pg_h($t5) . ' ' . tqx_pg_fmt_receipt_amount($L) . ' = ' . tqx_pg_fmt_receipt_amount($R);
+            if ($lbl !== '') {
+                $line .= ' ' . tqx_pg_h($lbl);
+            }
+            $b[] = $line;
+        }
+    }
+    $b[] = '';
+    $due = round($todayIn * $fx, 2);
+    $paid = round($todayOut, 2);
+    $pending = max(0.0, round($due - $paid, 2));
+    $b[] = '总入款额：' . tqx_pg_fmt_receipt_amount($todayIn);
+    $fxDisp = (abs($fx - round($fx, 0)) < 0.0000001) ? (string)(int)$fx : rtrim(rtrim(number_format($fx, 6, '.', ''), '0'), '.');
+    $b[] = '固定汇率：' . tqx_pg_h($fxDisp) . '（' . tqx_pg_h($txnCur) . '）';
+    $b[] = '应下发：' . tqx_pg_fmt_receipt_amount($due);
+    $b[] = '已下发：' . tqx_pg_fmt_receipt_amount($paid);
+    $b[] = '未下发：' . tqx_pg_fmt_receipt_amount($pending);
+    $b[] = '';
+    $b[] = '撤销：<code>' . tqx_pg_h('undo ' . $token) . '</code>';
+
+    return implode("\n", $b);
+}
+
 function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $botToken): void
 {
     $pdoCat = function_exists('shard_catalog') ? shard_catalog() : $pdo;
@@ -689,6 +899,53 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             return;
         }
         tqx_reply($botToken, $chatId, '✅ 默认银行/渠道已更新。+金额 姓名 未写銀行时用此处；消息里写銀行则只覆盖该笔记录。');
+        return;
+    }
+
+    if (preg_match('/^(currency|\/currency|币种|\/币种|幣種|\/幣種)(?:\s+(.+))?$/iu', $text, $mCur)) {
+        $cfgC = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
+        if (!$cfgC) {
+            tqx_reply($botToken, $chatId, '本群尚未绑定 PG 公司。请先发 /setup');
+            return;
+        }
+        $allowJsonC = (string)($cfgC['allowed_user_ids'] ?? '');
+        $allowArrC = tqx_json_decode_map($allowJsonC);
+        $allowC = [];
+        foreach ($allowArrC as $v) {
+            $v = trim((string)$v);
+            if ($v !== '') {
+                $allowC[] = $v;
+            }
+        }
+        $isAdmC = ($tgUserId > 0 && in_array((string)$tgUserId, $allowC, true))
+            || ($tgUsername !== '' && in_array($tgUsername, $allowC, true));
+        if (!$isAdmC) {
+            tqx_reply($botToken, $chatId, 'Unauthorized');
+            return;
+        }
+        $rawC = trim((string)($mCur[2] ?? ''));
+        if ($rawC === '') {
+            $eff = (string)($cfgC['txn_currency'] ?? 'MYR');
+            $tkHint = $topicKey !== '0' ? " topic={$topicKey}" : '';
+            $compC = (string)($cfgC['company_currency'] ?? 'MYR');
+            tqx_reply($botToken, $chatId, "本话题记账币种{$tkHint}：{$eff}\n（分公司默认：{$compC}；后台可设 pg_simple_currency）\n设置：/currency USD\n清除：/currency -");
+            return;
+        }
+        $clearC = in_array(strtolower($rawC), ['-', 'clear', 'none', '空'], true);
+        $norm = $clearC ? '' : tqx_pg_normalize_currency($rawC);
+        if (!$clearC && $norm === '') {
+            tqx_reply($botToken, $chatId, '币种须为 2～8 位大写字母（如 MYR、USD）。');
+            return;
+        }
+        try {
+            tqx_pg_bind_row_upsert_fields($pdoCat, $chatId, $topicKey, (int)($cfgC['company_id'] ?? 0), ['default_currency' => $norm]);
+        } catch (Throwable $e) {
+            tqx_reply($botToken, $chatId, '保存失败：' . $e->getMessage());
+            return;
+        }
+        $cfgAfter = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
+        $show = $cfgAfter ? (string)($cfgAfter['txn_currency'] ?? 'MYR') : 'MYR';
+        tqx_reply($botToken, $chatId, '✅ 本话题记账币种已更新。此后入账 pg_transactions.currency 为：' . $show . '（清除后按后台/分公司默认）。');
         return;
     }
 
@@ -857,17 +1114,18 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         ]);
 
         try {
-            $stB = $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, '0', ?, '', '', '')
+            $stB = $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product, default_currency) VALUES (?, '0', ?, '', '', '', '')
                 ON DUPLICATE KEY UPDATE
                     company_id = VALUES(company_id),
                     member_code = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.member_code),
                     default_bank = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.default_bank),
-                    default_product = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.default_product)");
+                    default_product = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.default_product),
+                    default_currency = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.default_currency)");
             $stB->execute([$chatId, $pickCompanyId]);
         } catch (Throwable $e) {
         }
 
-        tqx_reply($botToken, $chatId, "✅ PG 群已绑定\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已加入白名单。\n\n当前话题可设：/customer 代号  /bank 渠道\n（论坛各话题可分别设置；PG 无产品段）");
+        tqx_reply($botToken, $chatId, "✅ PG 群已绑定\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已加入白名单。\n\n当前话题可设：/customer 代号  /bank 渠道  /currency 币种\n（论坛各话题可分别设置；PG 无产品段）");
         return;
     }
 
@@ -1137,10 +1395,14 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         $lineRemark = trim($lineRemark . " [bonus {$bonus}]");
     }
 
+    $txnCur = tqx_pg_normalize_currency((string)($cfg['txn_currency'] ?? ''));
+    if ($txnCur === '') {
+        $txnCur = 'MYR';
+    }
     try {
         $pdoData->prepare('INSERT INTO pg_transactions (company_id, txn_day, txn_time, flow, amount, currency, external_ref, channel, member_code, status, remark, staff, created_by, created_at, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, NOW(), NULL, NOW())')
-            ->execute([$companyId, $day, $time, $flow, $total, ($extRefIns !== null && $extRefIns !== '' ? $extRefIns : null), $channel, $code, 'approved', ($lineRemark !== '' ? $lineRemark : null), $who]);
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NOW(), NULL, NOW())')
+            ->execute([$companyId, $day, $time, $flow, $total, $txnCur, ($extRefIns !== null && $extRefIns !== '' ? $extRefIns : null), $channel, $code, 'approved', ($lineRemark !== '' ? $lineRemark : null), $who]);
         $txId = (int)$pdoData->lastInsertId();
     } catch (Throwable $e) {
         tqx_reply($botToken, $chatId, '写入失败：' . $e->getMessage());
@@ -1149,6 +1411,10 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
 
     $todayIn = 0.0;
     $todayOut = 0.0;
+    $nIn = 0;
+    $nOut = 0;
+    $rowsIn = [];
+    $rowsOut = [];
     try {
         $stSum = $pdoData->prepare("SELECT COALESCE(SUM(CASE WHEN flow = 'in' THEN amount ELSE 0 END), 0), COALESCE(SUM(CASE WHEN flow = 'out' THEN amount ELSE 0 END), 0) FROM pg_transactions WHERE company_id = ? AND txn_day = ? AND status = 'approved'");
         $stSum->execute([$companyId, $day]);
@@ -1157,41 +1423,33 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             $todayIn = (float)($rowSum[0] ?? 0);
             $todayOut = (float)($rowSum[1] ?? 0);
         }
+        $stNi = $pdoData->prepare("SELECT COUNT(*) FROM pg_transactions WHERE company_id = ? AND txn_day = ? AND status = 'approved' AND flow = 'in'");
+        $stNi->execute([$companyId, $day]);
+        $nIn = (int)$stNi->fetchColumn();
+        $stNo = $pdoData->prepare("SELECT COUNT(*) FROM pg_transactions WHERE company_id = ? AND txn_day = ? AND status = 'approved' AND flow = 'out'");
+        $stNo->execute([$companyId, $day]);
+        $nOut = (int)$stNo->fetchColumn();
+        $stRi = $pdoData->prepare("SELECT id, txn_time, amount, external_ref, member_code, remark FROM pg_transactions WHERE company_id = ? AND txn_day = ? AND status = 'approved' AND flow = 'in' ORDER BY id ASC LIMIT 15");
+        $stRi->execute([$companyId, $day]);
+        $rowsIn = $stRi->fetchAll(PDO::FETCH_ASSOC) ?: [];
+        $stRo = $pdoData->prepare("SELECT id, txn_time, amount, external_ref, member_code, remark FROM pg_transactions WHERE company_id = ? AND txn_day = ? AND status = 'approved' AND flow = 'out' ORDER BY id ASC LIMIT 15");
+        $stRo->execute([$companyId, $day]);
+        $rowsOut = $stRo->fetchAll(PDO::FETCH_ASSOC) ?: [];
     } catch (Throwable $e) {
     }
 
     $token = substr(hash('sha256', $chatId . '|' . $tgUserId . '|' . microtime(true) . '|' . $txId), 0, 10);
-    $timeHm = date('H:i');
-    if ($flow === 'in') {
-        $reply = "✅ 已入账（本笔）\n";
-        $reply .= "{$timeHm} 入 +" . number_format($amount, 2, '.', '') . ' → 记账 ' . number_format($total, 2, '.', '') . "\n";
-        $reply .= "代号 {$code}｜{$channel}\n";
-        if ($extRefIns !== null && $extRefIns !== '') {
-            $reply .= '名字 ' . $extRefIns . "\n";
-        }
-        if ($lineRemark !== '') {
-            $reply .= '备注 ' . $lineRemark . "\n";
-        }
-        $reply .= "\n─── 今日汇总 ───\n";
-        $reply .= '今日入款合计：' . number_format($todayIn, 2, '.', '') . "\n";
-        $reply .= '今日出款合计：' . number_format($todayOut, 2, '.', '') . "\n";
-        $reply .= '本笔入款：' . number_format($total, 2, '.', '') . "\n";
-    } else {
-        $reply = "✅ 已出款（本笔）\n";
-        $reply .= "{$timeHm} 出 -" . number_format($amount, 2, '.', '') . ' → 记账 ' . number_format($total, 2, '.', '') . "\n";
-        $reply .= "代号 {$code}｜{$channel}\n";
-        if ($extRefIns !== null && $extRefIns !== '') {
-            $reply .= '名字 ' . $extRefIns . "\n";
-        }
-        if ($lineRemark !== '') {
-            $reply .= '备注 ' . $lineRemark . "\n";
-        }
-        $reply .= "\n─── 今日汇总 ───\n";
-        $reply .= '今日入款合计：' . number_format($todayIn, 2, '.', '') . "\n";
-        $reply .= '今日出款合计：' . number_format($todayOut, 2, '.', '') . "\n";
-        $reply .= '本笔出款：' . number_format($total, 2, '.', '') . "\n";
+    $fx = (float)($cfg['receipt_fx_rate'] ?? 1);
+    if ($fx <= 0 || !is_finite($fx)) {
+        $fx = 1.0;
     }
-    $reply .= "\n撤销：undo {$token}";
+    $body = tqx_pg_build_receipt_body_html($nIn, $nOut, $rowsIn, $rowsOut, $flow, $txId, $amount, $total, $todayIn, $todayOut, $fx, $txnCur, $token);
+    $reply = '';
+    $rp = trim((string)($cfg['receipt_prefix'] ?? ''));
+    if ($rp !== '') {
+        $reply .= '<b>' . tqx_pg_h($rp) . '</b>' . "\n\n";
+    }
+    $reply .= $body;
 
     global $NOTIFY_BASE_URL;
     if (!empty($NOTIFY_BASE_URL)) {
@@ -1216,7 +1474,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             $txId,
         ]);
 
-    $receiptMid = tqx_reply($botToken, $chatId, $reply);
+    $receiptMid = tqx_reply($botToken, $chatId, $reply, 'HTML');
     $GLOBALS['__tqx_reply_markup'] = null;
     if ($receiptMid) {
         try {
