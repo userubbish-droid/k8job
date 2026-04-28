@@ -41,6 +41,14 @@ try {
     foreach (['pg_simple_member_code', 'pg_simple_bank', 'pg_simple_product'] as $__pgc) {
         try { $pdo->exec("ALTER TABLE telegram_quick_txn_config_pg ADD COLUMN {$__pgc} VARCHAR(64) NULL DEFAULT NULL"); } catch (Throwable $e) {}
     }
+    $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_pg_chat_customer_pg (
+        chat_id VARCHAR(40) NOT NULL,
+        company_id INT UNSIGNED NOT NULL,
+        member_code VARCHAR(64) NOT NULL DEFAULT '',
+        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (chat_id),
+        KEY idx_company (company_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
 } catch (Throwable $e) {
     $err = $e->getMessage();
 }
@@ -160,6 +168,38 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && !$err) {
     }
 }
 
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['save_pg_chat_customers']) && !$err && $company_pick_pg_kind) {
+    try {
+        $ids = $_POST['bind_chat_id'] ?? [];
+        $codes = $_POST['bind_member_code'] ?? [];
+        if (!is_array($ids) || !is_array($codes)) {
+            throw new RuntimeException('表单无效。');
+        }
+        foreach ($ids as $i => $chid) {
+            $chid = trim((string)$chid);
+            if ($chid === '') {
+                continue;
+            }
+            $mem = trim((string)($codes[$i] ?? ''));
+            if (strlen($mem) > 64) {
+                throw new RuntimeException('代号过长（最多 64 字符）：' . $chid);
+            }
+            $stChk = $pdo->prepare('SELECT company_id FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
+            $stChk->execute([$chid]);
+            $exCid = (int)$stChk->fetchColumn();
+            if ($exCid > 0 && $exCid !== (int)$company_pick) {
+                continue;
+            }
+            $pdo->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE member_code = VALUES(member_code), company_id = VALUES(company_id)')
+                ->execute([$chid, (int)$company_pick, $mem]);
+        }
+        $msg = ($msg !== '' ? $msg . ' ' : '') . '已保存各群默认客户代号。';
+    } catch (Throwable $e) {
+        $err = $e->getMessage();
+    }
+}
+
 $cur = [
     'enabled' => 0,
     'chat_id' => '',
@@ -207,6 +247,17 @@ if (is_array($allow_arr)) {
 $bank_lines = _map_to_lines((string)($cur['bank_alias_json'] ?? '{}'));
 $prod_lines = _map_to_lines((string)($cur['product_alias_json'] ?? '{}'));
 $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
+
+$pg_chat_bindings = [];
+if (!$err) {
+    try {
+        $stBindList = $pdo->prepare('SELECT chat_id, member_code, updated_at FROM telegram_pg_chat_customer_pg WHERE company_id = ? ORDER BY chat_id ASC');
+        $stBindList->execute([(int)$company_pick]);
+        $pg_chat_bindings = $stBindList->fetchAll(PDO::FETCH_ASSOC) ?: [];
+    } catch (Throwable $e) {
+        $pg_chat_bindings = [];
+    }
+}
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -267,12 +318,12 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
                         启用 PG 快捷记账（仅 + / - / undo；写入 pg_transactions）
                     </label>
 
-                    <label style="margin-top:12px; font-weight:700;">群 Chat ID（必填）</label>
+                    <label style="margin-top:12px; font-weight:700;">群 Chat ID（兼容旧版；多群时以群内 /setup 为准）</label>
                     <input class="form-control" name="chat_id" value="<?= htmlspecialchars((string)($cur['chat_id'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="-100xxxxxxxxxx">
-                    <p class="form-hint">填写 <strong>PG 专用 Bot</strong> 所在群的 chat.id。获取方式：把 PG Bot 拉进群后发一条消息，用 PG 的 token 打开 <code>https://api.telegram.org/bot&lt;PG_TOKEN&gt;/getUpdates</code> 查看 chat.id。</p>
+                    <p class="form-hint">多群场景：每个群在群内发 <code>/setup</code> 绑定同一 PG 公司后，再发 <code>/customer 代号</code> 指定该群默认客户。此处 Chat ID 仍可作为参考或单群部署时填写。获取 chat.id：把 PG Bot 拉进群后发消息，用 PG token 调 <code>getUpdates</code>。</p>
 
                     <label style="margin-top:12px; font-weight:700;">极简指令（群内只发 +金额 / -金额）</label>
-                    <p class="form-hint">三项都填后，群内可只发 <code>+100</code> 或 <code>-50</code>，系统会自动展开为完整记账行（代号｜渠道｜产品）。与下方「完整格式」二选一或并存均可。</p>
+                    <p class="form-hint">群内已设 <code>/customer 代号</code> 时，「简易代号」可用后台默认或省略（以群设置优先）；仍须填「简易渠道」「简易产品」。三项齐备后群内可只发 <code>+100</code> / <code>-50</code>。与「完整格式」可并存。</p>
                     <div style="display:grid; grid-template-columns:1fr; gap:8px;">
                         <input class="form-control" name="pg_simple_member_code" value="<?= htmlspecialchars((string)($cur['pg_simple_member_code'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易代号（对应完整格式里第 1 段，如 Ez99 或 C001）">
                         <input class="form-control" name="pg_simple_bank" value="<?= htmlspecialchars((string)($cur['pg_simple_bank'] ?? ''), ENT_QUOTES, 'UTF-8') ?>" placeholder="简易渠道（第 2 段，如 DEP 或 CHANNEL1）">
@@ -315,11 +366,46 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
                 </form>
 
                 <hr style="border:none; border-top:1px solid var(--border); margin:18px 0;">
+                <h3 style="font-size:1rem; margin-bottom:10px;">各群默认客户代号</h3>
+                <p class="form-hint" style="margin-bottom:10px;">群内由管理员发 <code>/customer C001</code> 即可绑定；此处可批量修改已登记群的代号。</p>
+                <?php if ($company_pick_pg_kind): ?>
+                <form method="post">
+                    <?php if ($actor_is_superadmin): ?><input type="hidden" name="company_id" value="<?= (int)$company_pick ?>"><?php endif; ?>
+                    <input type="hidden" name="save_pg_chat_customers" value="1">
+                    <div class="table-scroll">
+                        <table class="data-table">
+                            <thead><tr><th>群 chat_id</th><th>默认客户代号</th></tr></thead>
+                            <tbody>
+                            <?php if (empty($pg_chat_bindings)): ?>
+                                <tr><td colspan="2" class="form-hint">尚无记录。请在目标群用 PG Bot 发 <code>/setup</code> 后再试，或下方手动添加一行。</td></tr>
+                            <?php else: ?>
+                                <?php foreach ($pg_chat_bindings as $br):
+                                    $bcid = htmlspecialchars((string)($br['chat_id'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                    $bmem = htmlspecialchars((string)($br['member_code'] ?? ''), ENT_QUOTES, 'UTF-8');
+                                ?>
+                                <tr>
+                                    <td><input type="hidden" name="bind_chat_id[]" value="<?= $bcid ?>"><code><?= $bcid ?></code></td>
+                                    <td><input class="form-control" name="bind_member_code[]" value="<?= $bmem ?>" placeholder="C001"></td>
+                                </tr>
+                                <?php endforeach; ?>
+                            <?php endif; ?>
+                                <tr>
+                                    <td><input class="form-control" name="bind_chat_id[]" value="" placeholder="-100xxxxxxxxxx"></td>
+                                    <td><input class="form-control" name="bind_member_code[]" value="" placeholder="新客户代号"></td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <button class="btn btn-primary" type="submit" style="margin-top:10px;">保存各群代号</button>
+                </form>
+                <?php endif; ?>
+
+                <hr style="border:none; border-top:1px solid var(--border); margin:18px 0;">
                 <div class="form-hint">
-                    <strong>极简（填上面三项后）：</strong><br>
+                    <strong>极简（渠道+产品 + 群代号或后台代号）：</strong><br>
                     <code>+100</code> 或 <code>-50</code><br><br>
                     <strong>完整格式：</strong><br>
-                    <code>+100 C011 P M b10 remark</code> / <code>-200 C012 P M remark</code><br>
+                    <code>+100 C011 P M b10 remark</code> / <code>-200 C012 P M remark</code>（若本群已 <code>/customer</code>，则 C011 会被本群代号覆盖）<br>
                     撤销：<code>undo &lt;token&gt;</code>
                 </div>
             </div>

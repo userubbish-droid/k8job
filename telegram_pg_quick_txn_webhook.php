@@ -65,6 +65,72 @@ function tqx_pg_ensure_tables(PDO $pdo): void
         } catch (Throwable $e) {
         }
     }
+    $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_pg_chat_customer_pg (
+        chat_id VARCHAR(40) NOT NULL,
+        company_id INT UNSIGNED NOT NULL,
+        member_code VARCHAR(64) NOT NULL DEFAULT '',
+        updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
+        PRIMARY KEY (chat_id),
+        KEY idx_company (company_id)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+}
+
+/**
+ * 按群解析 PG 配置：优先 telegram_pg_chat_customer_pg（支持多群），否则回退到 config 表里的 chat_id。
+ *
+ * @return array<string,mixed>|null  在 cfg 上增加键 chat_default_member_code（本群默认客户代号）
+ */
+function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId): ?array
+{
+    $stBind = $pdoCat->prepare('SELECT company_id, member_code FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
+    $stBind->execute([$chatId]);
+    $bindRow = $stBind->fetch(PDO::FETCH_ASSOC);
+    if (is_array($bindRow) && (int)($bindRow['company_id'] ?? 0) > 0) {
+        $companyId = (int)$bindRow['company_id'];
+        $stCfg = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
+            pg_simple_member_code, pg_simple_bank, pg_simple_product
+            FROM telegram_quick_txn_config_pg WHERE company_id = ? LIMIT 1");
+        $stCfg->execute([$companyId]);
+        $cfg = $stCfg->fetch(PDO::FETCH_ASSOC);
+        if (!is_array($cfg) || !(int)($cfg['enabled'] ?? 0)) {
+            return null;
+        }
+        $cfg['chat_default_member_code'] = trim((string)($bindRow['member_code'] ?? ''));
+        return $cfg;
+    }
+
+    $stFind = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
+        pg_simple_member_code, pg_simple_bank, pg_simple_product
+        FROM telegram_quick_txn_config_pg
+        WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
+        LIMIT 1");
+    $stFind->execute([$chatId]);
+    $cfg = $stFind->fetch(PDO::FETCH_ASSOC);
+    if (!is_array($cfg)) {
+        return null;
+    }
+    $cid = (int)($cfg['company_id'] ?? 0);
+    if ($cid <= 0) {
+        return null;
+    }
+    try {
+        $chk = $pdoCat->prepare('SELECT 1 FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
+        $chk->execute([$chatId]);
+        if (!$chk->fetchColumn()) {
+            $pdoCat->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, ?)')
+                ->execute([$chatId, $cid, '']);
+        }
+    } catch (Throwable $e) {
+    }
+    $mem = '';
+    try {
+        $stM = $pdoCat->prepare('SELECT member_code FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
+        $stM->execute([$chatId]);
+        $mem = trim((string)($stM->fetchColumn()));
+    } catch (Throwable $e) {
+    }
+    $cfg['chat_default_member_code'] = $mem;
+    return $cfg;
 }
 
 function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $botToken): void
@@ -100,6 +166,65 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     $tgLast = trim((string)($from['last_name'] ?? ''));
     $tgFull = trim($tgFirst . ' ' . $tgLast);
     $who = $tgUsername !== '' ? $tgUsername : ($tgFull !== '' ? $tgFull : ($tgUserId > 0 ? (string)$tgUserId : 'telegram'));
+
+    if (preg_match('/^(customer|\/customer|客户|\/客户)(?:\s+(.+))?$/iu', $text, $mCust)) {
+        $cfgCust = tqx_pg_load_cfg_for_chat($pdoCat, $chatId);
+        if (!$cfgCust) {
+            tqx_reply($botToken, $chatId, '本群尚未绑定 PG 公司。请先发 /setup <公司ID或公司代码>');
+            return;
+        }
+        $allowJsonC = (string)($cfgCust['allowed_user_ids'] ?? '');
+        $allowArrC = tqx_json_decode_map($allowJsonC);
+        $allowC = [];
+        foreach ($allowArrC as $v) {
+            $v = trim((string)$v);
+            if ($v !== '') {
+                $allowC[] = $v;
+            }
+        }
+        $isAdminCust = false;
+        if ($tgUserId > 0 && in_array((string)$tgUserId, $allowC, true)) {
+            $isAdminCust = true;
+        }
+        if ($tgUsername !== '' && in_array($tgUsername, $allowC, true)) {
+            $isAdminCust = true;
+        }
+        if (!$isAdminCust) {
+            tqx_reply($botToken, $chatId, 'Unauthorized');
+            return;
+        }
+        $curMem = trim((string)($cfgCust['chat_default_member_code'] ?? ''));
+        $rawArg = trim((string)($mCust[2] ?? ''));
+        if ($rawArg === '') {
+            $show = $curMem !== '' ? $curMem : '（未设置）';
+            tqx_reply($botToken, $chatId, "本群默认客户代号：{$show}\n设置：/customer C001 或 客户 C001\n清除：/customer -");
+            return;
+        }
+        $clear = in_array(strtolower($rawArg), ['-', 'clear', 'none', '空'], true);
+        $newCode = $clear ? '' : $rawArg;
+        if (!$clear) {
+            if (strlen($newCode) > 64) {
+                tqx_reply($botToken, $chatId, '代号过长（最多 64 字符）。');
+                return;
+            }
+            if (preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', $newCode)) {
+                tqx_reply($botToken, $chatId, '代号含非法字符。');
+                return;
+            }
+        }
+        $cidCust = (int)($cfgCust['company_id'] ?? 0);
+        try {
+            $pdoCat->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, ?)
+                ON DUPLICATE KEY UPDATE member_code = VALUES(member_code), company_id = VALUES(company_id)')
+                ->execute([$chatId, $cidCust, $newCode]);
+        } catch (Throwable $e) {
+            tqx_reply($botToken, $chatId, '保存失败：' . $e->getMessage());
+            return;
+        }
+        $afterShow = $newCode !== '' ? $newCode : '（已清除）';
+        tqx_reply($botToken, $chatId, "✅ 本群默认客户代号已设为：{$afterShow}\n此后本群内 +金额 / 完整格式 记账均使用该代号。");
+        return;
+    }
 
     if (!preg_match('/^(\+|-|undo\b|cancel\b|撤销|取消|id\b|\/id\b|setup\b|\/setup\b|add\s+admin\b|remove\s+admin\b|del\s+admin\b|list\s+admin\b|\\/(addadmin|removeadmin|deladmin|listadmin)\\b)/i', $text)) {
         return;
@@ -213,17 +338,20 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             $uid0,
         ]);
 
-        tqx_reply($botToken, $chatId, "✅ PG 群已绑定\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已加入白名单。");
+        try {
+            $stB = $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, '')
+                ON DUPLICATE KEY UPDATE
+                    company_id = VALUES(company_id),
+                    member_code = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.member_code)");
+            $stB->execute([$chatId, $pickCompanyId]);
+        } catch (Throwable $e) {
+        }
+
+        tqx_reply($botToken, $chatId, "✅ PG 群已绑定\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已加入白名单。\n\n设置本群默认客户代号：/customer C001 或 客户 C001");
         return;
     }
 
-    $stFind = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
-        pg_simple_member_code, pg_simple_bank, pg_simple_product
-        FROM telegram_quick_txn_config_pg
-        WHERE enabled = 1 AND chat_id IS NOT NULL AND chat_id <> '' AND chat_id = ?
-        LIMIT 1");
-    $stFind->execute([$chatId]);
-    $cfg = $stFind->fetch(PDO::FETCH_ASSOC);
+    $cfg = tqx_pg_load_cfg_for_chat($pdoCat, $chatId);
     if (!$cfg) {
         return;
     }
@@ -252,11 +380,12 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             tqx_reply($botToken, $chatId, '金额须大于 0。');
             return;
         }
-        $sc = trim((string)($cfg['pg_simple_member_code'] ?? ''));
+        $scChat = trim((string)($cfg['chat_default_member_code'] ?? ''));
+        $sc = $scChat !== '' ? $scChat : trim((string)($cfg['pg_simple_member_code'] ?? ''));
         $sb = trim((string)($cfg['pg_simple_bank'] ?? ''));
         $sp = trim((string)($cfg['pg_simple_product'] ?? ''));
         if ($sc === '' || $sb === '' || $sp === '') {
-            tqx_reply($botToken, $chatId, "极简指令：只发 +金额 或 -金额。\n请在后台「PG Telegram」填写：简易代号、简易渠道、简易产品（三项必填），\n或使用完整格式：+100 C001 CHANNEL1 PG 备注");
+            tqx_reply($botToken, $chatId, "极简指令：只发 +金额 或 -金额。\n请先在本群发 /customer 代号 绑定本群客户，并在后台「PG Telegram」填写：简易渠道、简易产品；\n或后台三项代号+渠道+产品都填。\n完整格式：+100 C001 CHANNEL1 PG 备注");
             return;
         }
         $sign = ($pgShort['sign'] ?? '+') === '-' ? '-' : '+';
@@ -438,6 +567,11 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     $prodKey = tqx_norm_key($prodIn);
     if ($prodKey !== '' && isset($prodAlias[$prodKey])) {
         $prodIn = (string)$prodAlias[$prodKey];
+    }
+
+    $chatDefMember = trim((string)($cfg['chat_default_member_code'] ?? ''));
+    if ($chatDefMember !== '') {
+        $code = $chatDefMember;
     }
 
     if ($code === '' || $bankIn === '' || $prodIn === '') {

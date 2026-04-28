@@ -11,6 +11,17 @@ $pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 
 $company_id = current_company_id();
 
+$pdoCatBk = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+try {
+    $stBk = $pdoCatBk->prepare('SELECT LOWER(TRIM(business_kind)) FROM companies WHERE id = ? LIMIT 1');
+    $stBk->execute([$company_id]);
+    if (strtolower(trim((string)$stBk->fetchColumn())) === 'pg') {
+        header('Location: pg_transaction_list.php');
+        exit;
+    }
+} catch (Throwable $e) {
+}
+
 require_once __DIR__ . '/inc/transaction_soft_delete.php';
 transaction_ensure_soft_delete_columns($pdoBiz);
 transaction_purge_soft_deleted($pdoBiz, 100);

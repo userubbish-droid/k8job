@@ -20,7 +20,8 @@
  *
  * 5) 使用：把 PG Bot 拉进群 → 群内发 /setup 或 /setup <company_id|公司代码>
  *     绑定公司必须是 companies.business_kind = pg。
- *     指令与 gaming 类似：+100 CODE BANK CHAN 备注、undo、cancel、白名单 /addadmin 等（见 telegram_pg_quick_txn_webhook.php）。
+ *     绑定后再发 /customer 代号（或 客户 代号）指定本群默认客户代号；该群内 +金额 / 完整格式 记账均使用该代号（见 telegram_pg_quick_txn_webhook.php）。
+ *     指令与 gaming 类似：+100 CODE BANK CHAN 备注、undo、cancel、白名单 /addadmin 等。
  */
 require __DIR__ . '/config.php';
 require_once __DIR__ . '/inc/notify.php';

@@ -219,7 +219,24 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
     </div>
     <?php endif; ?>
     <?php if (has_permission('statement_balance')): ?><a href="balance_summary.php" class="nav-item <?= $sidebar_current === 'balance_summary' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_statement'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-    <?php if (has_permission('transaction_list')): ?><a href="transaction_list.php" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_transactions'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+    <?php
+    $__txn_href = 'transaction_list.php';
+    if (has_permission('transaction_list') && !empty($pdo) && function_exists('current_company_id')) {
+        try {
+            $__cid = (int)current_company_id();
+            if ($__cid > 0) {
+                $pdoCatSide = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+                $sts = $pdoCatSide->prepare('SELECT LOWER(TRIM(business_kind)) FROM companies WHERE id = ? LIMIT 1');
+                $sts->execute([$__cid]);
+                if (strtolower(trim((string)$sts->fetchColumn())) === 'pg') {
+                    $__txn_href = 'pg_transaction_list.php';
+                }
+            }
+        } catch (Throwable $e) {
+        }
+    }
+    ?>
+    <?php if (has_permission('transaction_list')): ?><a href="<?= htmlspecialchars($__txn_href, ENT_QUOTES, 'UTF-8') ?>" class="nav-item <?= $sidebar_current === 'transaction_list' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_transactions'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
     <?php if (has_permission('transaction_create') || has_permission('customer_create')): ?>
     <div class="nav-group" data-group="add-menu">
         <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, ['transaction_create', 'customer_create'], true) ? 'true' : 'false' ?>" aria-controls="nav-sub-add-menu" id="nav-toggle-add-menu">
