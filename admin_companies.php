@@ -274,7 +274,7 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                         </div>
                         <div class="filter-group">
                             <label>列表背景色（可选）</label>
-                            <input class="form-control" type="color" name="ui_color" value="#DBEAFE" title="用于用户管理按分公司着色（不影响业务数据）" style="width:88px;padding:6px 8px;">
+                            <input class="form-control" type="color" name="ui_color" value="#DBEAFE" title="用于整站背景主题色（按当前公司生效）" style="width:88px;padding:6px 8px;">
                         </div>
                         <div class="filter-group" style="align-self:flex-end;">
                             <button type="submit" class="btn btn-primary">新增</button>

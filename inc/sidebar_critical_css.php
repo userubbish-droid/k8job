@@ -7,6 +7,11 @@ $__base_prefix = $__base !== '' ? $__base . '/' : '';
 ?>
 <link rel="icon" href="<?= $__base_prefix ?>favicon.ico" type="image/x-icon">
 <link rel="stylesheet" href="<?= $__base_prefix ?>style.css?v=<?= $__css_mtime ?>">
+<?php
+// Per-company theme (background color) override
+// Safe include: falls back to default CSS on any error.
+@include __DIR__ . '/company_theme.php';
+?>
 <style>
 .dashboard-layout { display: flex !important; flex-direction: row !important; min-height: 100vh; }
 .dashboard-main {

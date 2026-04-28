@@ -49,6 +49,19 @@ if ($head_office_stmt) {
     }
 }
 
+$biz_kind = 'gaming';
+try {
+    $pdoCatBk = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+    $stBk = $pdoCatBk->prepare('SELECT LOWER(TRIM(business_kind)) FROM companies WHERE id = ? LIMIT 1');
+    $stBk->execute([$company_id]);
+    $biz_kind = strtolower(trim((string)$stBk->fetchColumn()));
+} catch (Throwable $e) {
+    $biz_kind = 'gaming';
+}
+if (!in_array($biz_kind, ['gaming', 'pg'], true)) {
+    $biz_kind = 'gaming';
+}
+
 $has_deleted_at = true;
 try {
     $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
@@ -66,7 +79,11 @@ try {
 }
 $min_approved_day = (is_string($min_approved_day) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $min_approved_day)) ? $min_approved_day : null;
 
-require_once __DIR__ . '/inc/game_platform_statement_compute.php';
+if ($biz_kind === 'pg') {
+    require_once __DIR__ . '/inc/pg_statement_compute.php';
+} else {
+    require_once __DIR__ . '/inc/game_platform_statement_compute.php';
+}
 
 /** @param array<string, scalar> $extra */
 function balance_summary_stmt_url(string $df, string $dt, array $extra = []): string {
@@ -168,16 +185,40 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                     </div>
                     <div class="total-table-wrap" style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px;">
                         <div>
-                            <h4>Bank</h4>
+                            <h4><?= $biz_kind === 'pg' ? 'Channel' : 'Bank' ?></h4>
                             <table class="total-table">
                                 <thead>
                                     <tr>
-                                        <th>Bank</th>
+                                        <th><?= $biz_kind === 'pg' ? 'Channel' : 'Bank' ?></th>
                                         <?php if ($is_admin): ?><th class="num">Starting Balance</th><th class="num">In</th><th class="num">Out</th><?php endif; ?>
                                         <th class="num">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    <?php if ($biz_kind === 'pg'): ?>
+                                    <?php foreach (($pg_all_channels ?? []) as $name):
+                                        $name = trim((string)$name);
+                                        if ($name === '') continue;
+                                        $key = strtolower($name);
+                                        $in = (float)(($pg_range_in_channel ?? [])[$key] ?? 0);
+                                        $out = (float)(($pg_range_out_channel ?? [])[$key] ?? 0);
+                                        $init = (float)(($pg_initial_channel ?? [])[$key] ?? 0);
+                                        $balance = $init + $in - $out;
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($name) ?></td>
+                                        <?php if ($is_admin): ?>
+                                        <td class="num"><?= number_format($init, 2) ?></td>
+                                        <td class="num in"><?= number_format($in, 2) ?></td>
+                                        <td class="num out"><?= number_format($out, 2) ?></td>
+                                        <?php endif; ?>
+                                        <td class="num profit"><?= number_format($balance, 2) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php if (empty($pg_all_channels ?? [])): ?>
+                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
+                                    <?php endif; ?>
+                                    <?php else: ?>
                                     <?php foreach ($all_banks as $name):
                                         $name = trim((string)$name);
                                         if ($name === '') continue;
@@ -200,20 +241,54 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                     <?php if (empty($all_banks)): ?>
                                     <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
                                     <?php endif; ?>
+                                    <?php endif; ?>
                                 </tbody>
                             </table>
                         </div>
                         <div>
-                            <h4>Game Platform</h4>
+                            <h4><?= $biz_kind === 'pg' ? 'Customer' : 'Game Platform' ?></h4>
                             <table class="total-table">
                                 <thead>
                                         <tr>
-                                        <th>Game Platform</th>
-                                        <?php if ($is_admin): ?><th class="num">Starting</th><th class="num">In</th><th class="num">Topup</th><th class="num">Out</th><?php endif; ?>
+                                        <th><?= $biz_kind === 'pg' ? 'Customer' : 'Game Platform' ?></th>
+                                        <?php if ($is_admin): ?>
+                                            <th class="num">Starting</th>
+                                            <th class="num">In</th>
+                                            <?php if ($biz_kind === 'pg'): ?>
+                                                <th class="num">Cash out</th>
+                                            <?php else: ?>
+                                                <th class="num">Topup</th>
+                                                <th class="num">Out</th>
+                                            <?php endif; ?>
+                                        <?php endif; ?>
                                         <th class="num">Balance</th>
                                     </tr>
                                 </thead>
                                 <tbody>
+                                    <?php if ($biz_kind === 'pg'): ?>
+                                    <?php foreach (($pg_all_customers ?? []) as $name):
+                                        $name = trim((string)$name);
+                                        if ($name === '') continue;
+                                        $key = strtolower($name);
+                                        $in = (float)(($pg_range_in_customer ?? [])[$key] ?? 0);
+                                        $out = (float)(($pg_range_out_customer ?? [])[$key] ?? 0);
+                                        $init = (float)(($pg_initial_customer ?? [])[$key] ?? 0);
+                                        $balance = $init + $in - $out;
+                                    ?>
+                                    <tr>
+                                        <td><?= htmlspecialchars($name) ?></td>
+                                        <?php if ($is_admin): ?>
+                                        <td class="num"><?= number_format($init, 2) ?></td>
+                                        <td class="num stmt-in"><?= $in != 0 ? number_format($in, 2) : '—' ?></td>
+                                        <td class="num stmt-out"><?= $out != 0 ? number_format($out, 2) : '—' ?></td>
+                                        <?php endif; ?>
+                                        <td class="num <?= $balance < 0 ? 'stmt-negative' : 'profit' ?>"><?= number_format($balance, 2) ?></td>
+                                    </tr>
+                                    <?php endforeach; ?>
+                                    <?php if (empty($pg_all_customers ?? [])): ?>
+                                    <tr><td colspan="<?= $is_admin ? 5 : 2 ?>">暂无</td></tr>
+                                    <?php endif; ?>
+                                    <?php else: ?>
                                     <?php foreach ($all_products as $name):
                                         $name = trim((string)$name);
                                         if ($name === '') continue;
@@ -237,6 +312,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                     <?php endforeach; ?>
                                     <?php if (empty($all_products)): ?>
                                     <tr><td colspan="<?= $is_admin ? 6 : 2 ?>">暂无</td></tr>
+                                    <?php endif; ?>
                                     <?php endif; ?>
                                 </tbody>
                             </table>
