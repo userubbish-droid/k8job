@@ -216,7 +216,7 @@ $staff_lines = _map_to_lines((string)($cur['staff_alias_json'] ?? '{}'));
             <div class="card">
                 <p class="form-hint" style="margin-bottom:14px;">
                     <strong>入口：</strong>浏览器打开 <code>admin_telegram_pg.php</code>（侧栏「PG Telegram」）。<br>
-                    <strong>Bot Token：</strong>在项目根目录 <code>notify_config.php</code> 填写 <code>$PG_TELEGRAM_BOT_TOKEN</code>（与 gaming 的 NOTIFY token 分开）。<br>
+                    <strong>Bot Token：</strong>在 <code>PG_notify_config.php</code> 或 <code>notify_config.php</code> 填写 <code>$PG_TELEGRAM_BOT_TOKEN</code>（与 gaming 的 <code>$NOTIFY_TELEGRAM_BOT_TOKEN</code> 分开）。<br>
                     <strong>Webhook：</strong>Telegram 指向 <code>https://你的域名/telegram_pg_webhook.php</code>（不要用 password_reset 那个 URL）。
                 </p>
                 <?php if (!$company_pick_pg_kind): ?>

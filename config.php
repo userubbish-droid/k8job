@@ -169,7 +169,7 @@ try {
     )");
 } catch (Throwable $e) {}
 
-// Telegram 通知：密钥勿写在此文件（避免进 Git）。复制 notify_config.php.example 为 notify_config.php 并填写（已在 .gitignore）
+// Telegram 通知：密钥勿写在此文件（避免进 Git）。notify_config.php + PG_notify_config.php（已在 .gitignore），见各自 .example
 $NOTIFY_TELEGRAM_BOT_TOKEN = '';
 $NOTIFY_TELEGRAM_CHAT_ID  = '';
 $NOTIFY_BASE_URL = '';
@@ -184,7 +184,12 @@ if (is_file(__DIR__ . '/notify_config.php') && !defined('NOTIFY_CONFIG_LOADED'))
     define('NOTIFY_CONFIG_LOADED', true);
 }
 
-// PG Bot token：notify_config 里未填时，可读主机环境变量（Hostinger：hPanel → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）
+// PG Bot token：独立文件 PG_notify_config.php（后加载，可覆盖 notify_config 里的空 PG；多域名建议只传此小文件）
+if (is_file(__DIR__ . '/PG_notify_config.php')) {
+    include __DIR__ . '/PG_notify_config.php';
+}
+
+// PG Bot token：仍未填时，可读主机环境变量（Hostinger：hPanel → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）
 // 不少 PHP-FPM 配置下 getenv() 拿不到面板注入的变量，但 $_SERVER / $_ENV 里有，故依次尝试。
 if (!isset($PG_TELEGRAM_BOT_TOKEN) || trim((string)$PG_TELEGRAM_BOT_TOKEN) === '') {
     $ev = getenv('PG_TELEGRAM_BOT_TOKEN');

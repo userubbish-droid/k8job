@@ -6,8 +6,8 @@
  *
  * 1) Telegram：@BotFather → /newbot → 复制新 Bot 的 HTTP API Token（勿与 NOTIFY 里 gaming 机器人共用）。
  *
- * 2) 配置：复制 notify_config.php.example 为 notify_config.php，填写：
- *     $PG_TELEGRAM_BOT_TOKEN = '你的PG_bot_token';
+ * 2) 配置：复制 PG_notify_config.php.example 为 PG_notify_config.php，填写：
+ *     $PG_TELEGRAM_BOT_TOKEN = '你的PG_bot_token'（与 notify_config.php 同级；多域名建议只传此文件）
  *
  * 3) 数据库：
  *     - 在主库（catalog）执行 migrate_telegram_quick_txn_pg_tables.sql → telegram_quick_txn_config_pg / telegram_quick_txn_log_pg
@@ -28,7 +28,7 @@ require_once __DIR__ . '/inc/notify.php';
 http_response_code(200);
 header('Content-Type: application/json; charset=utf-8');
 
-// notify_config.php 与 config.php 同级；变量在 include 后应已存在（勿写在别的路径）
+// $PG_TELEGRAM_BOT_TOKEN 由 config.php 从 notify_config.php / PG_notify_config.php / 环境变量 加载
 $token = '';
 if (isset($PG_TELEGRAM_BOT_TOKEN)) {
     $token = trim((string)$PG_TELEGRAM_BOT_TOKEN);
@@ -37,6 +37,7 @@ if (isset($PG_TELEGRAM_BOT_TOKEN)) {
 // 浏览器 GET：自检是否读到 token、PHP 是否正常（勿公开传播此 URL）
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $notifyPath = __DIR__ . '/notify_config.php';
+    $pgNotifyPath = __DIR__ . '/PG_notify_config.php';
     $probeG = getenv('PG_TELEGRAM_BOT_TOKEN');
     $probe = [
         'getenv' => is_string($probeG) && trim($probeG) !== '',
@@ -54,9 +55,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $bytes = (is_file($notifyPath) && is_readable($notifyPath)) ? @filesize($notifyPath) : null;
     $nameSubstrPresent = is_string($rawNotify) && stripos($rawNotify, 'PG_TELEGRAM_BOT_TOKEN') !== false;
     $likelyOldFileNoPg = is_int($bytes) && $bytes > 0 && $bytes < 480 && !$hasPgVarLine;
+    $rawPgNotify = is_readable($pgNotifyPath) ? @file_get_contents($pgNotifyPath) : false;
+    $pgFileHasLine = is_string($rawPgNotify) && preg_match('/\$PG_TELEGRAM_BOT_TOKEN\s*=/', $rawPgNotify) > 0;
+    $pgFileBytes = (is_file($pgNotifyPath) && is_readable($pgNotifyPath)) ? @filesize($pgNotifyPath) : null;
     $out = [
         'pg_webhook' => 'ok',
         'webhook_script_dir' => realpath(__DIR__) ?: __DIR__,
+        'pg_notify_config_file_exists' => is_file($pgNotifyPath),
+        'pg_notify_config_realpath' => is_file($pgNotifyPath) ? realpath($pgNotifyPath) : null,
+        'pg_notify_config_bytes' => $pgFileBytes,
+        'pg_notify_config_declares_pg_token' => $pgFileHasLine,
         'notify_config_file_exists' => is_file($notifyPath),
         'notify_config_readable' => is_file($notifyPath) && is_readable($notifyPath),
         'notify_config_bytes' => $bytes,
@@ -68,17 +76,20 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         'token_configured' => ($token !== ''),
         'pg_token_length_on_this_server' => strlen($token),
         'probe_env_nonempty' => $probe,
-        'fix_if_token_false' => '本服务器仍读不到 PG token。任选其一：1) 在 notify_config.php 中写 PHP 变量名 $PG_TELEGRAM_BOT_TOKEN（勿写成 $_PG_…）；赋值为带引号的完整 token 字符串；2) 或在 Hostinger「环境变量」新增 PG_TELEGRAM_BOT_TOKEN，并上传最新 config.php。改后刷新本页。若 notify_config_declares_pg_token 为 false，说明文件里根本没有该赋值行；若为 true 且 pg_assignment_empty_string 为 true，说明仍是空字符串；若二者为 true/false 仍 length 0，请上传已修复「先 include 再 define NOTIFY_CONFIG_LOADED」的 config.php。',
+        'fix_if_token_false' => '本服务器仍读不到 PG token。推荐：将本机 PG_notify_config.php 上传到 webhook_script_dir（与 telegram_pg_webhook.php 同级），并上传已包含「include PG_notify_config.php」的 config.php。备选：在 notify_config.php 顶层写 $PG_TELEGRAM_BOT_TOKEN；或在 Hostinger 环境变量设 PG_TELEGRAM_BOT_TOKEN。若 pg_notify_config_file_exists 为 false，请先上传 PG_notify_config.php。',
         'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
     ];
     if ($token === '' && ($probe['getenv'] || $probe['server'] || $probe['env'])) {
         $out['fix_if_probe_true_but_token_empty'] = '面板里已配置 PG_TELEGRAM_BOT_TOKEN，但 PHP 未写入 $PG_TELEGRAM_BOT_TOKEN：请把当前仓库里的 config.php 上传到与 telegram_pg_webhook.php 同目录并覆盖（需含对 $_SERVER/$_ENV 的读取）。';
     }
     if ($likelyOldFileNoPg) {
-        $out['fix_likely_old_notify'] = 'notify_config.php 体积偏小且未检测到合法赋值行，多为「只有 NOTIFY、没有 PG」的旧版。请把本机已含 $PG_TELEGRAM_BOT_TOKEN 的那份 notify_config.php 上传到 webhook_script_dir 与 notify_config_realpath 所示目录并覆盖；含 PG 时文件通常约 500～600 字节，若仍为 373 字节说明未覆盖成功。每个域名 public_html 各传一次。';
+        $out['fix_likely_old_notify'] = 'notify_config.php 仍为「仅 NOTIFY」旧版（约 373 字节）。不必再改各站 notify：请上传本机 PG_notify_config.php（约百余字节）到本目录，并上传最新 config.php；自检里 pg_notify_config_file_exists 应为 true。';
     }
     if ($nameSubstrPresent && !$hasPgVarLine) {
-        $out['fix_pg_name_text_but_invalid_line'] = '文件里出现了 PG_TELEGRAM_BOT_TOKEN 文本，但不是合法 PHP 行「$PG_TELEGRAM_BOT_TOKEN = \'…\';」：检查是否用了全角＄、或变量名大小写错误。';
+        $out['fix_pg_name_text_but_invalid_line'] = 'notify_config.php 里出现了 PG_TELEGRAM_BOT_TOKEN 文本，但不是合法 PHP 赋值行：检查全角＄或拼写。更推荐改用 PG_notify_config.php 单独放 token。';
+    }
+    if ($token === '' && !is_file($pgNotifyPath)) {
+        $out['fix_missing_pg_notify_file'] = '当前目录没有 PG_notify_config.php。请把本机项目里的 PG_notify_config.php 上传到 webhook_script_dir 所示的 public_html（与 telegram_pg_webhook.php 同级），并上传已 include 该文件的 config.php。';
     }
     echo json_encode($out, JSON_UNESCAPED_UNICODE);
     exit;

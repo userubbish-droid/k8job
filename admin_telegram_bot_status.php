@@ -95,7 +95,7 @@ $rows[] = _fetch_bot_diag('PG 专用', $pgTok);
             </div>
             <p class="muted" style="margin-bottom:16px;">
                 本页通过 Telegram 官方接口读取 <strong>getMe</strong>（机器人是否有效）与 <strong>getWebhookInfo</strong>（Webhook URL 与最近错误）。<br>
-                Gaming 机器人 token 来自 <code>notify_config.php</code> 的 <code>$NOTIFY_TELEGRAM_BOT_TOKEN</code>；PG 来自 <code>$PG_TELEGRAM_BOT_TOKEN</code>。<br>
+                Gaming 机器人 token 来自 <code>notify_config.php</code> 的 <code>$NOTIFY_TELEGRAM_BOT_TOKEN</code>；PG 来自 <code>PG_notify_config.php</code> / <code>notify_config.php</code> / 环境变量 加载的 <code>$PG_TELEGRAM_BOT_TOKEN</code>。<br>
                 PG 自检亦可打开：<a href="telegram_pg_webhook.php" target="_blank" rel="noopener">telegram_pg_webhook.php</a>（GET，仅看 token 是否读到）。
             </p>
 

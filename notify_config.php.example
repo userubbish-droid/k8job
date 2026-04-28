@@ -13,8 +13,7 @@ $NOTIFY_TELEGRAM_BOT_TOKEN = ''; // 必填
 $NOTIFY_TELEGRAM_CHAT_ID  = '';  // 必填，多为数字字符串
 $NOTIFY_BASE_URL = '';           // 选填：待审核消息里审核链接前缀，如 https://你的域名.com
 
-// === PG 专用 Bot（与 gaming 快捷记账分开；在 BotFather 再建一个 bot，填 token，Webhook 指向 telegram_pg_webhook.php）===
-$PG_TELEGRAM_BOT_TOKEN = '';     // 必填：PG bot 的 token；勿与 $NOTIFY_TELEGRAM_BOT_TOKEN 混用
-// 若不想在文件里写 token：可在 Hostinger 环境变量里设 PG_TELEGRAM_BOT_TOKEN（config.php 会依次读 getenv / $_SERVER / $_ENV）。
-// 若群里发 +100… 机器人完全没反应：在 @BotFather 对该 bot 发 /setprivacy，选 Disable（否则非 / 开头的消息不会推给机器人）。
+// === PG 专用 Bot === 请复制 PG_notify_config.php.example 为 PG_notify_config.php 并填写 token（与 notify 分开，多域名好维护）
+// 若群里发 +100… 机器人完全没反应：在 @BotFather 对该 bot 发 /setprivacy，选 Disable。
+// 环境变量兜底：Hostinger 里设 PG_TELEGRAM_BOT_TOKEN（config.php 会读 getenv / $_SERVER / $_ENV）。
 
