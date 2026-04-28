@@ -2,6 +2,18 @@
 require 'config.php';
 require 'auth.php';
 require_login();
+$company_id = current_company_id();
+// PG 公司客户资料走独立页面（pg_customers），避免提示跑 gaming 的迁移
+try {
+    $pdoCat = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+    $stBk = $pdoCat->prepare('SELECT LOWER(TRIM(business_kind)) FROM companies WHERE id = ? LIMIT 1');
+    $stBk->execute([$company_id]);
+    if (strtolower(trim((string)$stBk->fetchColumn())) === 'pg') {
+        header('Location: pg_customers.php');
+        exit;
+    }
+} catch (Throwable $e) {
+}
 $filter_recommend = isset($_GET['recommend']) ? trim((string)$_GET['recommend']) : '';
 // 代理账号只能看自己的下线：强制 recommend = 自己的 agent_code
 if (($_SESSION['user_role'] ?? '') === 'agent') {
@@ -22,7 +34,6 @@ $can_view_contact_full = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSIO
 $can_view_total_dp_wd = (($_SESSION['user_role'] ?? '') === 'boss' || ($_SESSION['user_role'] ?? '') === 'superadmin' || has_permission(PERM_VIEW_CUSTOMER_TOTAL_DP_WD));
 $can_export_customers_csv = in_array(($_SESSION['user_role'] ?? ''), ['boss', 'superadmin'], true);
 $customers_list_colspan = 15 + ($can_view_total_dp_wd ? 2 : 0) + ($is_admin ? 2 : 0);
-$company_id = current_company_id();
 $has_customer_status = false;
 try {
     $stmt = $pdoBiz->query("SHOW COLUMNS FROM customers LIKE 'status'");
