@@ -2,6 +2,7 @@
 /**
  * 待审核流水 + 余额阈值 Telegram 通知（与本文件同目录的 config.php 会自动 include）
  * 复制本文件为 notify_config.php（勿提交 Git），取消注释并填写。
+ * 勿把整份赋值包在 if (!defined('NOTIFY_CONFIG_LOADED')) { ... } 里（旧版 config 曾误先 define 导致永不执行）；顶层直接写 $… 变量即可。
  *
  * === Telegram ===
  * 1. @BotFather /newbot 取得 BOT_TOKEN

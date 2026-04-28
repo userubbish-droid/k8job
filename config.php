@@ -175,11 +175,13 @@ $NOTIFY_TELEGRAM_CHAT_ID  = '';
 $NOTIFY_BASE_URL = '';
 // PG 专用快捷记账 Bot（与上方 NOTIFY 机器人分开；由 telegram_pg_webhook.php 使用）
 $PG_TELEGRAM_BOT_TOKEN = '';
-if (!defined('NOTIFY_CONFIG_LOADED')) {
-    define('NOTIFY_CONFIG_LOADED', true);
-}
+// 切勿在 include notify_config.php 之前 define('NOTIFY_CONFIG_LOADED', true)，否则若 notify 里用
+// if (!defined('NOTIFY_CONFIG_LOADED')) { ... 全部赋值 ... } 包裹，会导致整段被跳过、token 永远为空。
 if (is_file(__DIR__ . '/notify_config.php')) {
     include __DIR__ . '/notify_config.php';
+}
+if (is_file(__DIR__ . '/notify_config.php') && !defined('NOTIFY_CONFIG_LOADED')) {
+    define('NOTIFY_CONFIG_LOADED', true);
 }
 
 // PG Bot token：notify_config 里未填时，可读主机环境变量（Hostinger：hPanel → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）

@@ -45,14 +45,22 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         'env' => isset($_ENV['PG_TELEGRAM_BOT_TOKEN']) && is_string($_ENV['PG_TELEGRAM_BOT_TOKEN'])
             && trim($_ENV['PG_TELEGRAM_BOT_TOKEN']) !== '',
     ];
+    $rawNotify = is_readable($notifyPath) ? @file_get_contents($notifyPath) : false;
+    $hasPgVarLine = is_string($rawNotify) && preg_match('/\$PG_TELEGRAM_BOT_TOKEN\s*=/', $rawNotify) === 1;
+    $pgRhsQuoted = is_string($rawNotify) && preg_match(
+        '/\$PG_TELEGRAM_BOT_TOKEN\s*=\s*([\'"])\s*\1\s*;/',
+        $rawNotify
+    ) === 1;
     $out = [
         'pg_webhook' => 'ok',
         'notify_config_file_exists' => is_file($notifyPath),
         'notify_config_realpath' => is_file($notifyPath) ? realpath($notifyPath) : null,
+        'notify_config_declares_pg_token' => $hasPgVarLine,
+        'notify_config_pg_assignment_empty_string' => $pgRhsQuoted,
         'token_configured' => ($token !== ''),
         'pg_token_length_on_this_server' => strlen($token),
         'probe_env_nonempty' => $probe,
-        'fix_if_token_false' => '本服务器仍读不到 PG token。任选其一：1) 将 notify_config.php 上传到与本脚本、config.php 同一目录，且内含 $PG_TELEGRAM_BOT_TOKEN=完整token；2) 或在 Hostinger「环境变量」新增 PG_TELEGRAM_BOT_TOKEN（无需把密钥写进文件），并上传已支持 $_SERVER 读取的 config.php。改后刷新本页。若 probe_env_nonempty 任一为 true 而本项仍为 false，说明线上 config.php 过旧，请覆盖上传。',
+        'fix_if_token_false' => '本服务器仍读不到 PG token。任选其一：1) 在 notify_config.php 中写 PHP 变量名 $PG_TELEGRAM_BOT_TOKEN（勿写成 $_PG_…）；赋值为带引号的完整 token 字符串；2) 或在 Hostinger「环境变量」新增 PG_TELEGRAM_BOT_TOKEN，并上传最新 config.php。改后刷新本页。若 notify_config_declares_pg_token 为 false，说明文件里根本没有该赋值行；若为 true 且 pg_assignment_empty_string 为 true，说明仍是空字符串；若二者为 true/false 仍 length 0，请上传已修复「先 include 再 define NOTIFY_CONFIG_LOADED」的 config.php。',
         'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
     ];
     if ($token === '' && ($probe['getenv'] || $probe['server'] || $probe['env'])) {
