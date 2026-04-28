@@ -413,15 +413,15 @@ if ($actor_is_superadmin) {
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
                 LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
-                WHERE 1=1' . $status_sql . '
-                ORDER BY u.company_id ASC, u.id DESC';
+                WHERE 1=1" . $status_sql . "
+                ORDER BY u.company_id ASC, u.id DESC";
     $sql_all_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
                        COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name,
                        '' AS created_by_username
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
-                WHERE 1=1' . $status_sql . '
-                ORDER BY u.company_id ASC, u.id DESC';
+                WHERE 1=1" . $status_sql . "
+                ORDER BY u.company_id ASC, u.id DESC";
     try {
         $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
