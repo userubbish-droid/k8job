@@ -271,16 +271,18 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                         if ($name === '') continue;
                                         $key = strtolower($name);
                                         $in = (float)(($pg_range_in_customer ?? [])[$key] ?? 0);
-                                        $out = (float)(($pg_range_out_customer ?? [])[$key] ?? 0);
+                                        $out_total = (float)(($pg_range_out_customer ?? [])[$key] ?? 0);
+                                        $cashout = (float)(($pg_range_cashout_customer ?? [])[$key] ?? 0);
                                         $init = (float)(($pg_initial_customer ?? [])[$key] ?? 0);
-                                        $balance = $init + $in - $out;
+                                        // Balance 一定按“全部 out”口径计算；Cash out 只是 out 的一个子集展示
+                                        $balance = $init + $in - $out_total;
                                     ?>
                                     <tr>
                                         <td><?= htmlspecialchars($name) ?></td>
                                         <?php if ($is_admin): ?>
                                         <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num stmt-in"><?= $in != 0 ? number_format($in, 2) : '—' ?></td>
-                                        <td class="num stmt-out"><?= $out != 0 ? number_format($out, 2) : '—' ?></td>
+                                        <td class="num stmt-out"><?= $cashout != 0 ? number_format($cashout, 2) : '—' ?></td>
                                         <?php endif; ?>
                                         <td class="num <?= $balance < 0 ? 'stmt-negative' : 'profit' ?>"><?= number_format($balance, 2) ?></td>
                                     </tr>

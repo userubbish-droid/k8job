@@ -9,7 +9,7 @@
  *
  * 产出：
  * - $pg_all_channels, $pg_initial_channel, $pg_range_in_channel, $pg_range_out_channel
- * - $pg_all_customers, $pg_initial_customer, $pg_range_in_customer, $pg_range_out_customer
+ * - $pg_all_customers, $pg_initial_customer, $pg_range_in_customer, $pg_range_out_customer, $pg_range_cashout_customer
  */
 if (!isset($pdo, $day_from, $day_to)) {
     return;
@@ -46,6 +46,7 @@ if (!$pdoData) {
     $pg_initial_customer = [];
     $pg_range_in_customer = [];
     $pg_range_out_customer = [];
+$pg_range_cashout_customer = [];
     return;
 }
 
@@ -136,7 +137,8 @@ try {
 try {
     $st = $pdoData->prepare("SELECT TRIM(member_code) AS k,
         COALESCE(SUM(CASE WHEN flow = 'in' THEN amount ELSE 0 END), 0) AS ti,
-        COALESCE(SUM(CASE WHEN flow = 'out' THEN amount ELSE 0 END), 0) AS tout
+        COALESCE(SUM(CASE WHEN flow = 'out' THEN amount ELSE 0 END), 0) AS tout,
+        COALESCE(SUM(CASE WHEN flow = 'out' AND LOWER(TRIM(COALESCE(channel,''))) = 'cash' THEN amount ELSE 0 END), 0) AS cashout
         FROM pg_transactions
         WHERE company_id = ? AND status = 'approved' AND txn_day >= ? AND txn_day <= ?
           AND member_code IS NOT NULL AND TRIM(member_code) <> ''
@@ -147,6 +149,7 @@ try {
         if ($k === '') continue;
         $pg_range_in_customer[$k] = (float)($r['ti'] ?? 0);
         $pg_range_out_customer[$k] = (float)($r['tout'] ?? 0);
+        $pg_range_cashout_customer[$k] = (float)($r['cashout'] ?? 0);
     }
 } catch (Throwable $e) {
 }
@@ -165,5 +168,6 @@ foreach ($pg_all_customers as $nm) {
     if (!isset($pg_initial_customer[$k])) $pg_initial_customer[$k] = 0.0;
     if (!isset($pg_range_in_customer[$k])) $pg_range_in_customer[$k] = 0.0;
     if (!isset($pg_range_out_customer[$k])) $pg_range_out_customer[$k] = 0.0;
+    if (!isset($pg_range_cashout_customer[$k])) $pg_range_cashout_customer[$k] = 0.0;
 }
 
