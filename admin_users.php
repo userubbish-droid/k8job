@@ -408,7 +408,7 @@ if (!$actor_is_superadmin && $view_company_id > 0) {
 $all_company_users = [];
 if ($actor_is_superadmin) {
     $sql_all = "SELECT u.id, u.username, u.role, u.display_name, COALESCE(u.email,'') AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, u.created_by_user_id,
-                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name,
+                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name, COALESCE(c.ui_color,'') AS company_ui_color,
                        COALESCE(ucr.username, '') AS created_by_username
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
@@ -416,7 +416,7 @@ if ($actor_is_superadmin) {
                 WHERE 1=1" . $status_sql . "
                 ORDER BY u.company_id ASC, u.id DESC";
     $sql_all_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
-                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name,
+                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name, COALESCE(c.ui_color,'') AS company_ui_color,
                        '' AS created_by_username
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
@@ -424,14 +424,14 @@ if ($actor_is_superadmin) {
                 ORDER BY u.company_id ASC, u.id DESC";
     // 兜底：若线上缺少 companies 表（或无权限），不联表也要能加载账号列表
     $sql_all_no_co = "SELECT u.id, u.username, u.role, u.display_name, COALESCE(u.email,'') AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, u.created_by_user_id,
-                             '' AS company_code, '' AS company_name,
+                             '' AS company_code, '' AS company_name, '' AS company_ui_color,
                              COALESCE(ucr.username, '') AS created_by_username
                       FROM users u
                       LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
                       WHERE 1=1" . $status_sql . "
                       ORDER BY u.company_id ASC, u.id DESC";
     $sql_all_no_co_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
-                             '' AS company_code, '' AS company_name,
+                             '' AS company_code, '' AS company_name, '' AS company_ui_color,
                              '' AS created_by_username
                       FROM users u
                       WHERE 1=1" . $status_sql . "
@@ -507,15 +507,24 @@ $um_company_row_colors = [
 ];
 $um_company_bg_by_id = [];
 $um_company_ids_ordered = [];
+$um_company_color_override = [];
 foreach ($users_primary_list as $u) {
     $cid = (int)($u['company_id'] ?? 0);
     if ($cid > 0 && !in_array($cid, $um_company_ids_ordered, true)) {
         $um_company_ids_ordered[] = $cid;
     }
+    $rawColor = strtoupper(trim((string)($u['company_ui_color'] ?? '')));
+    if ($cid > 0 && $rawColor !== '' && preg_match('/^#[0-9A-F]{6}$/', $rawColor)) {
+        $um_company_color_override[$cid] = $rawColor;
+    }
 }
 sort($um_company_ids_ordered, SORT_NUMERIC);
 foreach ($um_company_ids_ordered as $i => $cid) {
-    $um_company_bg_by_id[$cid] = $um_company_row_colors[$i % count($um_company_row_colors)];
+    if (isset($um_company_color_override[$cid])) {
+        $um_company_bg_by_id[$cid] = $um_company_color_override[$cid];
+    } else {
+        $um_company_bg_by_id[$cid] = $um_company_row_colors[$i % count($um_company_row_colors)];
+    }
 }
 
 /** 分公司管理员改角色：不可设 boss / superadmin */

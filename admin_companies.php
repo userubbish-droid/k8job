@@ -16,10 +16,33 @@ function companies_ensure_business_kind(PDO $pdo): void {
     }
 }
 
+/** 确保 companies 有 UI 背景色列（用于用户管理按分公司着色） */
+function companies_ensure_ui_color(PDO $pdo): void {
+    try {
+        $pdo->exec("ALTER TABLE companies ADD COLUMN ui_color VARCHAR(16) NULL DEFAULT NULL AFTER business_kind");
+    } catch (Throwable $e) {
+        // 已存在则忽略
+    }
+}
+
 companies_ensure_business_kind($pdo);
+companies_ensure_ui_color($pdo);
 
 function normalize_company_code(string $raw): string {
     return strtolower(preg_replace('/\s+/', '', trim($raw)));
+}
+
+function normalize_ui_color(?string $raw): ?string
+{
+    $s = strtoupper(trim((string)$raw));
+    if ($s === '') {
+        return null;
+    }
+    // 仅允许 #RRGGBB
+    if (!preg_match('/^#[0-9A-F]{6}$/', $s)) {
+        return null;
+    }
+    return $s;
 }
 
 /** @return string[] 仍引用该 company_id 的表摘要（非空则不可删） */
@@ -79,8 +102,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!in_array($biz, ['gaming', 'pg'], true)) {
                 $biz = 'gaming';
             }
-            $stmt = $pdo->prepare('INSERT INTO companies (code, name, currency, business_kind, is_active) VALUES (?, ?, ?, ?, 1)');
-            $stmt->execute([$code, $name, $currency, $biz]);
+            $ui_color = normalize_ui_color($_POST['ui_color'] ?? null);
+            $stmt = $pdo->prepare('INSERT INTO companies (code, name, currency, business_kind, ui_color, is_active) VALUES (?, ?, ?, ?, ?, 1)');
+            $stmt->execute([$code, $name, $currency, $biz, $ui_color]);
             $newId = (int)$pdo->lastInsertId();
             if ($newId > 0 && function_exists('companies_shard_upsert_from_catalog')) {
                 companies_shard_upsert_from_catalog($pdo, $newId);
@@ -112,8 +136,9 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if (!in_array($biz, ['gaming', 'pg'], true)) {
                 $biz = 'gaming';
             }
-            $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ?, currency = ?, business_kind = ? WHERE id = ?');
-            $stmt->execute([$code, $name, $currency, $biz, $id]);
+            $ui_color = normalize_ui_color($_POST['ui_color'] ?? null);
+            $stmt = $pdo->prepare('UPDATE companies SET code = ?, name = ?, currency = ?, business_kind = ?, ui_color = ? WHERE id = ?');
+            $stmt->execute([$code, $name, $currency, $biz, $ui_color, $id]);
             if (function_exists('companies_shard_upsert_from_catalog')) {
                 companies_shard_upsert_from_catalog($pdo, $id);
             }
@@ -171,7 +196,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 $companies = [];
 try {
-    $companies = $pdo->query('SELECT id, code, name, currency, business_kind, is_active, created_at FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
+    $companies = $pdo->query('SELECT id, code, name, currency, business_kind, ui_color, is_active, created_at FROM companies ORDER BY id ASC')->fetchAll(PDO::FETCH_ASSOC);
 } catch (Throwable $e) {
     $companies = [];
 }
@@ -247,6 +272,10 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                                 <option value="pg">Payment Gateway（PG）</option>
                             </select>
                         </div>
+                        <div class="filter-group">
+                            <label>列表背景色（可选）</label>
+                            <input class="form-control" type="color" name="ui_color" value="#DBEAFE" title="用于用户管理按分公司着色（不影响业务数据）" style="width:88px;padding:6px 8px;">
+                        </div>
                         <div class="filter-group" style="align-self:flex-end;">
                             <button type="submit" class="btn btn-primary">新增</button>
                         </div>
@@ -294,6 +323,13 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                                                 <option value="gaming"<?= $bk === 'gaming' ? ' selected' : '' ?>>Gaming</option>
                                                 <option value="pg"<?= $bk === 'pg' ? ' selected' : '' ?>>PG</option>
                                             </select>
+                                            <?php
+                                                $uco = strtoupper(trim((string)($c['ui_color'] ?? '')));
+                                                if (!preg_match('/^#[0-9A-F]{6}$/', $uco)) {
+                                                    $uco = '';
+                                                }
+                                            ?>
+                                            <input class="form-control" type="color" name="ui_color" value="<?= htmlspecialchars($uco !== '' ? $uco : '#DBEAFE') ?>" title="用户管理列表背景色（可选）" style="width:66px;padding:6px 8px;">
                                             <button type="submit" class="btn btn-sm btn-primary">保存</button>
                                         </form>
                                     </td>
