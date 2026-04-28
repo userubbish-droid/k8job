@@ -169,28 +169,28 @@ try {
     )");
 } catch (Throwable $e) {}
 
-// Telegram 通知：密钥勿写在此文件（避免进 Git）。notify_config.php + PG_notify_config.php（已在 .gitignore），见各自 .example
+/*
+ * Telegram 密钥（勿进 Git；见各 .example）
+ * Gaming / 待审核 / 密码重置 / gaming 快捷记账：仅使用 notify_config.php 里的 $NOTIFY_TELEGRAM_*（本段加载顺序与此无关，不会读 PG 文件里的内容去替代它们）
+ * PG 快捷记账：仅使用 $PG_TELEGRAM_BOT_TOKEN（见下：notify → PG 文件 → 环境变量）
+ */
 $NOTIFY_TELEGRAM_BOT_TOKEN = '';
 $NOTIFY_TELEGRAM_CHAT_ID  = '';
 $NOTIFY_BASE_URL = '';
-// PG 专用快捷记账 Bot（与上方 NOTIFY 机器人分开；由 telegram_pg_webhook.php 使用）
 $PG_TELEGRAM_BOT_TOKEN = '';
-// 切勿在 include notify_config.php 之前 define('NOTIFY_CONFIG_LOADED', true)，否则若 notify 里用
-// if (!defined('NOTIFY_CONFIG_LOADED')) { ... 全部赋值 ... } 包裹，会导致整段被跳过、token 永远为空。
+// 切勿在 include notify_config.php 之前 define('NOTIFY_CONFIG_LOADED', true)，否则 notify 若包在 if (!defined('NOTIFY_CONFIG_LOADED')) { ... } 内会导致整段不执行。
 if (is_file(__DIR__ . '/notify_config.php')) {
-    include __DIR__ . '/notify_config.php';
+    include_once __DIR__ . '/notify_config.php';
 }
 if (is_file(__DIR__ . '/notify_config.php') && !defined('NOTIFY_CONFIG_LOADED')) {
     define('NOTIFY_CONFIG_LOADED', true);
 }
 
-// PG Bot token：独立文件 PG_notify_config.php（后加载，可覆盖 notify_config 里的空 PG；多域名建议只传此小文件）
 if (is_file(__DIR__ . '/PG_notify_config.php')) {
-    include __DIR__ . '/PG_notify_config.php';
+    include_once __DIR__ . '/PG_notify_config.php';
 }
 
-// PG Bot token：仍未填时，可读主机环境变量（Hostinger：hPanel → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）
-// 不少 PHP-FPM 配置下 getenv() 拿不到面板注入的变量，但 $_SERVER / $_ENV 里有，故依次尝试。
+// PG 仍为空：环境变量（getenv / $_SERVER / $_ENV，适配 Hostinger PHP-FPM）
 if (!isset($PG_TELEGRAM_BOT_TOKEN) || trim((string)$PG_TELEGRAM_BOT_TOKEN) === '') {
     $ev = getenv('PG_TELEGRAM_BOT_TOKEN');
     if (!is_string($ev) || trim($ev) === '') {

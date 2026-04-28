@@ -1,7 +1,9 @@
 <?php
 /**
- * PG 专用 Bot Token（config.php 在 notify_config.php 之后会尝试 include 本文件）
+ * PG 专用 Bot Token（config.php 在 notify_config.php 之后会 include_once 本文件）
  * 复制为 PG_notify_config.php 并填写；勿提交 Git。
- * 多域名部署：每个站点 public_html 各放一份本文件即可，不必反复改各站的 notify_config.php。
+ * 多域名：每个站点 public_html 各放一份即可，不必改各站 notify_config.php。
+ *
+ * 本文件只应设置 $PG_TELEGRAM_BOT_TOKEN，勿写 $NOTIFY_TELEGRAM_*（避免误改 gaming / 待审核机器人）。
  */
 $PG_TELEGRAM_BOT_TOKEN = '';

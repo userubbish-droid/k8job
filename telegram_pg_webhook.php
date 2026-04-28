@@ -57,6 +57,10 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $likelyOldFileNoPg = is_int($bytes) && $bytes > 0 && $bytes < 480 && !$hasPgVarLine;
     $rawPgNotify = is_readable($pgNotifyPath) ? @file_get_contents($pgNotifyPath) : false;
     $pgFileHasLine = is_string($rawPgNotify) && preg_match('/\$PG_TELEGRAM_BOT_TOKEN\s*=/', $rawPgNotify) > 0;
+    $pgFileRhsEmpty = is_string($rawPgNotify) && preg_match(
+        '/\$PG_TELEGRAM_BOT_TOKEN\s*=\s*([\'"])\s*\1\s*;/',
+        $rawPgNotify
+    ) > 0;
     $pgFileBytes = (is_file($pgNotifyPath) && is_readable($pgNotifyPath)) ? @filesize($pgNotifyPath) : null;
     $out = [
         'pg_webhook' => 'ok',
@@ -65,6 +69,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
         'pg_notify_config_realpath' => is_file($pgNotifyPath) ? realpath($pgNotifyPath) : null,
         'pg_notify_config_bytes' => $pgFileBytes,
         'pg_notify_config_declares_pg_token' => $pgFileHasLine,
+        'pg_notify_config_assignment_empty_string' => $pgFileRhsEmpty,
         'notify_config_file_exists' => is_file($notifyPath),
         'notify_config_readable' => is_file($notifyPath) && is_readable($notifyPath),
         'notify_config_bytes' => $bytes,
@@ -82,8 +87,17 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     if ($token === '' && ($probe['getenv'] || $probe['server'] || $probe['env'])) {
         $out['fix_if_probe_true_but_token_empty'] = '面板里已配置 PG_TELEGRAM_BOT_TOKEN，但 PHP 未写入 $PG_TELEGRAM_BOT_TOKEN：请把当前仓库里的 config.php 上传到与 telegram_pg_webhook.php 同目录并覆盖（需含对 $_SERVER/$_ENV 的读取）。';
     }
-    if ($likelyOldFileNoPg) {
-        $out['fix_likely_old_notify'] = 'notify_config.php 仍为「仅 NOTIFY」旧版（约 373 字节）。不必再改各站 notify：请上传本机 PG_notify_config.php（约百余字节）到本目录，并上传最新 config.php；自检里 pg_notify_config_file_exists 应为 true。';
+    if ($likelyOldFileNoPg && !is_file($pgNotifyPath)) {
+        $out['fix_likely_old_notify'] = 'notify_config.php 仍为「仅 NOTIFY」小文件且本目录尚无 PG_notify_config.php：请上传 PG_notify_config.php + 已 include 该文件的 config.php 到本 public_html。';
+    }
+    if (is_file($pgNotifyPath) && !$pgFileHasLine) {
+        $out['fix_pg_notify_syntax'] = 'PG_notify_config.php 已存在但未检测到合法行「$PG_TELEGRAM_BOT_TOKEN = \'…\';」，请对照本机 PG_notify_config.php.example 修正。';
+    }
+    if (is_file($pgNotifyPath) && $pgFileRhsEmpty) {
+        $out['fix_pg_notify_token_empty_string'] = 'PG_notify_config.php 里 $PG_TELEGRAM_BOT_TOKEN 仍为空字符串，请填入完整 token 并保存。';
+    }
+    if (is_file($pgNotifyPath) && $pgFileHasLine && !$pgFileRhsEmpty && $token === '') {
+        $out['fix_config_not_including_pg_file'] = 'PG_notify_config.php 内容看似正常但 PHP 未读到 token：请确认已上传最新 config.php（含 include_once PG_notify_config.php），且与本脚本同目录。';
     }
     if ($nameSubstrPresent && !$hasPgVarLine) {
         $out['fix_pg_name_text_but_invalid_line'] = 'notify_config.php 里出现了 PG_TELEGRAM_BOT_TOKEN 文本，但不是合法 PHP 赋值行：检查全角＄或拼写。更推荐改用 PG_notify_config.php 单独放 token。';
