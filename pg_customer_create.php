@@ -46,8 +46,17 @@ $msg = '';
 
 function pg_norm_currency(string $raw): string
 {
-    $c = strtoupper(preg_replace('/\s+/', '', trim($raw)));
-    return preg_match('/^[A-Z]{2,8}$/', $c) ? $c : '';
+    // PG：允许手填，不强制 ISO，仅做去空白与长度限制
+    $c = strtoupper(trim((string)$raw));
+    $c = preg_replace('/\s+/', ' ', $c);
+    $c = trim((string)$c);
+    if ($c === '') {
+        return '';
+    }
+    if (mb_strlen($c, 'UTF-8') > 16) {
+        $c = mb_substr($c, 0, 16, 'UTF-8');
+    }
+    return $c;
 }
 
 function pg_norm_pct($raw): float
@@ -63,9 +72,13 @@ function pg_norm_pct($raw): float
 
 function pg_norm_round($raw): string
 {
-    $v = strtolower(trim((string)$raw));
-    if (!in_array($v, ['none', '0.01', '0.1', '1', '10', '100'], true)) {
-        $v = 'none';
+    // PG：Volume around 允许手填（自由文本）
+    $v = trim((string)$raw);
+    if ($v === '') {
+        return '';
+    }
+    if (mb_strlen($v, 'UTF-8') > 32) {
+        $v = mb_substr($v, 0, 32, 'UTF-8');
     }
     return $v;
 }
@@ -130,7 +143,7 @@ $form = [
     'currency' => $def_currency,
     'pct_in' => '0',
     'pct_out' => '0',
-    'volume_round' => 'none',
+    'volume_round' => '',
     'account_type' => 'non',
 ];
 
@@ -148,7 +161,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $pdoData) {
 
     try {
         if ($form['code'] === '' || strlen($form['code']) > 64) {
-            throw new RuntimeException('Customer code 必填，最多 64 字符。');
+            throw new RuntimeException('排行 必填，最多 64 字符。');
         }
         if ($form['currency'] === '') {
             $form['currency'] = $def_currency;
@@ -174,7 +187,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $pdoData) {
     } catch (Throwable $e) {
         $raw = (string)$e->getMessage();
         if (strpos($raw, 'Duplicate') !== false || strpos($raw, '1062') !== false) {
-            $err = '该 Customer code 已存在，请换一个。';
+            $err = '该排行已存在，请换一个。';
         } else {
             $err = $raw;
         }
@@ -205,7 +218,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $pdoData) {
             <div class="card">
                 <form method="post" class="filters-bar filters-bar-flow" style="margin-bottom:0;">
                     <div class="filter-group" style="min-width:240px;">
-                        <label>Customer code *</label>
+                        <label>排行 *</label>
                         <input class="form-control" name="code" required maxlength="64" value="<?= htmlspecialchars($form['code'], ENT_QUOTES, 'UTF-8') ?>" placeholder="例如 A1 / C001">
                     </div>
                     <div class="filter-group" style="min-width:240px;">
@@ -218,7 +231,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $pdoData) {
                     </div>
                     <div class="filter-group" style="min-width:160px;">
                         <label>Currency</label>
-                        <input class="form-control" name="currency" maxlength="8" value="<?= htmlspecialchars($form['currency'], ENT_QUOTES, 'UTF-8') ?>" placeholder="MYR">
+                        <input class="form-control" name="currency" maxlength="16" value="<?= htmlspecialchars($form['currency'], ENT_QUOTES, 'UTF-8') ?>" placeholder="例如 MYR">
                     </div>
                     <div class="filter-group" style="min-width:140px;">
                         <label>% in</label>
@@ -230,14 +243,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $pdoData) {
                     </div>
                     <div class="filter-group" style="min-width:200px;">
                         <label>Volume around</label>
-                        <select class="form-control" name="volume_round">
-                            <?php
-                            $opts = ['none' => 'No rounding', '0.01' => '0.01', '0.1' => '0.1', '1' => '1', '10' => '10', '100' => '100'];
-                            foreach ($opts as $k => $lab):
-                            ?>
-                                <option value="<?= htmlspecialchars($k, ENT_QUOTES, 'UTF-8') ?>" <?= $form['volume_round'] === $k ? 'selected' : '' ?>><?= htmlspecialchars($lab, ENT_QUOTES, 'UTF-8') ?></option>
-                            <?php endforeach; ?>
-                        </select>
+                        <input class="form-control" name="volume_round" maxlength="32" value="<?= htmlspecialchars($form['volume_round'], ENT_QUOTES, 'UTF-8') ?>" placeholder="手动填写（可空）">
                     </div>
                     <div class="filter-group" style="min-width:220px;">
                         <label>Account</label>
