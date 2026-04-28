@@ -541,6 +541,7 @@ $users_primary_list = um_sort_users_primary_list($users_primary_list, $actor_is_
  */
 $um_company_color_override = [];
 $um_companies_color_supported = null; // null=未知，true=可用，false=不可用
+$um_company_color_debug_sample = [];
 if ($actor_is_superadmin) {
     try {
         $probe = $pdo->query("SELECT ui_color FROM companies LIMIT 1");
@@ -558,6 +559,12 @@ if ($actor_is_superadmin) {
                 if ($cid > 0 && $col !== '' && preg_match('/^#[0-9A-F]{6}$/', $col)) {
                     $um_company_color_override[$cid] = $col;
                 }
+            }
+            $k = 0;
+            foreach ($um_company_color_override as $cid => $col) {
+                $um_company_color_debug_sample[] = ['id' => (int)$cid, 'color' => (string)$col];
+                $k++;
+                if ($k >= 6) break;
             }
         } catch (Throwable $e) {
             // 忽略：读不到就继续用默认配色
@@ -919,6 +926,24 @@ $session_user_id = (int)($_SESSION['user_id'] ?? 0);
             <div class="alert alert-error" style="margin-bottom:14px;">
                 当前数据库未检测到 <code>companies.ui_color</code> 列（或无权限读取/创建），因此“公司背景色”不会生效。<br>
                 请在 phpMyAdmin 执行：<code>ALTER TABLE companies ADD COLUMN ui_color VARCHAR(16) NULL DEFAULT NULL;</code> 然后刷新本页。
+            </div>
+        <?php endif; ?>
+        <?php if ($actor_is_superadmin): ?>
+            <div class="alert" style="margin-bottom:14px;">
+                <b>背景色诊断</b>：
+                本页检测到公司账号 company_id 数量 <b><?= (int)count($um_company_ids_ordered) ?></b>；
+                数据库读取到已设置颜色的公司数 <b><?= (int)count($um_company_color_override) ?></b>。
+                <?php if ($um_company_color_debug_sample): ?>
+                    <span style="margin-left:8px;">示例：</span>
+                    <?php foreach ($um_company_color_debug_sample as $it): ?>
+                        <span style="display:inline-flex;align-items:center;gap:6px;margin-left:8px;">
+                            <span style="display:inline-block;width:12px;height:12px;border-radius:3px;border:1px solid rgba(0,0,0,0.15);background:<?= htmlspecialchars($it['color'], ENT_QUOTES, 'UTF-8') ?>;"></span>
+                            <span>#<?= (int)$it['id'] ?> <?= htmlspecialchars($it['color'], ENT_QUOTES, 'UTF-8') ?></span>
+                        </span>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <span style="margin-left:8px;color:var(--muted);">（当前没有任何公司设置过颜色，或读取失败）</span>
+                <?php endif; ?>
             </div>
         <?php endif; ?>
 
