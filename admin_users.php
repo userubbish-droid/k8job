@@ -422,13 +422,35 @@ if ($actor_is_superadmin) {
                 LEFT JOIN companies c ON c.id = u.company_id
                 WHERE 1=1" . $status_sql . "
                 ORDER BY u.company_id ASC, u.id DESC";
+    // 兜底：若线上缺少 companies 表（或无权限），不联表也要能加载账号列表
+    $sql_all_no_co = "SELECT u.id, u.username, u.role, u.display_name, COALESCE(u.email,'') AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, u.created_by_user_id,
+                             '' AS company_code, '' AS company_name,
+                             COALESCE(ucr.username, '') AS created_by_username
+                      FROM users u
+                      LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
+                      WHERE 1=1" . $status_sql . "
+                      ORDER BY u.company_id ASC, u.id DESC";
+    $sql_all_no_co_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
+                             '' AS company_code, '' AS company_name,
+                             '' AS created_by_username
+                      FROM users u
+                      WHERE 1=1" . $status_sql . "
+                      ORDER BY u.company_id ASC, u.id DESC";
     try {
         $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         try {
             $all_company_users = $pdo->query($sql_all_legacy)->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e2) {
-            $all_company_users = [];
+            try {
+                $all_company_users = $pdo->query($sql_all_no_co)->fetchAll(PDO::FETCH_ASSOC);
+            } catch (Throwable $e3) {
+                try {
+                    $all_company_users = $pdo->query($sql_all_no_co_legacy)->fetchAll(PDO::FETCH_ASSOC);
+                } catch (Throwable $e4) {
+                    $all_company_users = [];
+                }
+            }
         }
     }
 }
