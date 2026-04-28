@@ -46,19 +46,25 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
             && trim($_ENV['PG_TELEGRAM_BOT_TOKEN']) !== '',
     ];
     $rawNotify = is_readable($notifyPath) ? @file_get_contents($notifyPath) : false;
-    $hasPgVarLine = is_string($rawNotify) && preg_match('/\$PG_TELEGRAM_BOT_TOKEN\s*=/', $rawNotify) === 1;
+    $hasPgVarLine = is_string($rawNotify) && preg_match('/\$PG_TELEGRAM_BOT_TOKEN\s*=/', $rawNotify) > 0;
     $pgRhsQuoted = is_string($rawNotify) && preg_match(
         '/\$PG_TELEGRAM_BOT_TOKEN\s*=\s*([\'"])\s*\1\s*;/',
         $rawNotify
-    ) === 1;
+    ) > 0;
+    $bytes = (is_file($notifyPath) && is_readable($notifyPath)) ? @filesize($notifyPath) : null;
+    $nameSubstrPresent = is_string($rawNotify) && stripos($rawNotify, 'PG_TELEGRAM_BOT_TOKEN') !== false;
+    $likelyOldFileNoPg = is_int($bytes) && $bytes > 0 && $bytes < 480 && !$hasPgVarLine;
     $out = [
         'pg_webhook' => 'ok',
+        'webhook_script_dir' => realpath(__DIR__) ?: __DIR__,
         'notify_config_file_exists' => is_file($notifyPath),
         'notify_config_readable' => is_file($notifyPath) && is_readable($notifyPath),
-        'notify_config_bytes' => (is_file($notifyPath) && is_readable($notifyPath)) ? @filesize($notifyPath) : null,
+        'notify_config_bytes' => $bytes,
         'notify_config_realpath' => is_file($notifyPath) ? realpath($notifyPath) : null,
         'notify_config_declares_pg_token' => $hasPgVarLine,
         'notify_config_pg_assignment_empty_string' => $pgRhsQuoted,
+        'notify_config_file_contains_pg_token_text' => $nameSubstrPresent,
+        'likely_notify_is_old_copy_without_pg_line' => $likelyOldFileNoPg,
         'token_configured' => ($token !== ''),
         'pg_token_length_on_this_server' => strlen($token),
         'probe_env_nonempty' => $probe,
@@ -67,6 +73,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     ];
     if ($token === '' && ($probe['getenv'] || $probe['server'] || $probe['env'])) {
         $out['fix_if_probe_true_but_token_empty'] = '面板里已配置 PG_TELEGRAM_BOT_TOKEN，但 PHP 未写入 $PG_TELEGRAM_BOT_TOKEN：请把当前仓库里的 config.php 上传到与 telegram_pg_webhook.php 同目录并覆盖（需含对 $_SERVER/$_ENV 的读取）。';
+    }
+    if ($likelyOldFileNoPg) {
+        $out['fix_likely_old_notify'] = 'notify_config.php 体积偏小且未检测到合法赋值行，多为「只有 NOTIFY、没有 PG」的旧版。请把本机已含 $PG_TELEGRAM_BOT_TOKEN 的那份 notify_config.php 上传到 webhook_script_dir 与 notify_config_realpath 所示目录并覆盖；含 PG 时文件通常约 500～600 字节，若仍为 373 字节说明未覆盖成功。每个域名 public_html 各传一次。';
+    }
+    if ($nameSubstrPresent && !$hasPgVarLine) {
+        $out['fix_pg_name_text_but_invalid_line'] = '文件里出现了 PG_TELEGRAM_BOT_TOKEN 文本，但不是合法 PHP 行「$PG_TELEGRAM_BOT_TOKEN = \'…\';」：检查是否用了全角＄、或变量名大小写错误。';
     }
     echo json_encode($out, JSON_UNESCAPED_UNICODE);
     exit;
