@@ -103,6 +103,16 @@ function ensure_users_login_meta(PDO $pdo) {
     try { $pdo->exec("ALTER TABLE users ADD COLUMN last_login_ip VARCHAR(45) NULL AFTER last_login_at"); } catch (Throwable $e) {}
 }
 
+/** 允许在用户管理页自动补齐 companies.ui_color（用于按公司着色；失败则忽略） */
+function ensure_companies_ui_color(PDO $pdo): void
+{
+    try {
+        $pdo->exec("ALTER TABLE companies ADD COLUMN ui_color VARCHAR(16) NULL DEFAULT NULL");
+    } catch (Throwable $e) {
+        // 已存在或无权限则忽略
+    }
+}
+
 /** 用户管理列表依赖的列（线上若未跑迁移则在此补全，避免 500） */
 function ensure_users_email_created_columns(PDO $pdo) {
     try {
@@ -117,6 +127,7 @@ function ensure_users_email_created_columns(PDO $pdo) {
 
 ensure_users_login_meta($pdo);
 ensure_users_email_created_columns($pdo);
+ensure_companies_ui_color($pdo);
 
 try {
     // Agent 绑定下线用：客户列表（显示 code + name）
@@ -415,8 +426,24 @@ if ($actor_is_superadmin) {
                 LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
                 WHERE 1=1" . $status_sql . "
                 ORDER BY u.company_id ASC, u.id DESC";
+    // 无 ui_color 列时的降级版本（避免 Unknown column 触发整表空白）
+    $sql_all_no_color = "SELECT u.id, u.username, u.role, u.display_name, COALESCE(u.email,'') AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, u.created_by_user_id,
+                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name, '' AS company_ui_color,
+                       COALESCE(ucr.username, '') AS created_by_username
+                FROM users u
+                LEFT JOIN companies c ON c.id = u.company_id
+                LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
+                WHERE 1=1" . $status_sql . "
+                ORDER BY u.company_id ASC, u.id DESC";
     $sql_all_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
                        COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name, COALESCE(c.ui_color,'') AS company_ui_color,
+                       '' AS created_by_username
+                FROM users u
+                LEFT JOIN companies c ON c.id = u.company_id
+                WHERE 1=1" . $status_sql . "
+                ORDER BY u.company_id ASC, u.id DESC";
+    $sql_all_legacy_no_color = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
+                       COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name, '' AS company_ui_color,
                        '' AS created_by_username
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
@@ -440,15 +467,23 @@ if ($actor_is_superadmin) {
         $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
     } catch (Throwable $e) {
         try {
-            $all_company_users = $pdo->query($sql_all_legacy)->fetchAll(PDO::FETCH_ASSOC);
+            $all_company_users = $pdo->query($sql_all_no_color)->fetchAll(PDO::FETCH_ASSOC);
         } catch (Throwable $e2) {
             try {
-                $all_company_users = $pdo->query($sql_all_no_co)->fetchAll(PDO::FETCH_ASSOC);
+                $all_company_users = $pdo->query($sql_all_legacy)->fetchAll(PDO::FETCH_ASSOC);
             } catch (Throwable $e3) {
                 try {
-                    $all_company_users = $pdo->query($sql_all_no_co_legacy)->fetchAll(PDO::FETCH_ASSOC);
+                    $all_company_users = $pdo->query($sql_all_legacy_no_color)->fetchAll(PDO::FETCH_ASSOC);
                 } catch (Throwable $e4) {
-                    $all_company_users = [];
+                    try {
+                        $all_company_users = $pdo->query($sql_all_no_co)->fetchAll(PDO::FETCH_ASSOC);
+                    } catch (Throwable $e5) {
+                        try {
+                            $all_company_users = $pdo->query($sql_all_no_co_legacy)->fetchAll(PDO::FETCH_ASSOC);
+                        } catch (Throwable $e6) {
+                            $all_company_users = [];
+                        }
+                    }
                 }
             }
         }
