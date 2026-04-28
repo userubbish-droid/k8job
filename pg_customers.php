@@ -67,9 +67,15 @@ if (!function_exists('pdo_data_for_company_id')) {
     }
     $sql_where = implode(' AND ', $where);
     try {
-        $st = $pdoData->prepare("SELECT id, code, COALESCE(name,'') AS name, COALESCE(phone,'') AS phone,
-            COALESCE(remark,'') AS remark, COALESCE(bank_details,'') AS bank_details,
-            COALESCE(register_date,'') AS register_date, is_active, COALESCE(status,'') AS status, created_at
+        $st = $pdoData->prepare("SELECT id, code,
+            COALESCE(company_name,'') AS company_name,
+            COALESCE(nick_name,'') AS nick_name,
+            COALESCE(currency,'') AS currency,
+            COALESCE(pct_in,0) AS pct_in,
+            COALESCE(pct_out,0) AS pct_out,
+            COALESCE(volume_round,'') AS volume_round,
+            COALESCE(account_type,'') AS account_type,
+            is_active, COALESCE(status,'') AS status, created_at
             FROM pg_customers WHERE $sql_where ORDER BY id DESC LIMIT 500");
         $st->execute($params);
         $rows = $st->fetchAll(PDO::FETCH_ASSOC);
@@ -102,6 +108,10 @@ if (!function_exists('pdo_data_for_company_id')) {
             <?php if (!empty($err)): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
 
             <div class="card">
+                <div style="display:flex; gap:10px; flex-wrap:wrap; align-items:center; margin-bottom:12px;">
+                    <a class="btn btn-primary" href="pg_customer_create.php">+ New Customer</a>
+                    <span class="form-hint">PG 客户字段：company name / nick name / currency / % / volume / account type</span>
+                </div>
                 <form method="get" class="filters-bar" style="margin-bottom:12px;">
                     <div class="filters-row" style="flex-wrap:wrap; gap:10px; align-items:flex-end;">
                         <div class="filter-group" style="min-width:240px;">
@@ -118,10 +128,13 @@ if (!function_exists('pdo_data_for_company_id')) {
                         <thead>
                         <tr>
                             <th>Code</th>
-                            <th>Name</th>
-                            <th>Phone</th>
-                            <th>Bank detail</th>
-                            <th>Remark</th>
+                            <th>Company name</th>
+                            <th>Nick name</th>
+                            <th>Currency</th>
+                            <th>% in</th>
+                            <th>% out</th>
+                            <th>Volume around</th>
+                            <th>Account</th>
                             <th>Status</th>
                             <th>Created</th>
                         </tr>
@@ -130,16 +143,19 @@ if (!function_exists('pdo_data_for_company_id')) {
                         <?php foreach (($rows ?? []) as $r): ?>
                             <tr>
                                 <td><?= htmlspecialchars((string)($r['code'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                                <td><?= htmlspecialchars((string)($r['name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                                <td><?= htmlspecialchars((string)($r['phone'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                                <td style="max-width:320px; white-space:normal;"><?= htmlspecialchars((string)($r['bank_details'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
-                                <td style="max-width:320px; white-space:normal;"><?= htmlspecialchars((string)($r['remark'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td><?= htmlspecialchars((string)($r['company_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td><?= htmlspecialchars((string)($r['nick_name'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td><?= htmlspecialchars((string)($r['currency'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td class="num"><?= number_format((float)($r['pct_in'] ?? 0), 2) ?></td>
+                                <td class="num"><?= number_format((float)($r['pct_out'] ?? 0), 2) ?></td>
+                                <td><?= htmlspecialchars((string)($r['volume_round'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
+                                <td><?= htmlspecialchars((string)($r['account_type'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                                 <td><?= ((int)($r['is_active'] ?? 1) === 1) ? 'ACTIVE' : 'INACTIVE' ?></td>
                                 <td><?= htmlspecialchars((string)($r['created_at'] ?? ''), ENT_QUOTES, 'UTF-8') ?></td>
                             </tr>
                         <?php endforeach; ?>
                         <?php if (empty($rows ?? [])): ?>
-                            <tr><td colspan="7" style="text-align:center;color:var(--muted);padding:18px;">暂无数据</td></tr>
+                            <tr><td colspan="9" style="text-align:center;color:var(--muted);padding:18px;">暂无数据</td></tr>
                         <?php endif; ?>
                         </tbody>
                     </table>

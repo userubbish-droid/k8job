@@ -9,6 +9,16 @@ $err = '';
 $need_confirm = false;
 $confirm_message = '';
 $company_id = current_company_id();
+// PG 公司走独立客户创建页
+try {
+    $pdoCat = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+    $stBk = $pdoCat->prepare('SELECT LOWER(TRIM(business_kind)) FROM companies WHERE id = ? LIMIT 1');
+    $stBk->execute([$company_id]);
+    if (strtolower(trim((string)$stBk->fetchColumn())) === 'pg') {
+        header('Location: pg_customer_create.php');
+        exit;
+    }
+} catch (Throwable $e) {}
 if (function_exists('shard_refresh_business_pdo')) { shard_refresh_business_pdo(); }
 $pdoBiz = function_exists('pdo_business') ? pdo_business() : $pdo;
 

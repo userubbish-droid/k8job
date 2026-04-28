@@ -248,7 +248,7 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         </button>
         <div class="nav-group-sub" id="nav-sub-add-menu" role="region" aria-labelledby="nav-toggle-add-menu" style="display:<?= in_array($sidebar_current, ['transaction_create', 'customer_create'], true) ? 'block' : 'none' ?>">
             <?php if (has_permission('transaction_create')): ?><a href="transaction_create.php" class="nav-item nav-sub-item <?= $sidebar_current === 'transaction_create' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_add_transaction'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
-            <?php if (has_permission('customer_create')): ?><a href="customer_create.php" class="nav-item nav-sub-item <?= $sidebar_current === 'customer_create' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_new_customer'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
+            <?php if (has_permission('customer_create')): ?><a href="<?= $__is_pg_company ? 'pg_customer_create.php' : 'customer_create.php' ?>" class="nav-item nav-sub-item <?= $sidebar_current === 'customer_create' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_new_customer'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
         </div>
     </div>
     <?php endif; ?>
