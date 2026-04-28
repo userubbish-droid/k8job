@@ -1131,6 +1131,39 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
 
     $cfg = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
     if (!$cfg) {
+        // 统一提示：后台未启用 / 未绑定时，禁止入库但要给出明确原因
+        $wantsQuickTxn = (bool)preg_match('/^\s*(?:[+\-]\s*\d|undo\b|cancel\b|\/setup\b|setup\b)/iu', $text);
+        if (!$wantsQuickTxn) {
+            return;
+        }
+        try {
+            $st0 = $pdoCat->prepare('SELECT company_id FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+            $st0->execute([$chatId, '0']);
+            $cid0 = (int)$st0->fetchColumn();
+            $cid = $cid0;
+            if ($topicKey !== '0') {
+                $stT = $pdoCat->prepare('SELECT company_id FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+                $stT->execute([$chatId, $topicKey]);
+                $cidT = (int)$stT->fetchColumn();
+                if ($cidT > 0) {
+                    $cid = $cidT;
+                }
+            }
+            if ($cid > 0) {
+                $stE = $pdoCat->prepare('SELECT enabled FROM telegram_quick_txn_config_pg WHERE company_id = ? LIMIT 1');
+                $stE->execute([$cid]);
+                $en = (int)$stE->fetchColumn();
+                if ($en !== 1) {
+                    tqx_reply($botToken, $chatId, '⚠️ 机器人进单未启用：请到后台「PG Telegram」把 Enabled 打开后才可加单。');
+                    return;
+                }
+                // enabled=1 但仍取不到 cfg：说明该话题未绑定 member/bank 等默认
+                tqx_reply($botToken, $chatId, '⚠️ 本群/话题尚未完成绑定：请先 /setup 绑定公司，并设置 /customer 与 /bank（以及 /currency 可选）。');
+                return;
+            }
+        } catch (Throwable $e) {
+        }
+        tqx_reply($botToken, $chatId, '⚠️ 本群尚未绑定 PG 公司：请先发 /setup <公司ID或公司代码>，并在后台启用「PG Telegram」。');
         return;
     }
 
