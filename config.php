@@ -182,9 +182,18 @@ if (is_file(__DIR__ . '/notify_config.php')) {
     include __DIR__ . '/notify_config.php';
 }
 
-// PG Bot token：notify_config 里未填时，可读主机环境变量（Hostinger：hPanel → Advanced → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）
+// PG Bot token：notify_config 里未填时，可读主机环境变量（Hostinger：hPanel → Environment variables，名称 PG_TELEGRAM_BOT_TOKEN）
+// 不少 PHP-FPM 配置下 getenv() 拿不到面板注入的变量，但 $_SERVER / $_ENV 里有，故依次尝试。
 if (!isset($PG_TELEGRAM_BOT_TOKEN) || trim((string)$PG_TELEGRAM_BOT_TOKEN) === '') {
     $ev = getenv('PG_TELEGRAM_BOT_TOKEN');
+    if (!is_string($ev) || trim($ev) === '') {
+        $ev = (isset($_SERVER['PG_TELEGRAM_BOT_TOKEN']) && is_string($_SERVER['PG_TELEGRAM_BOT_TOKEN']))
+            ? $_SERVER['PG_TELEGRAM_BOT_TOKEN'] : false;
+    }
+    if (!is_string($ev) || trim($ev) === '') {
+        $ev = (isset($_ENV['PG_TELEGRAM_BOT_TOKEN']) && is_string($_ENV['PG_TELEGRAM_BOT_TOKEN']))
+            ? $_ENV['PG_TELEGRAM_BOT_TOKEN'] : false;
+    }
     if (is_string($ev) && trim($ev) !== '') {
         $PG_TELEGRAM_BOT_TOKEN = trim($ev);
     }

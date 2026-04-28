@@ -37,14 +37,28 @@ if (isset($PG_TELEGRAM_BOT_TOKEN)) {
 // 浏览器 GET：自检是否读到 token、PHP 是否正常（勿公开传播此 URL）
 if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $notifyPath = __DIR__ . '/notify_config.php';
-    echo json_encode([
+    $probeG = getenv('PG_TELEGRAM_BOT_TOKEN');
+    $probe = [
+        'getenv' => is_string($probeG) && trim($probeG) !== '',
+        'server' => isset($_SERVER['PG_TELEGRAM_BOT_TOKEN']) && is_string($_SERVER['PG_TELEGRAM_BOT_TOKEN'])
+            && trim($_SERVER['PG_TELEGRAM_BOT_TOKEN']) !== '',
+        'env' => isset($_ENV['PG_TELEGRAM_BOT_TOKEN']) && is_string($_ENV['PG_TELEGRAM_BOT_TOKEN'])
+            && trim($_ENV['PG_TELEGRAM_BOT_TOKEN']) !== '',
+    ];
+    $out = [
         'pg_webhook' => 'ok',
         'notify_config_file_exists' => is_file($notifyPath),
+        'notify_config_realpath' => is_file($notifyPath) ? realpath($notifyPath) : null,
         'token_configured' => ($token !== ''),
         'pg_token_length_on_this_server' => strlen($token),
-        'fix_if_token_false' => '本服务器仍读不到 PG token。任选其一：1) 将 notify_config.php 上传到与本脚本、config.php 同一目录，且内含 $PG_TELEGRAM_BOT_TOKEN=完整token；2) 或在 Hostinger「环境变量」新增 PG_TELEGRAM_BOT_TOKEN（无需把密钥写进文件）。改后刷新本页。若仍 false，用文件管理器打开线上 notify_config.php 确认第10行是否真已保存。',
+        'probe_env_nonempty' => $probe,
+        'fix_if_token_false' => '本服务器仍读不到 PG token。任选其一：1) 将 notify_config.php 上传到与本脚本、config.php 同一目录，且内含 $PG_TELEGRAM_BOT_TOKEN=完整token；2) 或在 Hostinger「环境变量」新增 PG_TELEGRAM_BOT_TOKEN（无需把密钥写进文件），并上传已支持 $_SERVER 读取的 config.php。改后刷新本页。若 probe_env_nonempty 任一为 true 而本项仍为 false，说明线上 config.php 过旧，请覆盖上传。',
         'hint' => 'POST updates come from Telegram; setWebhook must point here. If group +100 has no reply, use @BotFather /setprivacy -> Disable.',
-    ], JSON_UNESCAPED_UNICODE);
+    ];
+    if ($token === '' && ($probe['getenv'] || $probe['server'] || $probe['env'])) {
+        $out['fix_if_probe_true_but_token_empty'] = '面板里已配置 PG_TELEGRAM_BOT_TOKEN，但 PHP 未写入 $PG_TELEGRAM_BOT_TOKEN：请把当前仓库里的 config.php 上传到与 telegram_pg_webhook.php 同目录并覆盖（需含对 $_SERVER/$_ENV 的读取）。';
+    }
+    echo json_encode($out, JSON_UNESCAPED_UNICODE);
     exit;
 }
 
