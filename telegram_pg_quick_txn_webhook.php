@@ -226,6 +226,7 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
         $cfg['chat_default_member_code'] = trim((string)($bindMerged['member_code'] ?? ''));
         $cfg['chat_default_bank'] = trim((string)($bindMerged['default_bank'] ?? ''));
         $cfg['chat_default_product'] = '';
+        tqx_pg_fill_chat_defaults_from_any_topic($pdoCat, $chatId, $cfg);
         return $cfg;
     }
 
@@ -284,37 +285,44 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey 
     $cfg['chat_default_member_code'] = $mem;
     $cfg['chat_default_bank'] = $db;
     $cfg['chat_default_product'] = '';
+    tqx_pg_fill_chat_defaults_from_any_topic($pdoCat, $chatId, $cfg);
     return $cfg;
 }
 
-/**
- * PG 专用：+金额 代号 银行 [备注…]，无「产品」段（与 gaming 五段格式区分）
- *
- * @return array{ok:bool,err?:string,cmd?:string,data?:array}
- */
-function tqx_pg_parse_money_line(string $text): array
+/** 当前话题未设客户/银行时，用本群任意话题里最近填过的值（解决 /customer 与 /bank 分在不同论坛话题） */
+function tqx_pg_fill_chat_defaults_from_any_topic(PDO $pdoCat, string $chatId, array &$cfg): void
 {
-    $text = trim($text);
-    if ($text === '') {
-        return ['ok' => false, 'err' => 'Empty'];
+    if (trim((string)($cfg['chat_default_member_code'] ?? '')) === '') {
+        try {
+            $st = $pdoCat->prepare("SELECT member_code FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND TRIM(COALESCE(member_code,'')) <> '' ORDER BY updated_at IS NULL, updated_at DESC LIMIT 1");
+            $st->execute([$chatId]);
+            $v = trim((string)$st->fetchColumn());
+            if ($v !== '') {
+                $cfg['chat_default_member_code'] = $v;
+            }
+        } catch (Throwable $e) {
+        }
     }
-    if (!preg_match('/^([+-])\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/u', $text, $m)) {
-        return ['ok' => false, 'err' => ''];
+    if (trim((string)($cfg['chat_default_bank'] ?? '')) === '') {
+        try {
+            $st = $pdoCat->prepare("SELECT default_bank FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND TRIM(COALESCE(default_bank,'')) <> '' ORDER BY updated_at IS NULL, updated_at DESC LIMIT 1");
+            $st->execute([$chatId]);
+            $v = trim((string)$st->fetchColumn());
+            if ($v !== '') {
+                $cfg['chat_default_bank'] = $v;
+            }
+        } catch (Throwable $e) {
+        }
     }
-    $sign = $m[1];
-    $amtRaw = str_replace(',', '', $m[2]);
-    $code = $m[3];
-    $bank = $m[4];
-    $tail = isset($m[5]) ? trim((string)$m[5]) : '';
+}
 
-    if (!is_numeric($amtRaw)) {
-        return ['ok' => false, 'err' => '金额不是数字'];
-    }
-    $amount = round((float)$amtRaw, 2);
-    if ($amount <= 0) {
-        return ['ok' => false, 'err' => '金额需大于 0'];
-    }
-
+/**
+ * 从备注尾串解析 b10%、mega/game/balance 等（与 PG 四段格式尾段规则一致）。
+ *
+ * @return array{bonus_pct:?float,remark:string,mega_account:string,game_id:string,balance:?float}
+ */
+function tqx_pg_parse_remark_tail_features(string $tail): array
+{
     $bonusPct = null;
     $remark = $tail;
     if ($tail !== '') {
@@ -360,6 +368,175 @@ function tqx_pg_parse_money_line(string $text): array
     }
 
     return [
+        'bonus_pct' => $bonusPct,
+        'remark' => $restRemark,
+        'mega_account' => $megaAccount,
+        'game_id' => $gameId,
+        'balance' => $balance,
+    ];
+}
+
+/**
+ * 判断金额后第一个词是否像「渠道/银行」缩写（已设默认银行时用于区分「覆盖银行」与「纯备注」）。
+ */
+function tqx_pg_token_likely_bank_channel(string $tok, array $bankAlias, string $defB): bool
+{
+    $tok = trim($tok);
+    if ($tok === '') {
+        return false;
+    }
+    $k = tqx_norm_key($tok);
+    if ($defB !== '' && tqx_norm_key($defB) === $k) {
+        return true;
+    }
+    foreach ($bankAlias as $a => $v) {
+        $ka = tqx_norm_key((string)$a);
+        $kv = tqx_norm_key((string)$v);
+        if ($k === $ka || $k === $kv) {
+            return true;
+        }
+    }
+    if (preg_match('/^[a-z0-9._-]{2,15}$/i', $tok)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * 从 tokens 拆出：姓名、消息内银行（空则用默认）、备注。
+ *
+ * @param array<int,string> $parts0 金额后的所有词，至少 1 个（姓名）
+ * @return array{name:string,bankMsg:string,remark:string,err?:string}
+ */
+function tqx_pg_split_name_bank_remark(array $parts0, string $defBank, array $bankAlias): array
+{
+    $name = trim((string)($parts0[0] ?? ''));
+    if ($name === '') {
+        return ['name' => '', 'bankMsg' => '', 'remark' => '', 'err' => 'no_name'];
+    }
+    $tail = array_slice($parts0, 1);
+    $defB = trim($defBank);
+
+    if (count($tail) === 0) {
+        if ($defB === '') {
+            return ['name' => $name, 'bankMsg' => '', 'remark' => '', 'err' => 'need_bank'];
+        }
+
+        return ['name' => $name, 'bankMsg' => '', 'remark' => ''];
+    }
+
+    $t1 = trim((string)($tail[0] ?? ''));
+    $r = trim(implode(' ', array_slice($tail, 1)));
+
+    if ($defB !== '') {
+        if ($r === '') {
+            if (tqx_pg_token_likely_bank_channel($t1, $bankAlias, $defB)) {
+                return ['name' => $name, 'bankMsg' => $t1, 'remark' => ''];
+            }
+
+            return ['name' => $name, 'bankMsg' => '', 'remark' => $t1];
+        }
+        if (tqx_pg_token_likely_bank_channel($t1, $bankAlias, $defB)) {
+            return ['name' => $name, 'bankMsg' => $t1, 'remark' => $r];
+        }
+
+        return ['name' => $name, 'bankMsg' => '', 'remark' => trim($t1 . ($r !== '' ? ' ' . $r : ''))];
+    }
+
+    if ($r === '') {
+        return ['name' => $name, 'bankMsg' => $t1, 'remark' => ''];
+    }
+
+    return ['name' => $name, 'bankMsg' => $t1, 'remark' => $r];
+}
+
+/**
+ * PG：+/-金额 姓名 [銀行] [備注…]；銀行省略时用 /bank 或後台默認，寫在消息裡則只覆蓋本筆 channel。
+ *
+ * @return array{ok:bool,err?:string,cmd?:string,data?:array}
+ */
+function tqx_pg_flex_to_parsed(string $sign, string $amtRaw, array $parts0, array $cfgE): array
+{
+    if (!is_numeric($amtRaw)) {
+        return ['ok' => false, 'err' => '金额不是数字'];
+    }
+    $amount = round((float)$amtRaw, 2);
+    if ($amount <= 0) {
+        return ['ok' => false, 'err' => '金额需大于 0'];
+    }
+    $bankAlias = tqx_json_decode_map((string)($cfgE['bank_alias_json'] ?? ''));
+    $defB = trim((string)($cfgE['chat_default_bank'] ?? ''));
+    if ($defB === '') {
+        $defB = trim((string)($cfgE['pg_simple_bank'] ?? ''));
+    }
+
+    $split = tqx_pg_split_name_bank_remark($parts0, $defB, $bankAlias);
+    if (isset($split['err']) && $split['err'] === 'no_name') {
+        return ['ok' => false, 'err' => ''];
+    }
+    if (isset($split['err']) && $split['err'] === 'need_bank') {
+        return ['ok' => false, 'err' => 'need_bank'];
+    }
+
+    $bankMsg = trim((string)($split['bankMsg'] ?? ''));
+    $bankFinal = $bankMsg !== '' ? $bankMsg : $defB;
+    if ($bankFinal === '') {
+        return ['ok' => false, 'err' => 'need_bank'];
+    }
+
+    $tailFeat = tqx_pg_parse_remark_tail_features(trim((string)($split['remark'] ?? '')));
+
+    return [
+        'ok' => true,
+        'cmd' => ($sign === '+') ? 'deposit' : 'withdraw',
+        'data' => [
+            'amount' => $amount,
+            'code' => '',
+            'bank' => $bankFinal,
+            'product' => '',
+            'bonus_pct' => $tailFeat['bonus_pct'],
+            'mega_account' => $tailFeat['mega_account'],
+            'game_id' => $tailFeat['game_id'],
+            'balance' => $tailFeat['balance'],
+            'remark' => $tailFeat['remark'],
+            'name_display' => (string)($split['name'] ?? ''),
+            'pg_flex' => true,
+        ],
+    ];
+}
+
+/**
+ * PG 专用：+金额 代号 银行 [备注…]，无「产品」段（与 gaming 五段格式区分）
+ *
+ * @return array{ok:bool,err?:string,cmd?:string,data?:array}
+ */
+function tqx_pg_parse_money_line(string $text): array
+{
+    $text = trim($text);
+    if ($text === '') {
+        return ['ok' => false, 'err' => 'Empty'];
+    }
+    if (!preg_match('/^([+-])\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/u', $text, $m)) {
+        return ['ok' => false, 'err' => ''];
+    }
+    $sign = $m[1];
+    $amtRaw = str_replace(',', '', $m[2]);
+    $code = $m[3];
+    $bank = $m[4];
+    $tail = isset($m[5]) ? trim((string)$m[5]) : '';
+
+    if (!is_numeric($amtRaw)) {
+        return ['ok' => false, 'err' => '金额不是数字'];
+    }
+    $amount = round((float)$amtRaw, 2);
+    if ($amount <= 0) {
+        return ['ok' => false, 'err' => '金额需大于 0'];
+    }
+
+    $tailFeat = tqx_pg_parse_remark_tail_features($tail);
+
+    return [
         'ok' => true,
         'cmd' => ($sign === '+') ? 'deposit' : 'withdraw',
         'data' => [
@@ -367,11 +544,11 @@ function tqx_pg_parse_money_line(string $text): array
             'code' => $code,
             'bank' => $bank,
             'product' => '',
-            'bonus_pct' => $bonusPct,
-            'mega_account' => $megaAccount,
-            'game_id' => $gameId,
-            'balance' => $balance,
-            'remark' => $restRemark,
+            'bonus_pct' => $tailFeat['bonus_pct'],
+            'mega_account' => $tailFeat['mega_account'],
+            'game_id' => $tailFeat['game_id'],
+            'balance' => $tailFeat['balance'],
+            'remark' => $tailFeat['remark'],
         ],
     ];
 }
@@ -466,7 +643,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             return;
         }
         $afterShow = $newCode !== '' ? $newCode : '（已清除）';
-        tqx_reply($botToken, $chatId, "✅ 默认客户代号已设为：{$afterShow}\n极简 +金额 与完整格式中的代号均优先用此设置（完整格式可在消息里写银行，不受影响）。");
+        tqx_reply($botToken, $chatId, "✅ 默认客户代号已设为：{$afterShow}\n+金额 姓名 [銀行] [備注] 时 member_code 用此处；单段 +金额 词 可作仅备注（须已设 /bank）。");
         return;
     }
 
@@ -496,7 +673,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         if ($rawB === '') {
             $showB = $curB !== '' ? $curB : '（未设置）';
             $tkHint = $topicKey !== '0' ? " topic={$topicKey}" : '';
-            tqx_reply($botToken, $chatId, "本话题默认银行/渠道{$tkHint}：{$showB}\n设置：/bank HLB 或 银行 CHANNEL1\n清除：/bank -\n极简 +金额 会优先用此处；完整格式 +100 C001 HLB 备注 以消息里的银行为准。");
+            tqx_reply($botToken, $chatId, "本话题默认银行/渠道{$tkHint}：{$showB}\n设置：/bank HLB 或 银行 CHANNEL1\n清除：/bank -\n+金额 姓名 可省略銀行时用此处；消息裡寫銀行則只覆蓋該筆。純 +金额 亦用此默認。");
             return;
         }
         $clearB = in_array(strtolower($rawB), ['-', 'clear', 'none', '空'], true);
@@ -511,7 +688,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
             tqx_reply($botToken, $chatId, '保存失败：' . $e->getMessage());
             return;
         }
-        tqx_reply($botToken, $chatId, '✅ 默认银行/渠道已更新。极简记账将使用此处，除非使用完整格式并在消息中自行指定银行。');
+        tqx_reply($botToken, $chatId, '✅ 默认银行/渠道已更新。+金额 姓名 未写銀行时用此处；消息里写銀行则只覆盖该笔记录。');
         return;
     }
 
@@ -521,9 +698,51 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
 
     $parsed = tqx_parse_command($text);
     if (!$parsed['ok']) {
-        $pgParsed = tqx_pg_parse_money_line($text);
-        if ($pgParsed['ok']) {
-            $parsed = $pgParsed;
+        $t0 = trim($text);
+        if (preg_match('/^([+-])\s*([0-9][0-9,]*(?:\.[0-9]+)?)(?:\s+(.+))?$/u', $t0, $mxAmt)) {
+            $sign0 = (string)$mxAmt[1];
+            $amtRaw0 = str_replace(',', '', (string)$mxAmt[2]);
+            $rest0 = isset($mxAmt[3]) ? trim((string)$mxAmt[3]) : '';
+            if ($rest0 !== '' && is_numeric($amtRaw0) && round((float)$amtRaw0, 2) > 0) {
+                $parts0 = preg_split('/\s+/', $rest0) ?: [];
+                $parts0 = array_values(array_filter(array_map('trim', $parts0), fn($x) => $x !== ''));
+                $n0 = count($parts0);
+                $cfgE = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
+                if ($n0 === 1 && is_array($cfgE)) {
+                    $memE = trim((string)($cfgE['chat_default_member_code'] ?? ''));
+                    $sbE = trim((string)($cfgE['chat_default_bank'] ?? ''));
+                    if ($sbE === '') {
+                        $sbE = trim((string)($cfgE['pg_simple_bank'] ?? ''));
+                    }
+                    if ($memE !== '' && $sbE !== '') {
+                        $tailFeat = tqx_pg_parse_remark_tail_features((string)$parts0[0]);
+                        $amtF = round((float)$amtRaw0, 2);
+                        $parsed = [
+                            'ok' => true,
+                            'cmd' => $sign0 === '+' ? 'deposit' : 'withdraw',
+                            'data' => [
+                                'amount' => $amtF,
+                                'code' => $memE,
+                                'bank' => $sbE,
+                                'product' => '',
+                                'bonus_pct' => $tailFeat['bonus_pct'],
+                                'mega_account' => $tailFeat['mega_account'],
+                                'game_id' => $tailFeat['game_id'],
+                                'balance' => $tailFeat['balance'],
+                                'remark' => $tailFeat['remark'],
+                            ],
+                        ];
+                    }
+                }
+                if (!$parsed['ok'] && is_array($cfgE) && $n0 >= 1) {
+                    $fx = tqx_pg_flex_to_parsed($sign0, $amtRaw0, $parts0, $cfgE);
+                    if ($fx['ok']) {
+                        $parsed = $fx;
+                    } elseif (trim((string)($fx['err'] ?? '')) !== '') {
+                        $parsed = ['ok' => false, 'err' => (string)$fx['err']];
+                    }
+                }
+            }
         }
     }
     $pgShort = null;
@@ -533,7 +752,11 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         } elseif (preg_match('/^-[\s]*([0-9][0-9,]*(?:\.[0-9]+)?)\s*$/u', $text, $wm2)) {
             $pgShort = ['sign' => '-', 'amt' => str_replace(',', '', (string)$wm2[1])];
         } else {
-            tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
+            $hint = "PG：+金额 姓名 [銀行] [備注]（銀行/備注可省；未設 /bank 時須在消息裡寫銀行；已設默認銀行時消息裡寫銀行只覆蓋本筆）。已设 /customer 时「+金额 一段」可作仅备注。纯 +金额 须已设 /customer 与 /bank。\n";
+            if (trim((string)($parsed['err'] ?? '')) === 'need_bank') {
+                $hint = "PG：未設默認銀行時，請寫 +金额 姓名 銀行 [備注]，或先 /bank。\n";
+            }
+            tqx_reply($botToken, $chatId, $hint . '（解析失败：' . trim((string)($parsed['err'] ?? 'Invalid')) . '）');
             return;
         }
     }
@@ -682,7 +905,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         $sbChat = trim((string)($cfg['chat_default_bank'] ?? ''));
         $sb = $sbChat !== '' ? $sbChat : trim((string)($cfg['pg_simple_bank'] ?? ''));
         if ($sc === '' || $sb === '') {
-            tqx_reply($botToken, $chatId, "极简指令：只发 +金额 或 -金额。\n请在本话题发：/customer 代号  /bank 渠道（或后台填简易代号+银行）。\n论坛各话题可分别设置。\n完整格式：+100 C001 HLB 备注（无产品段）。");
+            tqx_reply($botToken, $chatId, "极简指令：发纯 +金额（也可 -金额）。\n请设 /customer 与 /bank（可设在任意论坛话题）。\n一般记账：+金额 姓名 [銀行] [備注]；已设 /customer 时可用 +金额 一段 作仅备注。\n也可：+金额 姓名 銀行 備注（未设默認銀行時銀行必填）。");
             return;
         }
         $sign = ($pgShort['sign'] ?? '+') === '-' ? '-' : '+';
@@ -850,19 +1073,49 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
 
     $data = $parsed['data'] ?? [];
     $amount = (float)($data['amount'] ?? 0);
-    $code = trim((string)($data['code'] ?? ''));
-    $bankIn = trim((string)($data['bank'] ?? ''));
-    $remark = trim((string)($data['remark'] ?? ''));
-    $bonusPct = $data['bonus_pct'] ?? null;
+    $extRefIns = null;
+
+    if (!empty($data['pg_flex'])) {
+        $nameDisplay = trim((string)($data['name_display'] ?? ''));
+        $remark = trim((string)($data['remark'] ?? ''));
+        $bonusPct = $data['bonus_pct'] ?? null;
+        $bankIn = trim((string)($data['bank'] ?? ''));
+        if ($bankIn === '') {
+            tqx_reply($botToken, $chatId, '缺少银行/渠道。请写 +金额 姓名 銀行 [備注] 或先 /bank。');
+            return;
+        }
+        if ($nameDisplay === '') {
+            tqx_reply($botToken, $chatId, '缺少姓名。例：+100 张三 [HLB] [備注]');
+            return;
+        }
+        $memDefT = trim((string)($cfg['chat_default_member_code'] ?? ''));
+        if ($memDefT !== '') {
+            $code = $memDefT;
+            $extRefIns = $nameDisplay;
+        } else {
+            $code = $nameDisplay;
+            $extRefIns = null;
+        }
+    } else {
+        $code = trim((string)($data['code'] ?? ''));
+        $bankIn = trim((string)($data['bank'] ?? ''));
+        $remark = trim((string)($data['remark'] ?? ''));
+        $bonusPct = $data['bonus_pct'] ?? null;
+
+        $chatDefMember = trim((string)($cfg['chat_default_member_code'] ?? ''));
+        if ($chatDefMember !== '') {
+            $code = $chatDefMember;
+        }
+
+        if ($code === '' || $bankIn === '') {
+            tqx_reply($botToken, $chatId, '缺少字段。例：+100 C011 HLB 备注（PG 无产品段）');
+            return;
+        }
+    }
 
     $bankKey = tqx_norm_key($bankIn);
     if ($bankKey !== '' && isset($bankAlias[$bankKey])) {
         $bankIn = (string)$bankAlias[$bankKey];
-    }
-
-    $chatDefMember = trim((string)($cfg['chat_default_member_code'] ?? ''));
-    if ($chatDefMember !== '') {
-        $code = $chatDefMember;
     }
 
     if ($code === '' || $bankIn === '') {
@@ -886,8 +1139,8 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
 
     try {
         $pdoData->prepare('INSERT INTO pg_transactions (company_id, txn_day, txn_time, flow, amount, currency, external_ref, channel, member_code, status, remark, staff, created_by, created_at, approved_by, approved_at)
-            VALUES (?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, NULL, NOW(), NULL, NOW())')
-            ->execute([$companyId, $day, $time, $flow, $total, $channel, $code, 'approved', ($lineRemark !== '' ? $lineRemark : null), $who]);
+            VALUES (?, ?, ?, ?, ?, NULL, ?, ?, ?, ?, ?, ?, NULL, NOW(), NULL, NOW())')
+            ->execute([$companyId, $day, $time, $flow, $total, ($extRefIns !== null && $extRefIns !== '' ? $extRefIns : null), $channel, $code, 'approved', ($lineRemark !== '' ? $lineRemark : null), $who]);
         $txId = (int)$pdoData->lastInsertId();
     } catch (Throwable $e) {
         tqx_reply($botToken, $chatId, '写入失败：' . $e->getMessage());
@@ -913,6 +1166,9 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         $reply = "✅ 已入账（本笔）\n";
         $reply .= "{$timeHm} 入 +" . number_format($amount, 2, '.', '') . ' → 记账 ' . number_format($total, 2, '.', '') . "\n";
         $reply .= "代号 {$code}｜{$channel}\n";
+        if ($extRefIns !== null && $extRefIns !== '') {
+            $reply .= '名字 ' . $extRefIns . "\n";
+        }
         if ($lineRemark !== '') {
             $reply .= '备注 ' . $lineRemark . "\n";
         }
@@ -924,6 +1180,9 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         $reply = "✅ 已出款（本笔）\n";
         $reply .= "{$timeHm} 出 -" . number_format($amount, 2, '.', '') . ' → 记账 ' . number_format($total, 2, '.', '') . "\n";
         $reply .= "代号 {$code}｜{$channel}\n";
+        if ($extRefIns !== null && $extRefIns !== '') {
+            $reply .= '名字 ' . $extRefIns . "\n";
+        }
         if ($lineRemark !== '') {
             $reply .= '备注 ' . $lineRemark . "\n";
         }

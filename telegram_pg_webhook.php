@@ -20,8 +20,8 @@
  *
  * 5) 使用：把 PG Bot 拉进群 → 群内发 /setup 或 /setup <company_id|公司代码>
  *     绑定公司必须是 companies.business_kind = pg。
- *     绑定后在当前话题发：/customer 代号、/bank 渠道（论坛各话题可分别设）；极简 +金额 用上述默认；完整格式 +100 C001 HLB 备注（无产品段，渠道以消息为准，见 telegram_pg_quick_txn_webhook.php）。
- *     指令与 gaming 类似：+100 CODE BANK CHAN 备注、undo、cancel、白名单 /addadmin 等。
+ *     绑定后在当前话题发：/customer 代号、/bank 渠道（论坛各话题可分别设）；记账 +金额 姓名 [銀行] [備注]（銀行可省则用 /bank；消息裡寫銀行只覆蓋該筆）。极简纯 +金额 用上述默认。
+ *     指令与 gaming 类似：undo、cancel、白名单 /addadmin 等。
  */
 require __DIR__ . '/config.php';
 require_once __DIR__ . '/inc/notify.php';
