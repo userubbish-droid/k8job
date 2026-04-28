@@ -67,26 +67,154 @@ function tqx_pg_ensure_tables(PDO $pdo): void
     }
     $pdo->exec("CREATE TABLE IF NOT EXISTS telegram_pg_chat_customer_pg (
         chat_id VARCHAR(40) NOT NULL,
+        topic_key VARCHAR(32) NOT NULL DEFAULT '0',
         company_id INT UNSIGNED NOT NULL,
         member_code VARCHAR(64) NOT NULL DEFAULT '',
+        default_bank VARCHAR(64) NOT NULL DEFAULT '',
+        default_product VARCHAR(64) NOT NULL DEFAULT '',
         updated_at TIMESTAMP NULL DEFAULT NULL ON UPDATE CURRENT_TIMESTAMP,
-        PRIMARY KEY (chat_id),
+        PRIMARY KEY (chat_id, topic_key),
         KEY idx_company (company_id)
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci");
+    tqx_pg_ensure_chat_customer_schema($pdo);
+}
+
+function tqx_pg_ensure_chat_customer_schema(PDO $pdo): void
+{
+    foreach (['default_bank', 'default_product'] as $col) {
+        try {
+            $pdo->exec("ALTER TABLE telegram_pg_chat_customer_pg ADD COLUMN {$col} VARCHAR(64) NOT NULL DEFAULT ''");
+        } catch (Throwable $e) {
+        }
+    }
+    // PG 不再使用产品：保留 default_product 列兼容旧库，写入时恒为空
+    $hasTopic = false;
+    try {
+        $q = $pdo->query("SHOW COLUMNS FROM telegram_pg_chat_customer_pg LIKE 'topic_key'");
+        $hasTopic = $q && $q->fetch(PDO::FETCH_ASSOC);
+    } catch (Throwable $e) {
+    }
+    if ($hasTopic) {
+        return;
+    }
+    try {
+        $pdo->exec("ALTER TABLE telegram_pg_chat_customer_pg ADD COLUMN topic_key VARCHAR(32) NOT NULL DEFAULT '0' AFTER chat_id");
+    } catch (Throwable $e) {
+        try {
+            $pdo->exec("ALTER TABLE telegram_pg_chat_customer_pg ADD COLUMN topic_key VARCHAR(32) NOT NULL DEFAULT '0'");
+        } catch (Throwable $e2) {
+        }
+    }
+    try {
+        $pdo->exec("UPDATE telegram_pg_chat_customer_pg SET topic_key = '0' WHERE topic_key = '' OR topic_key IS NULL");
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE telegram_pg_chat_customer_pg DROP PRIMARY KEY');
+    } catch (Throwable $e) {
+    }
+    try {
+        $pdo->exec('ALTER TABLE telegram_pg_chat_customer_pg ADD PRIMARY KEY (chat_id, topic_key)');
+    } catch (Throwable $e) {
+    }
+}
+
+function tqx_pg_topic_key_from_msg(array $msg): string
+{
+    if (isset($msg['message_thread_id']) && is_numeric($msg['message_thread_id'])) {
+        $tid = (int)$msg['message_thread_id'];
+        if ($tid > 0) {
+            return (string)$tid;
+        }
+    }
+    return '0';
 }
 
 /**
- * 按群解析 PG 配置：优先 telegram_pg_chat_customer_pg（支持多群），否则回退到 config 表里的 chat_id。
- *
- * @return array<string,mixed>|null  在 cfg 上增加键 chat_default_member_code（本群默认客户代号）
+ * @param array<string,mixed>|null $rowGlobal
+ * @param array<string,mixed>|null $rowTopic
  */
-function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId): ?array
+function tqx_pg_merge_bind_topic_over_global(?array $rowGlobal, ?array $rowTopic): ?array
 {
-    $stBind = $pdoCat->prepare('SELECT company_id, member_code FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
-    $stBind->execute([$chatId]);
-    $bindRow = $stBind->fetch(PDO::FETCH_ASSOC);
-    if (is_array($bindRow) && (int)($bindRow['company_id'] ?? 0) > 0) {
-        $companyId = (int)$bindRow['company_id'];
+    if (!is_array($rowGlobal) && !is_array($rowTopic)) {
+        return null;
+    }
+    $base = is_array($rowGlobal) ? $rowGlobal : $rowTopic;
+    if (!is_array($base)) {
+        return null;
+    }
+    $out = $base;
+    if (!is_array($rowTopic)) {
+        return $out;
+    }
+    foreach (['member_code', 'default_bank'] as $f) {
+        $tv = trim((string)($rowTopic[$f] ?? ''));
+        if ($tv !== '') {
+            $out[$f] = $tv;
+        }
+    }
+    $cidT = (int)($rowTopic['company_id'] ?? 0);
+    if ($cidT > 0) {
+        $out['company_id'] = $cidT;
+    }
+    return $out;
+}
+
+function tqx_pg_bind_row_upsert_fields(PDO $pdo, string $chatId, string $topicKey, int $companyId, array $fields): void
+{
+    $allowed = ['member_code', 'default_bank'];
+    $patch = [];
+    foreach ($allowed as $k) {
+        if (!array_key_exists($k, $fields)) {
+            continue;
+        }
+        $patch[$k] = (string)$fields[$k];
+    }
+    if ($patch === []) {
+        return;
+    }
+    $st = $pdo->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+    $st->execute([$chatId, $topicKey]);
+    $row = $st->fetch(PDO::FETCH_ASSOC);
+    if (is_array($row)) {
+        $member = array_key_exists('member_code', $patch) ? $patch['member_code'] : (string)($row['member_code'] ?? '');
+        $db = array_key_exists('default_bank', $patch) ? $patch['default_bank'] : (string)($row['default_bank'] ?? '');
+        $pdo->prepare('UPDATE telegram_pg_chat_customer_pg SET member_code = ?, default_bank = ?, default_product = ? WHERE chat_id = ? AND topic_key = ? LIMIT 1')
+            ->execute([$member, $db, '', $chatId, $topicKey]);
+        return;
+    }
+    $member = array_key_exists('member_code', $patch) ? $patch['member_code'] : '';
+    $db = array_key_exists('default_bank', $patch) ? $patch['default_bank'] : '';
+    $pdo->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, ?, ?, ?, ?, ?)')
+        ->execute([$chatId, $topicKey, $companyId, $member, $db, '']);
+}
+
+/**
+ * 按群 + 论坛话题解析 PG 配置；否则回退到 config 表里的 chat_id。
+ *
+ * @return array<string,mixed>|null
+ */
+function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId, string $topicKey = '0'): ?array
+{
+    tqx_pg_ensure_chat_customer_schema($pdoCat);
+    if (!preg_match('/^[0-9]{1,24}$/', $topicKey)) {
+        $topicKey = '0';
+    }
+
+    $st0 = $pdoCat->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+    $st0->execute([$chatId, '0']);
+    $row0 = $st0->fetch(PDO::FETCH_ASSOC) ?: null;
+
+    $rowT = null;
+    if ($topicKey !== '0') {
+        $stT = $pdoCat->prepare('SELECT chat_id, topic_key, company_id, member_code, default_bank, default_product FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1');
+        $stT->execute([$chatId, $topicKey]);
+        $rowT = $stT->fetch(PDO::FETCH_ASSOC) ?: null;
+    }
+
+    $bindMerged = tqx_pg_merge_bind_topic_over_global($row0, $rowT);
+    if (is_array($bindMerged) && (int)($bindMerged['company_id'] ?? 0) > 0) {
+        $companyId = (int)$bindMerged['company_id'];
         $stCfg = $pdoCat->prepare("SELECT company_id, enabled, chat_id, allowed_user_ids, bank_alias_json, product_alias_json, staff_alias_json, receipt_prefix, receipt_slogan, receipt_style, undo_window_sec,
             pg_simple_member_code, pg_simple_bank, pg_simple_product
             FROM telegram_quick_txn_config_pg WHERE company_id = ? LIMIT 1");
@@ -95,7 +223,9 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId): ?array
         if (!is_array($cfg) || !(int)($cfg['enabled'] ?? 0)) {
             return null;
         }
-        $cfg['chat_default_member_code'] = trim((string)($bindRow['member_code'] ?? ''));
+        $cfg['chat_default_member_code'] = trim((string)($bindMerged['member_code'] ?? ''));
+        $cfg['chat_default_bank'] = trim((string)($bindMerged['default_bank'] ?? ''));
+        $cfg['chat_default_product'] = '';
         return $cfg;
     }
 
@@ -114,23 +244,136 @@ function tqx_pg_load_cfg_for_chat(PDO $pdoCat, string $chatId): ?array
         return null;
     }
     try {
-        $chk = $pdoCat->prepare('SELECT 1 FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
+        $chk = $pdoCat->prepare("SELECT 1 FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = '0' LIMIT 1");
         $chk->execute([$chatId]);
         if (!$chk->fetchColumn()) {
-            $pdoCat->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, ?)')
-                ->execute([$chatId, $cid, '']);
+            $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, '0', ?, '', '', '')")
+                ->execute([$chatId, $cid]);
         }
     } catch (Throwable $e) {
     }
     $mem = '';
+    $db = '';
     try {
-        $stM = $pdoCat->prepare('SELECT member_code FROM telegram_pg_chat_customer_pg WHERE chat_id = ? LIMIT 1');
+        $stM = $pdoCat->prepare("SELECT member_code, default_bank FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = '0' LIMIT 1");
         $stM->execute([$chatId]);
-        $mem = trim((string)($stM->fetchColumn()));
+        $rM = $stM->fetch(PDO::FETCH_ASSOC);
+        if (is_array($rM)) {
+            $mem = trim((string)($rM['member_code'] ?? ''));
+            $db = trim((string)($rM['default_bank'] ?? ''));
+        }
     } catch (Throwable $e) {
     }
+    if ($topicKey !== '0') {
+        try {
+            $stT2 = $pdoCat->prepare("SELECT member_code, default_bank FROM telegram_pg_chat_customer_pg WHERE chat_id = ? AND topic_key = ? LIMIT 1");
+            $stT2->execute([$chatId, $topicKey]);
+            $rT2 = $stT2->fetch(PDO::FETCH_ASSOC);
+            if (is_array($rT2)) {
+                foreach (['member_code' => &$mem, 'default_bank' => &$db] as $fk => &$ref) {
+                    $tv = trim((string)($rT2[$fk] ?? ''));
+                    if ($tv !== '') {
+                        $ref = $tv;
+                    }
+                }
+                unset($ref);
+            }
+        } catch (Throwable $e) {
+        }
+    }
     $cfg['chat_default_member_code'] = $mem;
+    $cfg['chat_default_bank'] = $db;
+    $cfg['chat_default_product'] = '';
     return $cfg;
+}
+
+/**
+ * PG 专用：+金额 代号 银行 [备注…]，无「产品」段（与 gaming 五段格式区分）
+ *
+ * @return array{ok:bool,err?:string,cmd?:string,data?:array}
+ */
+function tqx_pg_parse_money_line(string $text): array
+{
+    $text = trim($text);
+    if ($text === '') {
+        return ['ok' => false, 'err' => 'Empty'];
+    }
+    if (!preg_match('/^([+-])\s*([0-9][0-9,]*(?:\.[0-9]+)?)\s+(\S+)\s+(\S+)(?:\s+(.*))?$/u', $text, $m)) {
+        return ['ok' => false, 'err' => ''];
+    }
+    $sign = $m[1];
+    $amtRaw = str_replace(',', '', $m[2]);
+    $code = $m[3];
+    $bank = $m[4];
+    $tail = isset($m[5]) ? trim((string)$m[5]) : '';
+
+    if (!is_numeric($amtRaw)) {
+        return ['ok' => false, 'err' => '金额不是数字'];
+    }
+    $amount = round((float)$amtRaw, 2);
+    if ($amount <= 0) {
+        return ['ok' => false, 'err' => '金额需大于 0'];
+    }
+
+    $bonusPct = null;
+    $remark = $tail;
+    if ($tail !== '') {
+        if (preg_match('/^(b\s*([0-9]{1,2}(?:\.[0-9]+)?)%?)\s*(.*)$/i', $tail, $mm)) {
+            $pctRaw = $mm[2];
+            if (is_numeric($pctRaw)) {
+                $p = (float)$pctRaw;
+                if ($p >= 0 && $p <= 100) {
+                    $bonusPct = $p;
+                    $remark = trim((string)($mm[3] ?? ''));
+                }
+            }
+        }
+    }
+
+    $megaAccount = '';
+    $gameId = '';
+    $balance = null;
+    $restRemark = $remark;
+    if ($remark !== '') {
+        $parts = preg_split('/\s+/', $remark) ?: [];
+        $parts = array_values(array_filter(array_map('trim', $parts), fn($x) => $x !== ''));
+        if (count($parts) >= 2) {
+            $p0 = (string)$parts[0];
+            $p1 = (string)$parts[1];
+            if ($p0 !== '' && $p1 !== '') {
+                $megaAccount = $p0;
+                $gameId = $p1;
+                if (count($parts) >= 3) {
+                    $p2 = (string)$parts[2];
+                    $balRaw = str_replace(',', '', $p2);
+                    if (is_numeric($balRaw)) {
+                        $balance = round((float)$balRaw, 2);
+                        $restRemark = trim(implode(' ', array_slice($parts, 3)));
+                    } else {
+                        $restRemark = trim(implode(' ', array_slice($parts, 2)));
+                    }
+                } else {
+                    $restRemark = trim(implode(' ', array_slice($parts, 2)));
+                }
+            }
+        }
+    }
+
+    return [
+        'ok' => true,
+        'cmd' => ($sign === '+') ? 'deposit' : 'withdraw',
+        'data' => [
+            'amount' => $amount,
+            'code' => $code,
+            'bank' => $bank,
+            'product' => '',
+            'bonus_pct' => $bonusPct,
+            'mega_account' => $megaAccount,
+            'game_id' => $gameId,
+            'balance' => $balance,
+            'remark' => $restRemark,
+        ],
+    ];
 }
 
 function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $botToken): void
@@ -159,6 +402,8 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         return;
     }
 
+    $topicKey = tqx_pg_topic_key_from_msg($msg);
+
     $from = $msg['from'] ?? [];
     $tgUserId = isset($from['id']) ? (int)$from['id'] : 0;
     $tgUsername = trim((string)($from['username'] ?? ''));
@@ -168,7 +413,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     $who = $tgUsername !== '' ? $tgUsername : ($tgFull !== '' ? $tgFull : ($tgUserId > 0 ? (string)$tgUserId : 'telegram'));
 
     if (preg_match('/^(customer|\/customer|客户|\/客户)(?:\s+(.+))?$/iu', $text, $mCust)) {
-        $cfgCust = tqx_pg_load_cfg_for_chat($pdoCat, $chatId);
+        $cfgCust = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
         if (!$cfgCust) {
             tqx_reply($botToken, $chatId, '本群尚未绑定 PG 公司。请先发 /setup <公司ID或公司代码>');
             return;
@@ -197,7 +442,8 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         $rawArg = trim((string)($mCust[2] ?? ''));
         if ($rawArg === '') {
             $show = $curMem !== '' ? $curMem : '（未设置）';
-            tqx_reply($botToken, $chatId, "本群默认客户代号：{$show}\n设置：/customer C001 或 客户 C001\n清除：/customer -");
+            $tkHint = $topicKey !== '0' ? "（当前论坛话题 topic={$topicKey}）" : '';
+            tqx_reply($botToken, $chatId, "本话题默认客户代号{$tkHint}：{$show}\n设置：/customer C001\n清除：/customer -");
             return;
         }
         $clear = in_array(strtolower($rawArg), ['-', 'clear', 'none', '空'], true);
@@ -214,15 +460,58 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         }
         $cidCust = (int)($cfgCust['company_id'] ?? 0);
         try {
-            $pdoCat->prepare('INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, ?)
-                ON DUPLICATE KEY UPDATE member_code = VALUES(member_code), company_id = VALUES(company_id)')
-                ->execute([$chatId, $cidCust, $newCode]);
+            tqx_pg_bind_row_upsert_fields($pdoCat, $chatId, $topicKey, $cidCust, ['member_code' => $newCode]);
         } catch (Throwable $e) {
             tqx_reply($botToken, $chatId, '保存失败：' . $e->getMessage());
             return;
         }
         $afterShow = $newCode !== '' ? $newCode : '（已清除）';
-        tqx_reply($botToken, $chatId, "✅ 本群默认客户代号已设为：{$afterShow}\n此后本群内 +金额 / 完整格式 记账均使用该代号。");
+        tqx_reply($botToken, $chatId, "✅ 默认客户代号已设为：{$afterShow}\n极简 +金额 与完整格式中的代号均优先用此设置（完整格式可在消息里写银行，不受影响）。");
+        return;
+    }
+
+    if (preg_match('/^(bank|\/bank|银行|\/银行)(?:\s+(.+))?$/iu', $text, $mBank)) {
+        $cfgB = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
+        if (!$cfgB) {
+            tqx_reply($botToken, $chatId, '本群尚未绑定 PG 公司。请先发 /setup');
+            return;
+        }
+        $allowJsonB = (string)($cfgB['allowed_user_ids'] ?? '');
+        $allowArrB = tqx_json_decode_map($allowJsonB);
+        $allowB = [];
+        foreach ($allowArrB as $v) {
+            $v = trim((string)$v);
+            if ($v !== '') {
+                $allowB[] = $v;
+            }
+        }
+        $isAdmB = ($tgUserId > 0 && in_array((string)$tgUserId, $allowB, true))
+            || ($tgUsername !== '' && in_array($tgUsername, $allowB, true));
+        if (!$isAdmB) {
+            tqx_reply($botToken, $chatId, 'Unauthorized');
+            return;
+        }
+        $curB = trim((string)($cfgB['chat_default_bank'] ?? ''));
+        $rawB = trim((string)($mBank[2] ?? ''));
+        if ($rawB === '') {
+            $showB = $curB !== '' ? $curB : '（未设置）';
+            $tkHint = $topicKey !== '0' ? " topic={$topicKey}" : '';
+            tqx_reply($botToken, $chatId, "本话题默认银行/渠道{$tkHint}：{$showB}\n设置：/bank HLB 或 银行 CHANNEL1\n清除：/bank -\n极简 +金额 会优先用此处；完整格式 +100 C001 HLB 备注 以消息里的银行为准。");
+            return;
+        }
+        $clearB = in_array(strtolower($rawB), ['-', 'clear', 'none', '空'], true);
+        $newB = $clearB ? '' : $rawB;
+        if (!$clearB && (strlen($newB) > 64 || preg_match('/[\x00-\x08\x0B\x0C\x0E-\x1F]/', $newB))) {
+            tqx_reply($botToken, $chatId, '内容过长或含非法字符（最多 64 字符）。');
+            return;
+        }
+        try {
+            tqx_pg_bind_row_upsert_fields($pdoCat, $chatId, $topicKey, (int)($cfgB['company_id'] ?? 0), ['default_bank' => $newB]);
+        } catch (Throwable $e) {
+            tqx_reply($botToken, $chatId, '保存失败：' . $e->getMessage());
+            return;
+        }
+        tqx_reply($botToken, $chatId, '✅ 默认银行/渠道已更新。极简记账将使用此处，除非使用完整格式并在消息中自行指定银行。');
         return;
     }
 
@@ -231,6 +520,12 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     }
 
     $parsed = tqx_parse_command($text);
+    if (!$parsed['ok']) {
+        $pgParsed = tqx_pg_parse_money_line($text);
+        if ($pgParsed['ok']) {
+            $parsed = $pgParsed;
+        }
+    }
     $pgShort = null;
     if (!$parsed['ok']) {
         if (preg_match('/^\+[\s]*([0-9][0-9,]*(?:\.[0-9]+)?)\s*$/u', $text, $wm)) {
@@ -244,7 +539,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     }
 
     if ($pgShort === null && ($parsed['cmd'] ?? '') === 'id') {
-        $out = "chat_id={$chatId}\nuser_id=" . ($tgUserId > 0 ? (string)$tgUserId : '-') . "\nusername=" . ($tgUsername !== '' ? $tgUsername : '-');
+        $out = "chat_id={$chatId}\ntopic_key={$topicKey}\nuser_id=" . ($tgUserId > 0 ? (string)$tgUserId : '-') . "\nusername=" . ($tgUsername !== '' ? $tgUsername : '-');
         tqx_reply($botToken, $chatId, $out);
         return;
     }
@@ -339,19 +634,21 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         ]);
 
         try {
-            $stB = $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, company_id, member_code) VALUES (?, ?, '')
+            $stB = $pdoCat->prepare("INSERT INTO telegram_pg_chat_customer_pg (chat_id, topic_key, company_id, member_code, default_bank, default_product) VALUES (?, '0', ?, '', '', '')
                 ON DUPLICATE KEY UPDATE
                     company_id = VALUES(company_id),
-                    member_code = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.member_code)");
+                    member_code = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.member_code),
+                    default_bank = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.default_bank),
+                    default_product = IF(telegram_pg_chat_customer_pg.company_id <> VALUES(company_id), '', telegram_pg_chat_customer_pg.default_product)");
             $stB->execute([$chatId, $pickCompanyId]);
         } catch (Throwable $e) {
         }
 
-        tqx_reply($botToken, $chatId, "✅ PG 群已绑定\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已加入白名单。\n\n设置本群默认客户代号：/customer C001 或 客户 C001");
+        tqx_reply($botToken, $chatId, "✅ PG 群已绑定\nchat_id={$chatId}\ncompany_id={$pickCompanyId}\n已加入白名单。\n\n当前话题可设：/customer 代号  /bank 渠道\n（论坛各话题可分别设置；PG 无产品段）");
         return;
     }
 
-    $cfg = tqx_pg_load_cfg_for_chat($pdoCat, $chatId);
+    $cfg = tqx_pg_load_cfg_for_chat($pdoCat, $chatId, $topicKey);
     if (!$cfg) {
         return;
     }
@@ -382,15 +679,15 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
         }
         $scChat = trim((string)($cfg['chat_default_member_code'] ?? ''));
         $sc = $scChat !== '' ? $scChat : trim((string)($cfg['pg_simple_member_code'] ?? ''));
-        $sb = trim((string)($cfg['pg_simple_bank'] ?? ''));
-        $sp = trim((string)($cfg['pg_simple_product'] ?? ''));
-        if ($sc === '' || $sb === '' || $sp === '') {
-            tqx_reply($botToken, $chatId, "极简指令：只发 +金额 或 -金额。\n请先在本群发 /customer 代号 绑定本群客户，并在后台「PG Telegram」填写：简易渠道、简易产品；\n或后台三项代号+渠道+产品都填。\n完整格式：+100 C001 CHANNEL1 PG 备注");
+        $sbChat = trim((string)($cfg['chat_default_bank'] ?? ''));
+        $sb = $sbChat !== '' ? $sbChat : trim((string)($cfg['pg_simple_bank'] ?? ''));
+        if ($sc === '' || $sb === '') {
+            tqx_reply($botToken, $chatId, "极简指令：只发 +金额 或 -金额。\n请在本话题发：/customer 代号  /bank 渠道（或后台填简易代号+银行）。\n论坛各话题可分别设置。\n完整格式：+100 C001 HLB 备注（无产品段）。");
             return;
         }
         $sign = ($pgShort['sign'] ?? '+') === '-' ? '-' : '+';
-        $expanded = $sign . $pgShort['amt'] . ' ' . $sc . ' ' . $sb . ' ' . $sp;
-        $parsed = tqx_parse_command($expanded);
+        $expanded = $sign . $pgShort['amt'] . ' ' . $sc . ' ' . $sb;
+        $parsed = tqx_pg_parse_money_line($expanded);
         if (!$parsed['ok']) {
             tqx_reply($botToken, $chatId, (string)($parsed['err'] ?? 'Invalid'));
             return;
@@ -419,7 +716,6 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     }
 
     $bankAlias = tqx_json_decode_map((string)($cfg['bank_alias_json'] ?? ''));
-    $prodAlias = tqx_json_decode_map((string)($cfg['product_alias_json'] ?? ''));
     $staffAlias = tqx_json_decode_map((string)($cfg['staff_alias_json'] ?? ''));
     if ($tgUserId > 0) {
         $k = (string)$tgUserId;
@@ -556,7 +852,6 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     $amount = (float)($data['amount'] ?? 0);
     $code = trim((string)($data['code'] ?? ''));
     $bankIn = trim((string)($data['bank'] ?? ''));
-    $prodIn = trim((string)($data['product'] ?? ''));
     $remark = trim((string)($data['remark'] ?? ''));
     $bonusPct = $data['bonus_pct'] ?? null;
 
@@ -564,18 +859,14 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     if ($bankKey !== '' && isset($bankAlias[$bankKey])) {
         $bankIn = (string)$bankAlias[$bankKey];
     }
-    $prodKey = tqx_norm_key($prodIn);
-    if ($prodKey !== '' && isset($prodAlias[$prodKey])) {
-        $prodIn = (string)$prodAlias[$prodKey];
-    }
 
     $chatDefMember = trim((string)($cfg['chat_default_member_code'] ?? ''));
     if ($chatDefMember !== '') {
         $code = $chatDefMember;
     }
 
-    if ($code === '' || $bankIn === '' || $prodIn === '') {
-        tqx_reply($botToken, $chatId, '缺少字段。例：+100 C011 CHANNEL1 PG 备注');
+    if ($code === '' || $bankIn === '') {
+        tqx_reply($botToken, $chatId, '缺少字段。例：+100 C011 HLB 备注（PG 无产品段）');
         return;
     }
 
@@ -587,7 +878,7 @@ function telegram_pg_quick_txn_handle_update(PDO $pdo, array $update, string $bo
     $day = date('Y-m-d');
     $time = date('H:i:s');
     $flow = (($parsed['cmd'] ?? '') === 'deposit') ? 'in' : 'out';
-    $channel = trim($bankIn . ' | ' . $prodIn, " |\t\n\r\0\x0B");
+    $channel = trim($bankIn);
     $lineRemark = $remark;
     if ($bonus > 0) {
         $lineRemark = trim($lineRemark . " [bonus {$bonus}]");
