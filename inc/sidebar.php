@@ -288,7 +288,7 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
         </button>
         <div class="nav-group-sub" id="nav-sub-account-customer" role="region" aria-labelledby="nav-toggle-account-customer" style="display:<?= in_array($sidebar_current, ['customers', 'product_library', 'admin_customer_export_log'], true) ? 'block' : 'none' ?>">
             <?php if ($__is_pg_company): ?>
-                <?php if ($sidebar_show_admin_nav): ?><a href="admin_banks_products.php" class="nav-item nav-sub-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>Bank detail</a><?php endif; ?>
+                <?php if (in_array(($_SESSION['user_role'] ?? ''), ['admin', 'superadmin', 'boss'], true)): ?><a href="admin_banks_products.php" class="nav-item nav-sub-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span>Bank detail</a><?php endif; ?>
                 <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item nav-sub-item <?= $sidebar_current === 'customers' ? 'primary' : '' ?>"><span class="nav-icon"></span>Customer detail</a><?php endif; ?>
             <?php else: ?>
                 <?php if (has_permission('customers')): ?><a href="customers.php" class="nav-item nav-sub-item <?= $sidebar_current === 'customers' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_customers'), ENT_QUOTES, 'UTF-8') ?></a><?php endif; ?>
