@@ -405,8 +405,8 @@ function i18n_dictionary(): array
         'adm_users_confirm_delete' => ['zh' => '确定删除该账号？删除后不可恢复。', 'en' => 'Delete this account? This cannot be undone.'],
         'adm_users_empty_sa' => ['zh' => '暂无各分公司账号', 'en' => 'No company accounts'],
         'adm_users_empty_sa_hint' => [
-            'zh' => '说明：平台总管理（如 BIG BOSS）只在下方「平台总管理」表中显示，不会出现在本表。若曾创建过账号但仍为空，请确认对方角色不是 superadmin，并勾选「显示已停用账号」查看已禁用用户。',
-            'en' => 'Note: Platform superadmins appear only in the table below. If you expected rows here, those accounts must not be superadmin; use “Show inactive” to include disabled users.',
+            'zh' => '若曾创建过账号但此处仍为空，请勾选「显示已停用账号」查看已禁用用户，或确认账号是否被停用。',
+            'en' => 'If you expected rows here, use “Show inactive” to include disabled users, or verify the account is not disabled.',
         ],
         'adm_users_empty_co' => ['zh' => '暂无本公司账号', 'en' => 'No accounts for this company'],
         'adm_users_empty_no_co' => ['zh' => '未选择公司', 'en' => 'No company selected'],

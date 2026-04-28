@@ -63,7 +63,8 @@ function um_role_badge_text(string $role): string {
  */
 function um_sort_users_primary_list(array $list, bool $superadmin_view): array
 {
-    $order = ['boss' => 0, 'admin' => 1, 'member' => 2, 'agent' => 3];
+    // 平台总管理视角：把 superadmin（BIG BOSS）也纳入主表并置顶
+    $order = ['superadmin' => -1, 'boss' => 0, 'admin' => 1, 'member' => 2, 'agent' => 3];
     $cmp_user = static function (string $ua, string $ub): int {
         if (function_exists('mb_strcasecmp')) {
             return mb_strcasecmp($ua, $ub, 'UTF-8');
@@ -412,14 +413,14 @@ if ($actor_is_superadmin) {
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
                 LEFT JOIN users ucr ON ucr.id = u.created_by_user_id
-                WHERE (u.role IS NULL OR u.role <> 'superadmin')" . $status_sql . '
+                WHERE 1=1' . $status_sql . '
                 ORDER BY u.company_id ASC, u.id DESC';
     $sql_all_legacy = "SELECT u.id, u.username, u.role, u.display_name, '' AS email, u.is_active, u.last_login_at, u.last_login_ip, u.created_at, u.company_id, NULL AS created_by_user_id,
                        COALESCE(c.code, '') AS company_code, COALESCE(c.name, '') AS company_name,
                        '' AS created_by_username
                 FROM users u
                 LEFT JOIN companies c ON c.id = u.company_id
-                WHERE (u.role IS NULL OR u.role <> 'superadmin')" . $status_sql . '
+                WHERE 1=1' . $status_sql . '
                 ORDER BY u.company_id ASC, u.id DESC';
     try {
         $all_company_users = $pdo->query($sql_all)->fetchAll(PDO::FETCH_ASSOC);
