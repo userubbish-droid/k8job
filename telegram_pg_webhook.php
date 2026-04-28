@@ -54,6 +54,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'GET') {
     $out = [
         'pg_webhook' => 'ok',
         'notify_config_file_exists' => is_file($notifyPath),
+        'notify_config_readable' => is_file($notifyPath) && is_readable($notifyPath),
+        'notify_config_bytes' => (is_file($notifyPath) && is_readable($notifyPath)) ? @filesize($notifyPath) : null,
         'notify_config_realpath' => is_file($notifyPath) ? realpath($notifyPath) : null,
         'notify_config_declares_pg_token' => $hasPgVarLine,
         'notify_config_pg_assignment_empty_string' => $pgRhsQuoted,
