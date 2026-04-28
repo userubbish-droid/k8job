@@ -535,6 +535,36 @@ if ($search_q !== '') {
 
 $users_primary_list = um_sort_users_primary_list($users_primary_list, $actor_is_superadmin);
 
+/**
+ * 尝试从 companies 单独读取 UI 配色映射（不依赖主表联表查询）。
+ * 若缺列/缺权限，给出明确提示，避免“看起来没生效但不知道为什么”。
+ */
+$um_company_color_override = [];
+$um_companies_color_supported = null; // null=未知，true=可用，false=不可用
+if ($actor_is_superadmin) {
+    try {
+        $probe = $pdo->query("SELECT ui_color FROM companies LIMIT 1");
+        $probe->fetch();
+        $um_companies_color_supported = true;
+    } catch (Throwable $e) {
+        $um_companies_color_supported = false;
+    }
+    if ($um_companies_color_supported) {
+        try {
+            $rows = $pdo->query("SELECT id, COALESCE(ui_color,'') AS ui_color FROM companies")->fetchAll(PDO::FETCH_ASSOC);
+            foreach ($rows as $r) {
+                $cid = (int)($r['id'] ?? 0);
+                $col = strtoupper(trim((string)($r['ui_color'] ?? '')));
+                if ($cid > 0 && $col !== '' && preg_match('/^#[0-9A-F]{6}$/', $col)) {
+                    $um_company_color_override[$cid] = $col;
+                }
+            }
+        } catch (Throwable $e) {
+            // 忽略：读不到就继续用默认配色
+        }
+    }
+}
+
 /** 主表按分公司着色：同一 company_id 同色，便于区分员工归属 */
 $um_company_row_colors = [
     '#dbeafe', '#fef3c7', '#bbf7d0', '#fbcfe8', '#e9d5ff', '#fed7aa',
@@ -542,15 +572,10 @@ $um_company_row_colors = [
 ];
 $um_company_bg_by_id = [];
 $um_company_ids_ordered = [];
-$um_company_color_override = [];
 foreach ($users_primary_list as $u) {
     $cid = (int)($u['company_id'] ?? 0);
     if ($cid > 0 && !in_array($cid, $um_company_ids_ordered, true)) {
         $um_company_ids_ordered[] = $cid;
-    }
-    $rawColor = strtoupper(trim((string)($u['company_ui_color'] ?? '')));
-    if ($cid > 0 && $rawColor !== '' && preg_match('/^#[0-9A-F]{6}$/', $rawColor)) {
-        $um_company_color_override[$cid] = $rawColor;
     }
 }
 sort($um_company_ids_ordered, SORT_NUMERIC);
@@ -890,6 +915,12 @@ $session_user_id = (int)($_SESSION['user_id'] ?? 0);
 
         <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg) ?></div><?php endif; ?>
         <?php if ($err && !($show_create_modal_on_load ?? false)): ?><div class="alert alert-error"><?= htmlspecialchars($err) ?></div><?php endif; ?>
+        <?php if ($actor_is_superadmin && $um_companies_color_supported === false): ?>
+            <div class="alert alert-error" style="margin-bottom:14px;">
+                当前数据库未检测到 <code>companies.ui_color</code> 列（或无权限读取/创建），因此“公司背景色”不会生效。<br>
+                请在 phpMyAdmin 执行：<code>ALTER TABLE companies ADD COLUMN ui_color VARCHAR(16) NULL DEFAULT NULL;</code> 然后刷新本页。
+            </div>
+        <?php endif; ?>
 
         <div id="create-account-modal" class="admin-users-modal<?= !empty($show_create_modal_on_load) ? ' is-open' : '' ?>" aria-hidden="<?= !empty($show_create_modal_on_load) ? 'false' : 'true' ?>">
             <div class="admin-users-modal-backdrop" id="create-account-modal-backdrop" tabindex="-1"></div>
