@@ -577,9 +577,21 @@ try {
                             </div>
                         </div>
                     </div>
+                    <div style="display:flex; justify-content:flex-end; margin:0 0 10px;">
+                        <button type="button"
+                            class="btn btn-sm btn-outline js-banks-total-toggle"
+                            aria-expanded="false"
+                            aria-controls="bank-total-wrap"
+                            data-label="<?= htmlspecialchars(__('abp_banks_total_amount'), ENT_QUOTES, 'UTF-8') ?>"
+                            title="<?= htmlspecialchars(__('abp_aria_show_total'), ENT_QUOTES, 'UTF-8') ?>">
+                            <?= htmlspecialchars(__('abp_banks_total_amount'), ENT_QUOTES, 'UTF-8') ?> +
+                        </button>
+                    </div>
+                    <div id="bank-total-wrap" style="display:none;">
                     <div class="abp-banks-total-bar" title="<?= htmlspecialchars(__('abp_banks_total_hint'), ENT_QUOTES, 'UTF-8') ?>">
                         <span class="abp-banks-total-label"><?= htmlspecialchars(__('abp_banks_total_amount'), ENT_QUOTES, 'UTF-8') ?></span>
                         <span class="abp-banks-total-value num <?= $banks_total_balance < 0 ? 'out' : 'profit' ?>"><?= number_format($banks_total_balance, 2) ?></span>
+                    </div>
                     </div>
                     <div style="overflow:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
                     <table class="data-table">
@@ -909,6 +921,17 @@ try {
                 var show = el.style.display === 'none' || !el.style.display;
                 el.style.display = show ? 'block' : 'none';
                 btn.textContent = show ? '−' : '+';
+            });
+        });
+        document.querySelectorAll('.js-banks-total-toggle').forEach(function(btn){
+            var wrap = document.getElementById('bank-total-wrap');
+            if (!wrap) return;
+            var label = btn.getAttribute('data-label') || 'Total amount';
+            btn.addEventListener('click', function(){
+                var show = wrap.style.display === 'none' || !wrap.style.display;
+                wrap.style.display = show ? 'block' : 'none';
+                btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+                btn.textContent = label + (show ? ' −' : ' +');
             });
         });
         document.querySelectorAll('.transfer-cell-inline').forEach(function(cell){

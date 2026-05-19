@@ -639,6 +639,7 @@ function i18n_dictionary(): array
         'abp_section_bank' => ['zh' => '银行/渠道', 'en' => 'Banks / channels'],
         'abp_banks_total_amount' => ['zh' => '银行余额合计', 'en' => 'Total amount'],
         'abp_banks_total_hint' => ['zh' => '所有银行 Balance 相加（含启用与停用）', 'en' => 'Sum of all bank balances (active and inactive)'],
+        'abp_aria_show_total' => ['zh' => '点击查看银行余额合计', 'en' => 'Click to show total bank balance'],
         'abp_aria_expand_transfer' => ['zh' => '展开互转与添加', 'en' => 'Expand transfer and add bank'],
         'abp_bank_contra_title' => ['zh' => '银行互转（contra）', 'en' => 'Bank transfer (contra)'],
         'abp_telegram_notify' => ['zh' => 'Telegram 余额通知', 'en' => 'Telegram balance alerts'],
