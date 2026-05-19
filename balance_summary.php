@@ -6,6 +6,8 @@ require_permission('statement_balance');
 
 $sidebar_current = 'balance_summary';
 $is_admin = in_array(($_SESSION['user_role'] ?? ''), ['admin', 'boss', 'superadmin'], true);
+/** admin / boss / big boss：statement 名称可钻取 before/after 流水 */
+$can_stmt_ledger = $is_admin;
 
 $day_from = isset($_GET['day_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_from']) ? $_GET['day_from'] : null;
 $day_to   = isset($_GET['day_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_to']) ? $_GET['day_to'] : null;
@@ -120,6 +122,41 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
         .stmt-pill.active { background: var(--primary, #2563eb); color: #fff; border-color: var(--primary, #2563eb); }
     </style>
     <?php endif; ?>
+    <?php if ($can_stmt_ledger): ?>
+    <style>
+        .stmt-ledger-trigger {
+            background: none; border: none; padding: 0; font: inherit; color: var(--primary, #2563eb);
+            cursor: pointer; text-decoration: underline; text-underline-offset: 2px;
+        }
+        .stmt-ledger-trigger:hover { opacity: 0.88; }
+        .stmt-ledger-mask {
+            display: none; position: fixed; inset: 0; z-index: 9999;
+            background: rgba(15, 23, 42, 0.45); align-items: center; justify-content: center; padding: 16px;
+        }
+        .stmt-ledger-mask.show { display: flex; }
+        .stmt-ledger-dialog {
+            background: #fff; border-radius: 12px; max-width: min(960px, 96vw); width: 100%;
+            max-height: 88vh; display: flex; flex-direction: column; box-shadow: 0 20px 50px rgba(0,0,0,.2);
+        }
+        .stmt-ledger-head {
+            display: flex; align-items: center; justify-content: space-between;
+            padding: 14px 18px; border-bottom: 1px solid #e2e8f0;
+        }
+        .stmt-ledger-head h3 { margin: 0; font-size: 1.05rem; font-weight: 700; }
+        .stmt-ledger-x {
+            border: none; background: #f1f5f9; width: 36px; height: 36px; border-radius: 8px;
+            font-size: 22px; line-height: 1; cursor: pointer;
+        }
+        .stmt-ledger-body { padding: 12px 18px 18px; overflow: auto; flex: 1; }
+        .stmt-ledger-meta { font-size: 13px; color: var(--muted, #64748b); margin: 0 0 12px; }
+        .stmt-ledger-table { width: 100%; font-size: 13px; }
+        .stmt-ledger-table th, .stmt-ledger-table td { padding: 6px 8px; white-space: nowrap; }
+        .stmt-ledger-table td.wrap { white-space: normal; max-width: 200px; }
+        .stmt-ledger-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .stmt-ledger-loading, .stmt-ledger-err { padding: 24px; text-align: center; color: var(--muted); }
+        .stmt-ledger-err { color: var(--danger, #dc2626); }
+    </style>
+    <?php endif; ?>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -206,7 +243,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                         $balance = $init + $in - $out;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($name) ?></td>
+                                        <td><?php if ($can_stmt_ledger): ?><button type="button" class="stmt-ledger-trigger" data-entity-type="channel" data-entity-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($name) ?></button><?php else: ?><?= htmlspecialchars($name) ?><?php endif; ?></td>
                                         <?php if ($is_admin): ?>
                                         <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num in"><?= number_format($in, 2) ?></td>
@@ -229,7 +266,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                         $balance = $init + $in - $out;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($name) ?></td>
+                                        <td><?php if ($can_stmt_ledger): ?><button type="button" class="stmt-ledger-trigger" data-entity-type="bank" data-entity-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($name) ?></button><?php else: ?><?= htmlspecialchars($name) ?><?php endif; ?></td>
                                         <?php if ($is_admin): ?>
                                         <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num in"><?= number_format($in, 2) ?></td>
@@ -279,7 +316,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                         $balance = $init + $in - $out_total;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($name) ?></td>
+                                        <td><?php if ($can_stmt_ledger): ?><button type="button" class="stmt-ledger-trigger" data-entity-type="customer" data-entity-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($name) ?></button><?php else: ?><?= htmlspecialchars($name) ?><?php endif; ?></td>
                                         <?php if ($is_admin): ?>
                                         <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num stmt-in"><?= $in != 0 ? number_format($in, 2) : '—' ?></td>
@@ -304,7 +341,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
                                         $balance = $init - $in + $topup + $out;
                                     ?>
                                     <tr>
-                                        <td><?= htmlspecialchars($name) ?></td>
+                                        <td><?php if ($can_stmt_ledger): ?><button type="button" class="stmt-ledger-trigger" data-entity-type="product" data-entity-name="<?= htmlspecialchars($name, ENT_QUOTES, 'UTF-8') ?>"><?= htmlspecialchars($name) ?></button><?php else: ?><?= htmlspecialchars($name) ?><?php endif; ?></td>
                                         <?php if ($is_admin): ?>
                                         <td class="num"><?= number_format($init, 2) ?></td>
                                         <td class="num stmt-in"><?= $in != 0 ? '−' . number_format($in, 2) : '—' ?></td>
@@ -326,6 +363,17 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
             </div>
         </main>
     </div>
+    <?php if ($can_stmt_ledger): ?>
+    <div class="stmt-ledger-mask" id="stmt-ledger-mask" aria-hidden="true">
+        <div class="stmt-ledger-dialog" role="dialog" aria-modal="true" aria-labelledby="stmt-ledger-title">
+            <div class="stmt-ledger-head">
+                <h3 id="stmt-ledger-title"><?= app_lang() === 'en' ? 'Ledger' : '流水明细' ?></h3>
+                <button type="button" class="stmt-ledger-x" id="stmt-ledger-close" aria-label="<?= app_lang() === 'en' ? 'Close' : '关闭' ?>">×</button>
+            </div>
+            <div class="stmt-ledger-body" id="stmt-ledger-body"></div>
+        </div>
+    </div>
+    <?php endif; ?>
 <script>
 (function(){
     var btn = document.getElementById('stmt-date-toggle');
@@ -367,6 +415,91 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
         });
     }
 })();
+<?php if ($can_stmt_ledger): ?>
+(function(){
+    var mask = document.getElementById('stmt-ledger-mask');
+    var bodyEl = document.getElementById('stmt-ledger-body');
+    var titleEl = document.getElementById('stmt-ledger-title');
+    var closeBtn = document.getElementById('stmt-ledger-close');
+    if (!mask || !bodyEl) return;
+
+    var dayFrom = <?= json_encode($day_from) ?>;
+    var dayTo = <?= json_encode($day_to) ?>;
+    var stmtCo = <?= $head_office_stmt && $company_id > 0 ? (int)$company_id : 0 ?>;
+    var langEn = <?= app_lang() === 'en' ? 'true' : 'false' ?>;
+
+    function esc(s) {
+        var d = document.createElement('div');
+        d.textContent = s == null ? '' : String(s);
+        return d.innerHTML;
+    }
+    function closeLedger() {
+        mask.classList.remove('show');
+        mask.setAttribute('aria-hidden', 'true');
+        bodyEl.innerHTML = '';
+    }
+    if (closeBtn) closeBtn.addEventListener('click', closeLedger);
+    mask.addEventListener('click', function(e) { if (e.target === mask) closeLedger(); });
+    document.addEventListener('keydown', function(e) { if (e.key === 'Escape' && mask.classList.contains('show')) closeLedger(); });
+
+    function renderLedger(data) {
+        var label = data.entity_label || '';
+        titleEl.textContent = (label ? label + ': ' : '') + (data.entity_name || '');
+        var meta = (langEn ? 'Period: ' : '区间：') + data.day_from + (data.day_from !== data.day_to ? (' ~ ' + data.day_to) : '');
+        meta += ' · ' + (langEn ? 'Opening' : '期初') + ' ' + data.opening_balance;
+        meta += ' · ' + (langEn ? 'Closing' : '期末') + ' ' + data.closing_balance;
+        if (data.truncated) meta += ' · ' + (langEn ? '(truncated)' : '（仅显示前 500 笔）');
+        var html = '<p class="stmt-ledger-meta">' + esc(meta) + '</p>';
+        var cols = langEn
+            ? ['Date', 'Time', 'Code', 'Mode', 'Amount', 'Before', 'After', 'Bank', 'Product', 'Remark']
+            : ['日期', '时间', '代号', '类型', '金额', '变更前', '变更后', '银行', '产品', '备注'];
+        html += '<table class="data-table stmt-ledger-table"><thead><tr>';
+        cols.forEach(function(c) { html += '<th>' + esc(c) + '</th>'; });
+        html += '</tr></thead><tbody>';
+        html += '<tr><td colspan="2">B/F</td><td colspan="3">' + (langEn ? 'Opening balance' : '期初余额') + '</td>';
+        html += '<td class="num">' + esc(data.opening_balance) + '</td><td class="num">' + esc(data.opening_balance) + '</td><td colspan="4"></td></tr>';
+        (data.rows || []).forEach(function(r) {
+            html += '<tr>';
+            html += '<td>' + esc(r.date) + '</td><td>' + esc(r.time) + '</td><td>' + esc(r.code) + '</td>';
+            html += '<td>' + esc(r.mode) + '</td><td class="num">' + esc(r.amount) + '</td>';
+            html += '<td class="num">' + esc(r.before) + '</td><td class="num">' + esc(r.after) + '</td>';
+            html += '<td>' + esc(r.bank) + '</td><td>' + esc(r.product) + '</td>';
+            html += '<td class="wrap">' + esc(r.remark) + '</td></tr>';
+        });
+        html += '</tbody></table>';
+        if (!data.rows || !data.rows.length) {
+            html += '<p class="stmt-ledger-meta">' + (langEn ? 'No transactions in this period.' : '此区间内无流水。') + '</p>';
+        }
+        bodyEl.innerHTML = html;
+    }
+
+    document.querySelectorAll('.stmt-ledger-trigger').forEach(function(btn) {
+        btn.addEventListener('click', function() {
+            var et = btn.getAttribute('data-entity-type') || '';
+            var en = btn.getAttribute('data-entity-name') || '';
+            if (!et || !en) return;
+            mask.classList.add('show');
+            mask.setAttribute('aria-hidden', 'false');
+            bodyEl.innerHTML = '<div class="stmt-ledger-loading">' + (langEn ? 'Loading…' : '加载中…') + '</div>';
+            var q = 'day_from=' + encodeURIComponent(dayFrom) + '&day_to=' + encodeURIComponent(dayTo)
+                + '&entity_type=' + encodeURIComponent(et) + '&entity_name=' + encodeURIComponent(en);
+            if (stmtCo > 0) q += '&stmt_co=' + stmtCo;
+            fetch('balance_statement_ledger.php?' + q, { credentials: 'same-origin' })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (!data.ok) {
+                        bodyEl.innerHTML = '<div class="stmt-ledger-err">' + esc(data.error || (langEn ? 'Failed' : '加载失败')) + '</div>';
+                        return;
+                    }
+                    renderLedger(data);
+                })
+                .catch(function() {
+                    bodyEl.innerHTML = '<div class="stmt-ledger-err">' + (langEn ? 'Network error' : '网络错误') + '</div>';
+                });
+        });
+    });
+})();
+<?php endif; ?>
 </script>
 </body>
 </html>
