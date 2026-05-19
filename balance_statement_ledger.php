@@ -3,32 +3,56 @@
  * Statement 单元格钻取：按银行/产品（或 PG channel/customer）列出区间内流水及逐笔 before/after 余额。
  * 仅 admin / boss / superadmin 可访问（页面端控制入口）。
  */
+ob_start();
 require __DIR__ . '/config.php';
 require __DIR__ . '/auth.php';
 require_login();
 require_permission('statement_balance');
 
-header('Content-Type: application/json; charset=utf-8');
-
 $role = strtolower(trim((string)($_SESSION['user_role'] ?? ''));
 if (!in_array($role, ['admin', 'boss', 'superadmin'], true)) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
     echo json_encode(['ok' => false, 'error' => 'Forbidden'], JSON_UNESCAPED_UNICODE);
     exit;
 }
 
 $company_id = current_company_id();
-if (is_superadmin_head_office_scope() && isset($_GET['stmt_co'])) {
-    $pick = (int)$_GET['stmt_co'];
-    if ($pick > 0) {
-        $company_id = $pick;
+if (isset($_GET['company_id']) && (int)$_GET['company_id'] > 0) {
+    $company_id = (int)$_GET['company_id'];
+} elseif (is_superadmin_head_office_scope() && isset($_GET['stmt_co']) && (int)$_GET['stmt_co'] > 0) {
+    $company_id = (int)$_GET['stmt_co'];
+} elseif ($company_id <= 0 && function_exists('effective_admin_company_id')) {
+    $company_id = effective_admin_company_id($pdo);
+}
+if ($company_id <= 0) {
+    ob_end_clean();
+    header('Content-Type: application/json; charset=utf-8');
+    echo json_encode(['ok' => false, 'error' => 'Invalid company'], JSON_UNESCAPED_UNICODE);
+    exit;
+}
+
+/** 与 statement / 流水列表同源的业务库连接 */
+$pdoTxn = (function_exists('pdo_business') ? pdo_business() : $pdo);
+
+function bsl_json_out(array $payload): void
+{
+    if (ob_get_level() > 0) {
+        ob_end_clean();
     }
+    header('Content-Type: application/json; charset=utf-8');
+    $flags = JSON_UNESCAPED_UNICODE;
+    if (defined('JSON_INVALID_UTF8_SUBSTITUTE')) {
+        $flags |= JSON_INVALID_UTF8_SUBSTITUTE;
+    }
+    echo json_encode($payload, $flags);
+    exit;
 }
 
 $day_from = isset($_GET['day_from']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_from']) ? $_GET['day_from'] : '';
 $day_to = isset($_GET['day_to']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $_GET['day_to']) ? $_GET['day_to'] : '';
 if ($day_from === '' || $day_to === '') {
-    echo json_encode(['ok' => false, 'error' => 'Invalid date range'], JSON_UNESCAPED_UNICODE);
-    exit;
+    bsl_json_out(['ok' => false, 'error' => 'Invalid date range']);
 }
 if ($day_from > $day_to) {
     $t = $day_from;
@@ -39,8 +63,7 @@ if ($day_from > $day_to) {
 $entity_type = strtolower(trim((string)($_GET['entity_type'] ?? '')));
 $entity_name = trim((string)($_GET['entity_name'] ?? ''));
 if ($entity_name === '') {
-    echo json_encode(['ok' => false, 'error' => 'Missing entity'], JSON_UNESCAPED_UNICODE);
-    exit;
+    bsl_json_out(['ok' => false, 'error' => 'Missing entity']);
 }
 
 $pdoCat = function_exists('shard_catalog') ? shard_catalog() : $pdo;
@@ -101,6 +124,16 @@ function bsl_gaming_product_delta(string $mode, float $amount, float $bonus, flo
 function bsl_fmt(float $v): string
 {
     return number_format($v, 2, '.', '');
+}
+
+function bsl_has_burn_column(PDO $db): bool
+{
+    try {
+        $db->query('SELECT burn FROM transactions LIMIT 0');
+        return true;
+    } catch (Throwable $e) {
+        return false;
+    }
 }
 
 try {
@@ -169,7 +202,7 @@ try {
             ];
         }
 
-        echo json_encode([
+        bsl_json_out([
             'ok' => true,
             'entity_type' => $entity_type,
             'entity_name' => $entity_name,
@@ -180,20 +213,21 @@ try {
             'closing_balance' => bsl_fmt($run),
             'rows' => $rows,
             'truncated' => $truncated,
-        ], JSON_UNESCAPED_UNICODE);
-        exit;
+        ]);
     }
 
     // Gaming
     $has_deleted_at = true;
     try {
-        $pdo->query('SELECT deleted_at FROM transactions LIMIT 0');
+        $pdoTxn->query('SELECT deleted_at FROM transactions LIMIT 0');
     } catch (Throwable $e) {
         $has_deleted_at = false;
     }
     $del = $has_deleted_at ? ' AND t.deleted_at IS NULL' : '';
+    $burnCol = bsl_has_burn_column($pdoTxn) ? 't.burn' : '0 AS burn';
     $gpc_gp_key_sql = require __DIR__ . '/inc/gpc_effective_product_key_sql.php';
 
+    $pdo = $pdoTxn;
     require_once __DIR__ . '/inc/game_platform_statement_compute.php';
 
     $entity_key = strtolower($entity_name);
@@ -210,13 +244,13 @@ try {
             $opening = (float)(($cum_in_bank[$entity_key] ?? 0) - ($cum_out_bank[$entity_key] ?? 0));
         }
 
-        $sql = "SELECT t.id, t.day, t.time, TRIM(t.mode) AS mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.burn, t.remark
+        $sql = "SELECT t.id, t.day, t.time, TRIM(t.mode) AS mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, {$burnCol}, t.remark
             FROM transactions t
             WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved'{$del}
               AND LOWER(TRIM(COALESCE(t.bank,''))) = ?
             ORDER BY t.day ASC, t.time ASC, t.id ASC
             LIMIT 500";
-        $st = $pdo->prepare($sql);
+        $st = $pdoTxn->prepare($sql);
         $st->execute([$company_id, $day_from, $day_to, $entity_key]);
         $rawRows = $st->fetchAll(PDO::FETCH_ASSOC);
         $truncated = count($rawRows) >= 500;
@@ -232,13 +266,13 @@ try {
             $opening = (float)(-($cum_in_product[$entity_key] ?? 0) + ($cum_topup_product[$entity_key] ?? 0) + ($cum_out_product[$entity_key] ?? 0));
         }
 
-        $sql = "SELECT t.id, t.day, t.time, TRIM(t.mode) AS mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, t.burn, t.remark,
+        $sql = "SELECT t.id, t.day, t.time, TRIM(t.mode) AS mode, t.code, t.bank, t.product, t.amount, t.bonus, t.total, {$burnCol}, t.remark,
             ($gpc_gp_key_sql) AS eff_gp
             FROM transactions t
             WHERE t.company_id = ? AND t.day >= ? AND t.day <= ? AND t.status = 'approved'{$del}
             ORDER BY t.day ASC, t.time ASC, t.id ASC
             LIMIT 600";
-        $st = $pdo->prepare($sql);
+        $st = $pdoTxn->prepare($sql);
         $st->execute([$company_id, $day_from, $day_to]);
         $all = $st->fetchAll(PDO::FETCH_ASSOC);
         $rawRows = [];
@@ -285,7 +319,7 @@ try {
         ];
     }
 
-    echo json_encode([
+    bsl_json_out([
         'ok' => true,
         'entity_type' => $entity_type,
         'entity_name' => $entity_name,
@@ -296,7 +330,7 @@ try {
         'closing_balance' => bsl_fmt($run),
         'rows' => $rows,
         'truncated' => $truncated,
-    ], JSON_UNESCAPED_UNICODE);
+    ]);
 } catch (Throwable $e) {
-    echo json_encode(['ok' => false, 'error' => $e->getMessage()], JSON_UNESCAPED_UNICODE);
+    bsl_json_out(['ok' => false, 'error' => $e->getMessage()]);
 }

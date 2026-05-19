@@ -425,8 +425,29 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
 
     var dayFrom = <?= json_encode($day_from) ?>;
     var dayTo = <?= json_encode($day_to) ?>;
-    var stmtCo = <?= $head_office_stmt && $company_id > 0 ? (int)$company_id : 0 ?>;
+    var ledgerCompanyId = <?= (int)$company_id ?>;
     var langEn = <?= app_lang() === 'en' ? 'true' : 'false' ?>;
+
+    function parseLedgerResponse(res) {
+        return res.text().then(function(text) {
+            var data;
+            try {
+                data = text ? JSON.parse(text) : null;
+            } catch (e) {
+                var hint = (text && text.indexOf('<') >= 0)
+                    ? (langEn ? 'Server returned HTML (check login or upload balance_statement_ledger.php)' : '服务器返回了网页而非 JSON（请确认已上传 balance_statement_ledger.php 且已登录）')
+                    : ((text || '').slice(0, 180) || ('HTTP ' + res.status));
+                throw new Error(hint);
+            }
+            if (!res.ok && data && data.error) {
+                throw new Error(data.error);
+            }
+            if (!res.ok) {
+                throw new Error((data && data.error) || ('HTTP ' + res.status));
+            }
+            return data;
+        });
+    }
 
     function esc(s) {
         var d = document.createElement('div');
@@ -483,18 +504,21 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
             bodyEl.innerHTML = '<div class="stmt-ledger-loading">' + (langEn ? 'Loading…' : '加载中…') + '</div>';
             var q = 'day_from=' + encodeURIComponent(dayFrom) + '&day_to=' + encodeURIComponent(dayTo)
                 + '&entity_type=' + encodeURIComponent(et) + '&entity_name=' + encodeURIComponent(en);
-            if (stmtCo > 0) q += '&stmt_co=' + stmtCo;
-            fetch('balance_statement_ledger.php?' + q, { credentials: 'same-origin' })
-                .then(function(res) { return res.json(); })
+            if (ledgerCompanyId > 0) {
+                q += '&company_id=' + ledgerCompanyId + '&stmt_co=' + ledgerCompanyId;
+            }
+            fetch('balance_statement_ledger.php?' + q, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                .then(parseLedgerResponse)
                 .then(function(data) {
-                    if (!data.ok) {
-                        bodyEl.innerHTML = '<div class="stmt-ledger-err">' + esc(data.error || (langEn ? 'Failed' : '加载失败')) + '</div>';
+                    if (!data || !data.ok) {
+                        bodyEl.innerHTML = '<div class="stmt-ledger-err">' + esc((data && data.error) || (langEn ? 'Failed' : '加载失败')) + '</div>';
                         return;
                     }
                     renderLedger(data);
                 })
-                .catch(function() {
-                    bodyEl.innerHTML = '<div class="stmt-ledger-err">' + (langEn ? 'Network error' : '网络错误') + '</div>';
+                .catch(function(err) {
+                    var msg = (err && err.message) ? err.message : (langEn ? 'Network error' : '网络错误');
+                    bodyEl.innerHTML = '<div class="stmt-ledger-err">' + esc(msg) + '</div>';
                 });
         });
     });
