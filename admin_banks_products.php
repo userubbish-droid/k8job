@@ -420,6 +420,26 @@ try {
     if (empty($diag_error)) $diag_error = $e->getMessage();
 }
 
+/** 所有银行 Balance 合计（与列表各行公式一致，不受状态筛选影响） */
+$banks_total_balance = 0.0;
+try {
+    $stAllBanks = $pdoBiz->prepare('SELECT name FROM banks WHERE company_id = ?');
+    $stAllBanks->execute([$company_id]);
+    foreach ($stAllBanks->fetchAll(PDO::FETCH_COLUMN) as $bnameRaw) {
+        $bname = trim((string)$bnameRaw);
+        if ($bname === '') {
+            continue;
+        }
+        $bkey = strtolower($bname);
+        $merged_open = isset($initial_bank[$bname]) ? (float)$initial_bank[$bname] : (float)(($cum_in_bank[$bkey] ?? 0) - ($cum_out_bank[$bkey] ?? 0));
+        $tin = (float)($total_in_bank[$bkey] ?? 0);
+        $tout = (float)($total_out_bank[$bkey] ?? 0);
+        $banks_total_balance += $merged_open + $tin - $tout;
+    }
+} catch (Throwable $e) {
+}
+$banks_total_balance = round($banks_total_balance, 2);
+
 // 余额阈值 Telegram：与 snapshot 内 notify 映射一致（全公司启用中的银行/产品，不受本页筛选影响）
 require_once __DIR__ . '/inc/balance_notify.php';
 check_balance_notify($snap['bank_balances_for_notify'], $snap['product_balances_for_notify']);
@@ -441,6 +461,16 @@ try {
     <title><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?> - <?= defined('SITE_TITLE') ? SITE_TITLE : 'K8' ?></title>
     <?php include __DIR__ . '/inc/sidebar_critical_css.php'; ?>
     <link rel="stylesheet" href="style.css?v=<?= @filemtime(__DIR__ . '/style.css') ?>">
+    <style>
+        .abp-banks-total-bar {
+            display: flex; align-items: baseline; justify-content: flex-end; gap: 12px;
+            margin: 0 0 12px; padding: 12px 14px;
+            background: linear-gradient(135deg, #eff6ff 0%, #f8fafc 100%);
+            border: 1px solid rgba(37, 99, 235, 0.2); border-radius: 8px;
+        }
+        .abp-banks-total-label { font-size: 14px; font-weight: 700; color: var(--text, #1e293b); }
+        .abp-banks-total-value { font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
+    </style>
 </head>
 <body>
     <div class="dashboard-layout">
@@ -546,6 +576,10 @@ try {
                                 </div>
                             </div>
                         </div>
+                    </div>
+                    <div class="abp-banks-total-bar" title="<?= htmlspecialchars(__('abp_banks_total_hint'), ENT_QUOTES, 'UTF-8') ?>">
+                        <span class="abp-banks-total-label"><?= htmlspecialchars(__('abp_banks_total_amount'), ENT_QUOTES, 'UTF-8') ?></span>
+                        <span class="abp-banks-total-value num <?= $banks_total_balance < 0 ? 'out' : 'profit' ?>"><?= number_format($banks_total_balance, 2) ?></span>
                     </div>
                     <div style="overflow:auto; padding-bottom:8px; -webkit-overflow-scrolling:touch;">
                     <table class="data-table">
