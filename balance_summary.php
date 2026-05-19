@@ -153,6 +153,7 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
         .stmt-ledger-table th, .stmt-ledger-table td { padding: 6px 8px; white-space: nowrap; }
         .stmt-ledger-table td.wrap { white-space: normal; max-width: 200px; }
         .stmt-ledger-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+        .stmt-ledger-table .num.neg { color: #dc2626; }
         .stmt-ledger-loading, .stmt-ledger-err { padding: 24px; text-align: center; color: var(--muted); }
         .stmt-ledger-err { color: var(--danger, #dc2626); }
     </style>
@@ -482,7 +483,8 @@ function balance_summary_stmt_url(string $df, string $dt, array $extra = []): st
         (data.rows || []).forEach(function(r) {
             html += '<tr>';
             html += '<td>' + esc(r.date) + '</td><td>' + esc(r.time) + '</td><td>' + esc(r.code) + '</td>';
-            html += '<td>' + esc(r.mode) + '</td><td class="num">' + esc(r.amount) + '</td>';
+            var amtCls = 'num' + (String(r.amount).indexOf('-') === 0 ? ' neg' : '');
+            html += '<td>' + esc(r.mode) + '</td><td class="' + amtCls + '">' + esc(r.amount) + '</td>';
             html += '<td class="num">' + esc(r.before) + '</td><td class="num">' + esc(r.after) + '</td>';
             html += '<td>' + esc(r.bank) + '</td><td>' + esc(r.product) + '</td>';
             html += '<td class="wrap">' + esc(r.remark) + '</td></tr>';

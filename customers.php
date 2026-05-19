@@ -324,6 +324,35 @@ try {
     $err = $err ?: (strpos($e->getMessage(), 'recommend') !== false ? __('cust_err_migrate_recommend') : __('cust_err_migrate_detail')) . ' (' . $e->getMessage() . ')';
 }
 
+$per_page = 10;
+$page = max(1, (int)($_GET['page'] ?? 1));
+$total_rows = count($rows);
+$total_pages = $total_rows > 0 ? (int)ceil($total_rows / $per_page) : 1;
+if ($page > $total_pages) {
+    $page = $total_pages;
+}
+$offset = ($page - 1) * $per_page;
+$list_rows = array_slice($rows, $offset, $per_page);
+
+$cust_pagination_q = $_GET;
+unset($cust_pagination_q['page']);
+$cust_pagination_base = 'customers.php?' . (http_build_query($cust_pagination_q) !== '' ? http_build_query($cust_pagination_q) . '&' : '');
+
+$agent_total_win_loss_all = 0.0;
+if ($agent_view) {
+    foreach ($rows as $r) {
+        $code = trim((string)($r['code'] ?? ''));
+        if ($agent_pnl_by_range) {
+            $all_dp = $agent_range_dp[$code] ?? 0;
+            $all_wd = $agent_range_wd[$code] ?? 0;
+        } else {
+            $all_dp = $all_deposit_by_code[$code] ?? 0;
+            $all_wd = $all_withdraw_by_code[$code] ?? 0;
+        }
+        $agent_total_win_loss_all += ($all_dp - $all_wd);
+    }
+}
+
 if (!empty($_GET['export']) && $_GET['export'] === 'csv') {
     if (!$can_export_customers_csv) {
         http_response_code(403);
@@ -525,8 +554,7 @@ if ($can_export_customers_csv) {
                 </thead>
                 <tbody>
                 <?php
-                    $agent_total_win_loss = 0;
-                    foreach ($rows as $r):
+                    foreach ($list_rows as $r):
                     $code = trim((string)($r['code'] ?? ''));
                     if ($agent_pnl_by_range) {
                         $all_dp = $agent_range_dp[$code] ?? 0;
@@ -536,7 +564,6 @@ if ($can_export_customers_csv) {
                         $all_wd = $all_withdraw_by_code[$code] ?? 0;
                     }
                     $win_loss = $all_dp - $all_wd;
-                    $agent_total_win_loss += $win_loss;
                     $wl_cls = $win_loss < 0 ? 'cust-pnl-cust-wins' : ($win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                 ?>
                     <tr>
@@ -546,18 +573,29 @@ if ($can_export_customers_csv) {
                 <?php endforeach; ?>
                 <?php if ($rows): ?>
                     <?php
-                    $tot_cls = $agent_total_win_loss < 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
+                    $tot_cls = $agent_total_win_loss_all < 0 ? 'cust-pnl-cust-wins' : ($agent_total_win_loss_all > 0 ? 'cust-pnl-company-wins' : 'cust-pnl-even');
                     ?>
                     <tr style="font-weight:bold;">
                         <td><?= htmlspecialchars(__('ui_total'), ENT_QUOTES, 'UTF-8') ?></td>
-                        <td class="num <?= $tot_cls ?>"><?= number_format($agent_total_win_loss, 2) ?></td>
+                        <td class="num <?= $tot_cls ?>"><?= number_format($agent_total_win_loss_all, 2) ?></td>
                     </tr>
                 <?php endif; ?>
-                <?php if (!$rows): ?>
+                <?php if (!$list_rows): ?>
                     <tr><td colspan="2" style="color:var(--muted); padding:24px;">No customers under this agent.</td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
+            <?php if ($total_pages > 1): ?>
+            <div class="pagination" style="margin-top:16px;">
+                <?php if ($page > 1): ?>
+                    <a href="<?= htmlspecialchars($cust_pagination_base . 'page=' . ($page - 1), ENT_QUOTES, 'UTF-8') ?>"><?= app_lang() === 'en' ? 'Previous' : '上一页' ?></a>
+                <?php endif; ?>
+                <span><?= (int)$page ?> / <?= (int)$total_pages ?> · <?= app_lang() === 'en' ? 'Total' : '共' ?> <?= (int)$total_rows ?></span>
+                <?php if ($page < $total_pages): ?>
+                    <a href="<?= htmlspecialchars($cust_pagination_base . 'page=' . ($page + 1), ENT_QUOTES, 'UTF-8') ?>"><?= app_lang() === 'en' ? 'Next' : '下一页' ?></a>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
             <?php else: ?>
             <div class="cust-list-title-row">
                 <h3><?= htmlspecialchars(__('ui_label_list'), ENT_QUOTES, 'UTF-8') ?></h3>
@@ -600,7 +638,7 @@ if ($can_export_customers_csv) {
                     </tr>
                 </thead>
                 <tbody>
-                <?php foreach ($rows as $r):
+                <?php foreach ($list_rows as $r):
                     $code = $r['code'];
                     $flag = trim((string)($r['bonus_flag'] ?? ''));
                     $flag_cls = $flag === 'no_bonus' ? 'cust-flag-no-bonus' : ($flag === 'scam_receipt' ? 'cust-flag-scam' : '');
@@ -649,11 +687,22 @@ if ($can_export_customers_csv) {
                         <?php endif; ?>
                     </tr>
                 <?php endforeach; ?>
-                <?php if (!$rows): ?>
+                <?php if (!$list_rows): ?>
                     <tr><td colspan="<?= (int)$customers_list_colspan ?>" style="color:var(--muted); padding:24px;"><?= htmlspecialchars(__('cust_err_migrate'), ENT_QUOTES, 'UTF-8') ?></td></tr>
                 <?php endif; ?>
                 </tbody>
             </table>
+            <?php if ($total_pages > 1): ?>
+            <div class="pagination" style="margin-top:16px;">
+                <?php if ($page > 1): ?>
+                    <a href="<?= htmlspecialchars($cust_pagination_base . 'page=' . ($page - 1), ENT_QUOTES, 'UTF-8') ?>"><?= app_lang() === 'en' ? 'Previous' : '上一页' ?></a>
+                <?php endif; ?>
+                <span><?= (int)$page ?> / <?= (int)$total_pages ?> · <?= app_lang() === 'en' ? 'Total' : '共' ?> <?= (int)$total_rows ?></span>
+                <?php if ($page < $total_pages): ?>
+                    <a href="<?= htmlspecialchars($cust_pagination_base . 'page=' . ($page + 1), ENT_QUOTES, 'UTF-8') ?>"><?= app_lang() === 'en' ? 'Next' : '下一页' ?></a>
+                <?php endif; ?>
+            </div>
+            <?php endif; ?>
             <?php endif; ?>
         </div>
     </div>

@@ -120,6 +120,18 @@ function bsl_fmt(float $v): string
     return number_format($v, 2, '.', '');
 }
 
+/** 金额列：减少余额显示负数，如 -300.00 */
+function bsl_fmt_signed(float $v): string
+{
+    if (abs($v) < 0.00001) {
+        return '0.00';
+    }
+    if ($v < 0) {
+        return '-' . number_format(abs($v), 2, '.', '');
+    }
+    return number_format($v, 2, '.', '');
+}
+
 function bsl_table_has_column(PDO $db, string $table, string $column): bool
 {
     try {
@@ -321,8 +333,8 @@ try {
                 'mode' => strtoupper($flow === 'out' ? 'OUT' : 'IN'),
                 'bank' => (string)($r['channel'] ?? ''),
                 'product' => '',
-                'amount' => bsl_fmt($amt),
-                'delta' => bsl_fmt($delta),
+                'amount' => bsl_fmt_signed($delta),
+                'delta' => bsl_fmt_signed($delta),
                 'before' => bsl_fmt($before),
                 'after' => bsl_fmt($after),
                 'remark' => (string)($r['remark'] ?? ''),
@@ -348,8 +360,8 @@ try {
             'mode' => strtoupper(trim($mode)),
             'bank' => trim((string)($r['bank'] ?? '')),
             'product' => trim((string)($r['product'] ?? '')),
-            'amount' => bsl_fmt(bsl_txn_line_amount($r)),
-            'delta' => bsl_fmt($delta),
+            'amount' => bsl_fmt_signed($delta),
+            'delta' => bsl_fmt_signed($delta),
             'before' => bsl_fmt($before),
             'after' => bsl_fmt($after),
             'remark' => trim((string)($r['remark'] ?? '')),
