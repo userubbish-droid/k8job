@@ -20,6 +20,17 @@ $day_from = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_from_raw) ? substr($day_from
 $day_to = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw) ? substr($day_to_raw, 0, 10) : $default_to;
 if ($day_from > $day_to) { $t = $day_from; $day_from = $day_to; $day_to = $t; }
 
+$yesterday = date('Y-m-d', strtotime('-1 day'));
+$this_week_start = date('Y-m-d', strtotime('monday this week'));
+$this_week_end = date('Y-m-d', strtotime('sunday this week'));
+$last_week_start = date('Y-m-d', strtotime('monday last week'));
+$last_week_end = date('Y-m-d', strtotime('sunday last week'));
+$this_month_start = date('Y-m-01');
+$this_month_end = date('Y-m-t');
+$last_month_start = date('Y-m-01', strtotime('first day of last month'));
+$last_month_end = date('Y-m-t', strtotime('last day of last month'));
+$last7_start = date('Y-m-d', strtotime('-6 days'));
+
 $total_in = 0.0;
 $total_out = 0.0;
 $total_expenses = 0.0;
@@ -282,8 +293,13 @@ try {
                         <button type="submit" class="btn btn-search">Search</button>
                     </div>
                     <div class="filters-row filters-row-presets">
-                        <a href="report.php?<?= http_build_query(['day_from' => date('Y-m-d', strtotime('monday this week')), 'day_to' => date('Y-m-d', strtotime('sunday this week'))]) ?>" class="btn btn-preset">This Week</a>
-                        <a href="report.php?<?= http_build_query(['day_from' => date('Y-m-01'), 'day_to' => date('Y-m-t')]) ?>" class="btn btn-preset">This Month</a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $today, 'day_to' => $today]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'Today' : '今天' ?></a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $yesterday, 'day_to' => $yesterday]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'Yesterday' : '昨天' ?></a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $last7_start, 'day_to' => $today]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'Last 7 days' : '近7天' ?></a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $this_week_start, 'day_to' => $this_week_end]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'This Week' : '本周' ?></a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $last_week_start, 'day_to' => $last_week_end]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'Last Week' : '上周' ?></a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $this_month_start, 'day_to' => $this_month_end]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'This Month' : '本月' ?></a>
+                        <a href="report.php?<?= http_build_query(['day_from' => $last_month_start, 'day_to' => $last_month_end]) ?>" class="btn btn-preset"><?= app_lang() === 'en' ? 'Last Month' : '上月' ?></a>
                     </div>
                 </form>
 
