@@ -1,13 +1,86 @@
 <?php
 /**
- * Telegram Bot 连线诊断：调用官方 getWebhookInfo / getMe（仅 Boss / BigBoss）
+ * Telegram Bot 连线诊断 + Token 配置（仅 Boss / BigBoss）
  */
 require 'config.php';
 require 'auth.php';
 require_boss_or_superadmin();
 require_once __DIR__ . '/inc/notify.php';
+require_once __DIR__ . '/inc/telegram_config_persist.php';
 
 $sidebar_current = 'admin_telegram_bot_status';
+$rootDir = __DIR__;
+$msg = '';
+$err = '';
+
+if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+    $action = trim((string)($_POST['action'] ?? ''));
+    try {
+        if ($action === 'save_notify') {
+            $cur = telegram_cfg_read_notify_file($rootDir);
+            $newTok = trim((string)($_POST['notify_bot_token'] ?? ''));
+            $newChat = trim((string)($_POST['notify_chat_id'] ?? ''));
+            $newBase = trim((string)($_POST['notify_base_url'] ?? ''));
+            if ($newTok === '') {
+                $newTok = $cur['token'] !== '' ? $cur['token'] : trim((string)($NOTIFY_TELEGRAM_BOT_TOKEN ?? ''));
+            }
+            if (!telegram_cfg_validate_bot_token($newTok)) {
+                throw new RuntimeException('Gaming Bot Token 格式不正确（应为 123456789:AAH...）');
+            }
+            if ($newTok === '') {
+                throw new RuntimeException('请填写 Gaming Bot Token');
+            }
+            telegram_cfg_write_notify_file($rootDir, $newTok, $newChat, $newBase);
+            $msg = 'Gaming Bot Token 已保存到 notify_config.php';
+        } elseif ($action === 'save_pg') {
+            $curPg = telegram_cfg_read_pg_file($rootDir);
+            $newPg = trim((string)($_POST['pg_bot_token'] ?? ''));
+            if ($newPg === '') {
+                $newPg = $curPg !== '' ? $curPg : trim((string)($PG_TELEGRAM_BOT_TOKEN ?? ''));
+            }
+            if (!telegram_cfg_validate_bot_token($newPg)) {
+                throw new RuntimeException('PG Bot Token 格式不正确');
+            }
+            if ($newPg === '') {
+                throw new RuntimeException('请填写 PG Bot Token');
+            }
+            telegram_cfg_write_pg_file($rootDir, $newPg);
+            $msg = 'PG Bot Token 已保存到 PG_notify_config.php';
+        } else {
+            throw new RuntimeException('无效操作');
+        }
+        header('Location: admin_telegram_bot_status.php?saved=1');
+        exit;
+    } catch (Throwable $e) {
+        $err = $e->getMessage();
+    }
+}
+
+if (isset($_GET['saved']) && $_GET['saved'] === '1') {
+    $msg = $msg ?: 'Token 已保存，下方为最新连线检测结果。';
+    // 重新加载配置（本请求已 include config.php，需再读文件）
+    $nf = telegram_cfg_read_notify_file($rootDir);
+    if ($nf['token'] !== '') {
+        $NOTIFY_TELEGRAM_BOT_TOKEN = $nf['token'];
+    }
+    if ($nf['chat_id'] !== '') {
+        $NOTIFY_TELEGRAM_CHAT_ID = $nf['chat_id'];
+    }
+    if ($nf['base_url'] !== '') {
+        $NOTIFY_BASE_URL = $nf['base_url'];
+    }
+    $pgf = telegram_cfg_read_pg_file($rootDir);
+    if ($pgf !== '') {
+        $PG_TELEGRAM_BOT_TOKEN = $pgf;
+    }
+}
+
+$notifyFile = telegram_cfg_read_notify_file($rootDir);
+$pgFile = telegram_cfg_read_pg_file($rootDir);
+$notifyChatDisplay = $notifyFile['chat_id'] !== '' ? $notifyFile['chat_id'] : trim((string)($NOTIFY_TELEGRAM_CHAT_ID ?? ''));
+$notifyBaseDisplay = $notifyFile['base_url'] !== '' ? $notifyFile['base_url'] : trim((string)($NOTIFY_BASE_URL ?? ''));
+$notifyFileExists = is_file($rootDir . '/notify_config.php');
+$pgFileExists = is_file($rootDir . '/PG_notify_config.php');
 
 function _mask_token(string $t): string
 {
@@ -64,6 +137,10 @@ $rows = [];
 $rows[] = _fetch_bot_diag('Gaming / 通知（NOTIFY）', $notifyTok);
 $rows[] = _fetch_bot_diag('PG 专用', $pgTok);
 
+$gamingWebhookHint = $notifyBaseDisplay !== ''
+    ? rtrim($notifyBaseDisplay, '/') . '/telegram_password_reset_webhook.php'
+    : '（先填 NOTIFY_BASE_URL，例如 https://你的域名.com）';
+
 ?>
 <!doctype html>
 <html lang="<?= app_lang() === 'en' ? 'en' : 'zh-CN' ?>">
@@ -81,7 +158,12 @@ $rows[] = _fetch_bot_diag('PG 专用', $pgTok);
         .ok { color: #15803d; }
         .bad { color: #b91c1c; }
         .muted { color: var(--muted, #64748b); font-size: 13px; }
-        pre.raw { max-height: 220px; overflow: auto; font-size: 11px; background: #0f172a; color: #e2e8f0; padding: 12px; border-radius: 8px; margin-top: 10px; }
+        .token-setup-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 20px; }
+        @media (max-width: 768px) { .token-setup-grid { grid-template-columns: 1fr; } }
+        .token-setup-card { padding: 16px; border: 1px solid var(--border); border-radius: 12px; background: var(--card-bg, #fff); }
+        .token-setup-card h3 { margin: 0 0 12px; font-size: 1rem; }
+        .token-setup-card label { display: block; font-size: 13px; font-weight: 600; margin: 10px 0 4px; }
+        .token-setup-card .form-hint { margin: 4px 0 0; font-size: 12px; }
     </style>
 </head>
 <body>
@@ -93,10 +175,59 @@ $rows[] = _fetch_bot_diag('PG 专用', $pgTok);
                 <h2>Telegram Bot 连线状态</h2>
                 <?php include __DIR__ . '/inc/breadcrumb_back.php'; ?>
             </div>
+
+            <?php if ($msg): ?><div class="alert alert-success"><?= htmlspecialchars($msg, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
+            <?php if ($err): ?><div class="alert alert-error"><?= htmlspecialchars($err, ENT_QUOTES, 'UTF-8') ?></div><?php endif; ?>
+
+            <div class="token-setup-grid">
+                <div class="token-setup-card">
+                    <h3>Gaming / 通知 Bot Token</h3>
+                    <p class="muted" style="margin:0 0 8px;">
+                        写入 <code>notify_config.php</code>
+                        <?= $notifyFileExists ? '' : '（将新建）' ?>
+                        · 当前：<code><?= htmlspecialchars(_mask_token($notifyTok), ENT_QUOTES, 'UTF-8') ?></code>
+                    </p>
+                    <form method="post">
+                        <input type="hidden" name="action" value="save_notify">
+                        <label>Bot Token *</label>
+                        <input type="password" name="notify_bot_token" class="form-control" autocomplete="off"
+                               placeholder="<?= $notifyTok !== '' ? '留空则保留现有 token' : '123456789:AAH...' ?>">
+                        <p class="form-hint">从 @BotFather 复制。留空且已有配置时不会覆盖。</p>
+                        <label>通知群 Chat ID</label>
+                        <input type="text" name="notify_chat_id" class="form-control"
+                               value="<?= htmlspecialchars($notifyChatDisplay, ENT_QUOTES, 'UTF-8') ?>"
+                               placeholder="-100xxxxxxxxxx">
+                        <p class="form-hint">待审核流水通知用；可留空。</p>
+                        <label>NOTIFY_BASE_URL</label>
+                        <input type="url" name="notify_base_url" class="form-control"
+                               value="<?= htmlspecialchars($notifyBaseDisplay, ENT_QUOTES, 'UTF-8') ?>"
+                               placeholder="https://你的域名.com">
+                        <p class="form-hint">Webhook 建议：<code><?= htmlspecialchars($gamingWebhookHint, ENT_QUOTES, 'UTF-8') ?></code></p>
+                        <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存 Gaming 配置</button>
+                    </form>
+                </div>
+                <div class="token-setup-card">
+                    <h3>PG 专用 Bot Token</h3>
+                    <p class="muted" style="margin:0 0 8px;">
+                        写入 <code>PG_notify_config.php</code>
+                        <?= $pgFileExists ? '' : '（将新建）' ?>
+                        · 当前：<code><?= htmlspecialchars(_mask_token($pgTok), ENT_QUOTES, 'UTF-8') ?></code>
+                    </p>
+                    <form method="post">
+                        <input type="hidden" name="action" value="save_pg">
+                        <label>PG Bot Token *</label>
+                        <input type="password" name="pg_bot_token" class="form-control" autocomplete="off"
+                               placeholder="<?= $pgTok !== '' ? '留空则保留现有 token' : '另建一个 PG 专用 Bot' ?>">
+                        <p class="form-hint">PG 与 Gaming 请用<strong>不同</strong> Bot。留空且已有配置时不会覆盖。</p>
+                        <p class="form-hint" style="margin-top:8px;">Webhook 应指向：<br><code>https://你的域名.com/telegram_pg_webhook.php</code></p>
+                        <button type="submit" class="btn btn-primary" style="margin-top:12px;">保存 PG 配置</button>
+                    </form>
+                </div>
+            </div>
+
             <p class="muted" style="margin-bottom:16px;">
-                本页通过 Telegram 官方接口读取 <strong>getMe</strong>（机器人是否有效）与 <strong>getWebhookInfo</strong>（Webhook URL 与最近错误）。<br>
-                Gaming 机器人 token 来自 <code>notify_config.php</code> 的 <code>$NOTIFY_TELEGRAM_BOT_TOKEN</code>；PG 来自 <code>PG_notify_config.php</code> / <code>notify_config.php</code> / 环境变量 加载的 <code>$PG_TELEGRAM_BOT_TOKEN</code>。<br>
-                PG 自检亦可打开：<a href="telegram_pg_webhook.php" target="_blank" rel="noopener">telegram_pg_webhook.php</a>（GET，仅看 token 是否读到）。
+                保存后下方自动检测 <strong>getMe</strong> 与 <strong>getWebhookInfo</strong>。
+                PG 自检：<a href="telegram_pg_webhook.php" target="_blank" rel="noopener">telegram_pg_webhook.php</a>
             </p>
 
             <?php foreach ($rows as $d): ?>
@@ -128,9 +259,9 @@ $rows[] = _fetch_bot_diag('PG 专用', $pgTok);
                     $maxConn = isset($res['max_connections']) ? (int)$res['max_connections'] : 0;
                     ?>
                     <p class="<?= $whOk ? 'ok' : 'bad' ?>">getWebhookInfo：<?= $whOk ? '✓ 已请求' : '✗ 异常' ?></p>
-                    <div class="kv"><strong>Webhook URL</strong>：<br><code><?= $url !== '' ? htmlspecialchars($url, ENT_QUOTES, 'UTF-8') : '<span class="bad">（空：未 setWebhook，Telegram 不会 POST 到你的服务器）</span>' ?></code></div>
+                    <div class="kv"><strong>Webhook URL</strong>：<br><code><?= $url !== '' ? htmlspecialchars($url, ENT_QUOTES, 'UTF-8') : '<span class="bad">（空：未 setWebhook）</span>' ?></code></div>
                     <?php if ($pending > 0): ?>
-                        <div class="kv muted">待投递更新数：<?= $pending ?>（若长期很大，多半是 Webhook 连不上）</div>
+                        <div class="kv muted">待投递更新数：<?= $pending ?></div>
                     <?php endif; ?>
                     <?php if ($maxConn > 0): ?>
                         <div class="kv muted">max_connections：<?= $maxConn ?></div>
@@ -138,16 +269,11 @@ $rows[] = _fetch_bot_diag('PG 专用', $pgTok);
                     <?php if ($lastErr !== ''): ?>
                         <div class="kv bad" style="margin-top:8px;"><strong>last_error_message</strong>：<br><?= htmlspecialchars($lastErr, ENT_QUOTES, 'UTF-8') ?></div>
                     <?php endif; ?>
-                    <?php if ($d['label'] === 'Gaming / 通知（NOTIFY）' && $url !== ''): ?>
-                        <p class="muted" style="margin-top:10px;">Gaming 群聊快捷记账与密码重置等，通常与同一 Webhook URL 共用（由你 setWebhook 时填写）。</p>
-                    <?php elseif (strpos($d['label'], 'PG') !== false && $url !== ''): ?>
-                        <p class="muted" style="margin-top:10px;">PG 应指向 <code>…/telegram_pg_webhook.php</code>，勿与 <code>telegram_password_reset_webhook.php</code> 混用。</p>
-                    <?php endif; ?>
                 <?php endif; ?>
             </div>
             <?php endforeach; ?>
 
-            <p class="muted">若 URL 正确仍无反应：查服务器 HTTPS 证书、防火墙；群内 <code>+</code> 指令需 @BotFather 对该 bot <code>/setprivacy</code> → Disable。</p>
+            <p class="muted">保存后若 Webhook 仍为空，需在 Telegram 设置 Webhook URL；群内 <code>+</code> 指令需 @BotFather <code>/setprivacy</code> → Disable。</p>
         </div>
     </main>
 </div>
