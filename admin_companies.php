@@ -2,6 +2,7 @@
 require 'config.php';
 require 'auth.php';
 require_superadmin();
+require_once __DIR__ . '/inc/game_api.php';
 $sidebar_current = 'admin_companies';
 
 $msg = '';
@@ -109,7 +110,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             if ($newId > 0 && function_exists('companies_shard_upsert_from_catalog')) {
                 companies_shard_upsert_from_catalog($pdo, $newId);
             }
+            $wantGameApi = !empty($_POST['game_api_connect']) && $biz === 'gaming';
+            if ($newId > 0 && $wantGameApi) {
+                game_api_ensure_tables($pdo);
+                game_api_save_company_config($pdo, $newId, ['enabled' => 1], (int)($_SESSION['user_id'] ?? 0));
+            }
             $msg = '已新增分公司：' . $code . '（类型：' . ($biz === 'pg' ? 'Payment Gateway (PG)' : 'Gaming') . '）';
+            if ($wantGameApi) {
+                $msg .= ' — 已标记启用游戏 API，请到 Other → 游戏平台 API 填写 Authcode / SecretKey。';
+            }
         } elseif ($action === 'update') {
             $id = (int)($_POST['id'] ?? 0);
             $code = normalize_company_code((string)($_POST['code'] ?? ''));
@@ -267,10 +276,17 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
                         </div>
                         <div class="filter-group">
                             <label>业务类型</label>
-                            <select class="form-control" name="business_kind" title="与另一行业数据区分标识；报表后续可按类型筛选">
+                            <select class="form-control" name="business_kind" id="company-business-kind" title="与另一行业数据区分标识；报表后续可按类型筛选">
                                 <option value="gaming" selected>Gaming（博彩）</option>
                                 <option value="pg">Payment Gateway（PG）</option>
                             </select>
+                        </div>
+                        <div class="filter-group" id="game-api-connect-wrap" style="align-self:flex-end;">
+                            <label style="display:flex;gap:8px;align-items:center;font-weight:600;cursor:pointer;">
+                                <input type="checkbox" name="game_api_connect" value="1">
+                                启用游戏平台 API
+                            </label>
+                            <p class="form-hint" style="margin:4px 0 0;font-size:12px;">创建后到 Other → 游戏平台 API 填写凭证</p>
                         </div>
                         <div class="filter-group">
                             <label>列表背景色（可选）</label>
@@ -365,17 +381,32 @@ $open_create_panel = ($_SERVER['REQUEST_METHOD'] === 'POST' && ($_POST['action']
     (function(){
         var btn = document.getElementById('btn-add-company');
         var panel = document.getElementById('company-create-panel');
-        if (!btn || !panel) return;
-        btn.addEventListener('click', function(){
-            var open = panel.style.display === 'none' || panel.style.display === '';
-            panel.style.display = open ? 'block' : 'none';
-            btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-            if (open) {
-                panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-                var first = panel.querySelector('input[name="code"]');
-                if (first) setTimeout(function(){ first.focus(); }, 200);
+        if (btn && panel) {
+            btn.addEventListener('click', function(){
+                var open = panel.style.display === 'none' || panel.style.display === '';
+                panel.style.display = open ? 'block' : 'none';
+                btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+                if (open) {
+                    panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                    var first = panel.querySelector('input[name="code"]');
+                    if (first) setTimeout(function(){ first.focus(); }, 200);
+                }
+            });
+        }
+        var bk = document.getElementById('company-business-kind');
+        var apiWrap = document.getElementById('game-api-connect-wrap');
+        function syncGameApiOption() {
+            if (!bk || !apiWrap) return;
+            apiWrap.style.display = bk.value === 'gaming' ? '' : 'none';
+            if (bk.value !== 'gaming') {
+                var cb = apiWrap.querySelector('input[name="game_api_connect"]');
+                if (cb) cb.checked = false;
             }
-        });
+        }
+        if (bk) {
+            bk.addEventListener('change', syncGameApiOption);
+            syncGameApiOption();
+        }
     })();
     </script>
 </body>

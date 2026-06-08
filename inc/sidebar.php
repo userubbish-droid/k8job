@@ -314,10 +314,13 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
             <a href="admin_banks_products.php" class="nav-item <?= ($sidebar_current === 'admin_banks' || $sidebar_current === 'admin_products' || $sidebar_current === 'admin_banks_products') ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_banks_products'), ENT_QUOTES, 'UTF-8') ?></a>
         <?php endif; ?>
         <a href="admin_permissions.php" class="nav-item <?= $sidebar_current === 'admin_permissions' ? 'primary' : '' ?>"><span class="nav-icon"></span><?= htmlspecialchars(__('nav_permissions'), ENT_QUOTES, 'UTF-8') ?></a>
-        <?php if ($sidebar_is_superadmin): ?>
+        <?php
+        $__sidebar_boss = (($_SESSION['user_role'] ?? '') === 'boss');
+        if ($sidebar_is_superadmin || $__sidebar_boss):
+        ?>
         <div class="nav-group" data-group="other-menu">
             <?php
-            $__other_nav_keys = ['admin_txn_edit_audit', 'admin_telegram_pg', 'admin_telegram_bot_status', 'admin_telegram_quick_txn', 'admin_telegram_guide', 'admin_telegram_guide_gaming', 'admin_telegram_guide_pg'];
+            $__other_nav_keys = ['admin_txn_edit_audit', 'admin_telegram_pg', 'admin_telegram_bot_status', 'admin_telegram_quick_txn', 'admin_telegram_guide', 'admin_telegram_guide_gaming', 'admin_telegram_guide_pg', 'admin_game_api'];
             ?>
             <button type="button" class="nav-group-toggle nav-item" aria-expanded="<?= in_array($sidebar_current, $__other_nav_keys, true) ? 'true' : 'false' ?>" aria-controls="nav-sub-other-menu" id="nav-toggle-other-menu">
                 <span class="nav-icon"></span>
@@ -331,6 +334,7 @@ $sidebar_lang_to = rawurlencode($sidebar_lang_rel);
                 <a href="admin_telegram_guide.php?tab=gaming" class="nav-item nav-sub-item <?= in_array($sidebar_current, ['admin_telegram_guide', 'admin_telegram_guide_gaming'], true) ? 'primary' : '' ?>"><span class="nav-icon"></span>Gaming 教程</a>
                 <a href="admin_telegram_pg.php" class="nav-item nav-sub-item <?= $sidebar_current === 'admin_telegram_pg' ? 'primary' : '' ?>"><span class="nav-icon"></span>PG Telegram</a>
                 <a href="admin_telegram_guide.php?tab=pg" class="nav-item nav-sub-item <?= $sidebar_current === 'admin_telegram_guide_pg' ? 'primary' : '' ?>"><span class="nav-icon"></span>PG 教程</a>
+                <a href="admin_game_api.php" class="nav-item nav-sub-item <?= $sidebar_current === 'admin_game_api' ? 'primary' : '' ?>"><span class="nav-icon"></span>游戏平台 API</a>
             </div>
         </div>
         <?php endif; ?>
