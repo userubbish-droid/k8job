@@ -5,7 +5,8 @@ require_once __DIR__ . '/inc/notify.php';
 http_response_code(200);
 header('Content-Type: application/json; charset=utf-8');
 
-if (empty($NOTIFY_TELEGRAM_BOT_TOKEN) || empty($NOTIFY_TELEGRAM_CHAT_ID)) {
+// 仅需 Token 即可接收群消息（/setup、/id、+/- 记账）；Chat ID 仅用于密码重置/流水审批 callback
+if (empty($NOTIFY_TELEGRAM_BOT_TOKEN)) {
     echo json_encode(['ok' => true]);
     exit;
 }
@@ -34,6 +35,11 @@ if (isset($update['message'])) {
 }
 
 if (!isset($update['callback_query'])) {
+    echo json_encode(['ok' => true]);
+    exit;
+}
+
+if (empty($NOTIFY_TELEGRAM_CHAT_ID)) {
     echo json_encode(['ok' => true]);
     exit;
 }
