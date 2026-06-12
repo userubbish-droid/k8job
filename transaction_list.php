@@ -43,6 +43,7 @@ $day_to   = preg_match('/^\d{4}-\d{2}-\d{2}/', $day_to_raw)   ? substr($day_to_r
 $mode     = $_GET['mode'] ?? '';
 $code     = trim($_GET['code'] ?? '');
 $bank     = trim($_GET['bank'] ?? '');
+$staff    = trim($_GET['staff'] ?? '');
 $product  = trim($_GET['product'] ?? '');
 $status   = trim($_GET['status'] ?? '');
 $export   = ($_GET['export'] ?? '') === 'csv';
@@ -209,6 +210,10 @@ if ($bank !== '') {
     $where[] = 'bank = ?';
     $params[] = $bank;
 }
+if ($staff !== '') {
+    $where[] = 'TRIM(staff) = ?';
+    $params[] = $staff;
+}
 if ($product !== '') {
     $where[] = 'product = ?';
     $params[] = $product;
@@ -216,7 +221,7 @@ if ($product !== '') {
 
 $sql_where_list = implode(' AND ', $where);
 $sql_where_list_t = preg_replace(
-    '/\b(company_id|day|time|mode|code|bank|product|status|deleted_at|created_by|hide_from_member|remark)\b/',
+    '/\b(company_id|day|time|mode|code|bank|staff|product|status|deleted_at|created_by|hide_from_member|remark)\b/',
     't.$1',
     $sql_where_list
 );
@@ -341,6 +346,9 @@ $products = $stP->fetchAll(PDO::FETCH_COLUMN);
 $stC = $pdoBiz->prepare("SELECT DISTINCT code $distinct_base company_id = ? AND code IS NOT NULL AND code <> '' ORDER BY code ASC");
 $stC->execute([$company_id]);
 $codes = $stC->fetchAll(PDO::FETCH_COLUMN);
+$stS = $pdoBiz->prepare("SELECT DISTINCT TRIM(staff) AS staff_name $distinct_base company_id = ? AND staff IS NOT NULL AND TRIM(staff) <> '' ORDER BY staff_name ASC");
+$stS->execute([$company_id]);
+$staffs = $stS->fetchAll(PDO::FETCH_COLUMN);
 
 // 当前筛选下的总入、总出、利润
 $sum_sql = "SELECT
@@ -362,6 +370,7 @@ $q = array_filter([
     'mode'     => $mode,
     'code'     => $code,
     'bank'     => $bank,
+    'staff'    => $staff,
     'product'  => $product,
 ]);
 $query_string = http_build_query($q);
@@ -405,7 +414,7 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
         $this_month_end = date('Y-m-t');
         $last_month_start = date('Y-m-01', strtotime('first day of last month'));
         $last_month_end = date('Y-m-t', strtotime('last day of last month'));
-        $base_q = array_filter(['status' => $status, 'mode' => $mode, 'code' => $code, 'bank' => $bank, 'product' => $product]);
+        $base_q = array_filter(['status' => $status, 'mode' => $mode, 'code' => $code, 'bank' => $bank, 'staff' => $staff, 'product' => $product]);
     ?>
     <div class="list-advanced-toggle-wrap" style="margin-bottom:12px;">
         <button type="button" class="btn btn-outline" id="list-advanced-toggle" aria-expanded="true"><?= app_lang() === 'en' ? 'Hide filters & summary' : '收起筛选与汇总' ?></button>
@@ -483,6 +492,17 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                     <option value=""><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
                     <?php foreach ($banks as $b): ?>
                         <option value="<?= htmlspecialchars($b) ?>" <?= $bank === $b ? 'selected' : '' ?>><?= htmlspecialchars($b) ?></option>
+                    <?php endforeach; ?>
+                </select>
+            </div>
+            <div class="filter-group"><label><?= app_lang() === 'en' ? 'Staff' : '员工' ?></label>
+                <select name="staff">
+                    <option value=""><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
+                    <?php foreach ($staffs as $s):
+                        $s = trim((string)$s);
+                        if ($s === '') continue;
+                    ?>
+                        <option value="<?= htmlspecialchars($s, ENT_QUOTES, 'UTF-8') ?>" <?= $staff === $s ? 'selected' : '' ?>><?= htmlspecialchars($s, ENT_QUOTES, 'UTF-8') ?></option>
                     <?php endforeach; ?>
                 </select>
             </div>
