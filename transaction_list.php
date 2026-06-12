@@ -211,8 +211,12 @@ if ($bank !== '') {
     $params[] = $bank;
 }
 if ($staff !== '') {
-    $where[] = 'TRIM(staff) = ?';
-    $params[] = $staff;
+    $where[] = 'TRIM(staff) LIKE ?';
+    $params[] = '%' . $staff . '%';
+    // 仅 member 录入的流水（不含 admin / boss / superadmin）
+    $where[] = 'created_by IN (SELECT id FROM users WHERE company_id = ? AND LOWER(TRIM(role)) = ?)';
+    $params[] = $company_id;
+    $params[] = 'member';
 }
 if ($product !== '') {
     $where[] = 'product = ?';
@@ -346,9 +350,19 @@ $products = $stP->fetchAll(PDO::FETCH_COLUMN);
 $stC = $pdoBiz->prepare("SELECT DISTINCT code $distinct_base company_id = ? AND code IS NOT NULL AND code <> '' ORDER BY code ASC");
 $stC->execute([$company_id]);
 $codes = $stC->fetchAll(PDO::FETCH_COLUMN);
-$stS = $pdoBiz->prepare("SELECT DISTINCT TRIM(staff) AS staff_name $distinct_base company_id = ? AND staff IS NOT NULL AND TRIM(staff) <> '' ORDER BY staff_name ASC");
-$stS->execute([$company_id]);
-$staffs = $stS->fetchAll(PDO::FETCH_COLUMN);
+$member_staff_hints = [];
+try {
+    $pdoCatStaff = function_exists('shard_catalog') ? shard_catalog() : $pdo;
+    $stM = $pdoCatStaff->prepare("SELECT DISTINCT TRIM(COALESCE(NULLIF(display_name, ''), username)) AS nm
+        FROM users
+        WHERE company_id = ? AND LOWER(TRIM(role)) = 'member' AND is_active = 1
+          AND TRIM(COALESCE(NULLIF(display_name, ''), username)) <> ''
+        ORDER BY nm ASC");
+    $stM->execute([$company_id]);
+    $member_staff_hints = $stM->fetchAll(PDO::FETCH_COLUMN);
+} catch (Throwable $e) {
+    $member_staff_hints = [];
+}
 
 // 当前筛选下的总入、总出、利润
 $sum_sql = "SELECT
@@ -496,15 +510,18 @@ $base_url = 'transaction_list.php' . ($query_string ? '?' . $query_string . '&' 
                 </select>
             </div>
             <div class="filter-group"><label><?= app_lang() === 'en' ? 'Staff' : '员工' ?></label>
-                <select name="staff">
-                    <option value=""><?= app_lang() === 'en' ? 'All' : '全部' ?></option>
-                    <?php foreach ($staffs as $s):
-                        $s = trim((string)$s);
-                        if ($s === '') continue;
+                <input type="text" name="staff" class="form-control" list="txn-staff-member-list"
+                       value="<?= htmlspecialchars($staff, ENT_QUOTES, 'UTF-8') ?>"
+                       placeholder="<?= app_lang() === 'en' ? 'Type member name' : '输入员工名（仅 member）' ?>"
+                       autocomplete="off">
+                <datalist id="txn-staff-member-list">
+                    <?php foreach ($member_staff_hints as $hint):
+                        $hint = trim((string)$hint);
+                        if ($hint === '') continue;
                     ?>
-                        <option value="<?= htmlspecialchars($s, ENT_QUOTES, 'UTF-8') ?>" <?= $staff === $s ? 'selected' : '' ?>><?= htmlspecialchars($s, ENT_QUOTES, 'UTF-8') ?></option>
+                        <option value="<?= htmlspecialchars($hint, ENT_QUOTES, 'UTF-8') ?>"></option>
                     <?php endforeach; ?>
-                </select>
+                </datalist>
             </div>
         </div>
         <button type="button" class="btn btn-outline btn-more-toggle" id="flow-more-toggle" style="margin-top:8px;"><?= app_lang() === 'en' ? 'More filters' : '更多筛选' ?></button>
